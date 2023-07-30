@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% load bootstrap3 %}
+
+{% bootstrap_css %}
+{% bootstrap_javascript %}
+
+{% block content %}
+
+{% bootstrap_messages %}
+
+<div class='container'>
+	<div class=''>
+		<a class='hover:text-blue-500' href='{% url "rules:list" %}'>Go back to Rules</a>
+	<div>
+	<h1>Are you sure you want to delete {{rule.name}}</h1>
+	<form method='post'>
+		{% csrf_token %}
+		{{ form }}
+		<button type='submit' class=>Delete</button>
+	</form>
+</div>
+
+{% endblock %}

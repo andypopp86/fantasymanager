@@ -1,0 +1,10 @@
+.VOTE_YES {
+    background-color:#00B050;
+    color: black;
+    text-align: center;
+}
+.VOTE_NO {
+    background-color: #FFC000;
+    color: red;
+    text-align: center;
+}

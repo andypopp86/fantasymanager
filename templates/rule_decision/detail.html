@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% load bootstrap3 %}
+
+{% bootstrap_css %}
+{% bootstrap_javascript %}
+
+{% block content %}
+
+{% bootstrap_messages %}
+
+<div class='container'>
+	<div class=''>
+		<a class='hover:text-blue-500' href='{% url "rules:rule-decision-list" %}'>Go back to Rule Decisions</a>
+		<span> | </span>
+		<a class='hover:text-blue-500' href='{% url "rules:rule-decision-update" rule_decision.pk %}'>Update Rule Decision</a>
+		<span> | </span>
+		<a class='hover:text-blue-500' href='{% url "rules:rule-decision-delete" rule_decision.pk %}'>Delete Rule Decision</a>
+	<div>
+	<ul>
+		{{ rule_decision.name }}
+	</ul>
+</div>
+
+{% endblock %}

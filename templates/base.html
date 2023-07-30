@@ -1,0 +1,61 @@
+{% extends 'bootstrap.html' %}
+{% load static %}
+{% load bootstrap3 %}
+
+{% block bootstrap3_content %}
+
+<html>
+    <head>
+        <title>Fantasy</title>
+        <link rel='stylesheet' href="{% static 'css/style.css' %}">
+        {% block extra_css %}{% endblock %}
+        
+        <script src="{% static 'js/jquery-3.6.0.min.js' %}" ></script>
+        {% block extra_script %}{% endblock %}
+        
+    </head>
+    <header class="bg-header-image img-responsive">
+        <div class="container">
+            {% if environment == 'DEV' %}
+                <span class="h1 dev_main_title">Fantasy [DEV]<span>
+                {% comment %} <small class="dev_main_subtitle">{{page_title}}</small> {% endcomment %}
+            {% else %}
+                <span class="h1 prod_main_title">Fantasy<span>
+                {% comment %} <small class="prod_main_subtitle">{{page_title}}</small> {% endcomment %}
+            {% endif %}
+        </div>
+    </header>
+
+    <div class="container-fluid">
+        <tr class="row">
+            <td class="column">
+            {% comment %} <div class="">
+                <div>Fantasy</div>{% if page_title %}<div class="align-text-right">{{ page_title }}</div>{% endif %}
+            </div> {% endcomment %}
+            
+            <navbar class="row navbar navbar-light sticky-top">
+                {% if user.is_superuser %}
+                <a class="hover:text-blue-500" href="{% url 'rules:list' %}">Rules</a>
+                 | <a class="hover:text-blue-500" href="{% url 'rules:rule-decision-list' %}">Rule Voting</a>
+                 | <a class="hover:text-blue-500" href="{% url 'admin:index' %}">Admin</a>
+                {% endif %}
+                {% if user.is_authenticated %} 
+                | <a class="" href="{% url 'draft:list' %}">Drafts</a> 
+                    {% comment %} {% if not '/draft/board' in  request.path %}
+                    | <a class="" href="{% url 'draft:start' %}">Draft</a> 
+                    {% endif %} {% endcomment %}
+                    | <a class="navbar-right" href="{% url 'logout' %}">Log out - {{user}}</a> 
+                {% else %} 
+                    | <a class="navbar-right" href="{% url 'login' %}">Log In</a> 
+                {% endif %}
+            </navbar>
+        </td>
+        </tr>
+
+        {% autoescape off %}{% bootstrap_messages %}{% endautoescape %}
+
+        {% block content %}{% endblock %}
+    </div>
+</html>
+
+{% endblock %}

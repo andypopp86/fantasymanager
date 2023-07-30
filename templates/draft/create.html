@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% load bootstrap3 %}
+
+{% bootstrap_css %}
+{% bootstrap_javascript %}
+
+{% block content %}
+
+{% bootstrap_messages %}
+
+<div class='container'>
+	<div class=''>
+		<a class='hover:text-blue-500' href='{% url "rules:rule-decision-list" %}'>Go back to Drafts</a>
+	<div>
+	<h1>Create new Draft</h1>
+	<h3>Enter each Managers name separated by a line break (Enter)</h3>
+	<form method='post'>
+        {% csrf_token %}
+        <label>Draft Name:&nbsp;</label><input name="draft_name"></input>
+        <h4 for="draft_managers">League Managers:</h4>
+        <textarea id="draft_managers" name="draft_managers" rows="14" cols="40"></textarea>
+		<button type='submit' class=>Submit</button>
+	</form>
+</div>
+
+{% endblock %}

@@ -1,0 +1,32 @@
+.bg-header-image {
+    background-image: url('../images/header-bg-image.jpg');
+    background-position: center center;
+    background-size: cover;
+    height: 100px;
+}
+.dev_main_title {
+    color: yellow
+}
+.dev_main_subtitle {
+    color: yellowgreen
+}
+.prod_main_title {
+    color: white
+}
+.prod_main_subtitle {
+    color: gainsboro
+}
+
+.circled_text {
+    border-radius: 50%;
+    width: 54px;
+    height: 54px;
+    padding: 8px;
+
+    background: #fff;
+    border: 2px solid #666;
+    color: #666;
+    text-align: center;
+
+    font: 32px Arial, sans-serif;
+}

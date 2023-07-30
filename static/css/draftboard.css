@@ -1,0 +1,49 @@
+.draft-board-slot {
+    font-size: 9pt;
+    border: solid lightgoldenrodyellow 1px;
+}
+.available-player {
+    color: black;
+}
+.drafted-player {
+    color: grey;
+    background-color: black;
+}
+.draft-slot {
+    border: 1px solid #dddddd;
+    text-align: center;
+    vertical-align: middle;
+    /* width: 8%; */
+    height: 25px;
+}
+.position-WR {
+    background-color: green;
+    color: white;
+}
+.position-RB {
+    background-color: blue;
+    color: white;
+}
+.position-QB {
+    background-color: red;
+    color: white;
+}
+.position-TE {
+    background-color: burlywood;
+    color: black;
+}
+.position-DEF {
+    background-color: black;
+    color: grey;
+}
+.pick-selected {
+    background-color: darkcyan;
+    color: white;
+}
+
+.proj-drafted {
+    background-color: skyblue;
+}
+.proj-budgeted {
+    background-color: burlywood;
+}

@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% load bootstrap3 %}
+{% load static %}
+
+{% bootstrap_css %}
+{% bootstrap_javascript %}
+
+{% block extra_css %}
+    <link rel='stylesheet' href="{% static 'css/draftboard.css' %}">
+{% endblock %}
+
+{% block extra_script %}
+    <script src="{% static 'js/draftboard.js' %}"></script>
+    <script type="text/javascript">
+        $(document).ready(function() {
+            startPriceBoard();
+        });
+    </script>
+{% endblock %}
+
+{% block content %}
+
+{% bootstrap_messages %}
+<div class='draft-container'>
+    {% csrf_token %}
+    <div class="col-xs-12 draft-board">
+        <table class="table col-xs-12">
+            <tbody>
+                {% for round in prices_by_round %}
+                <tr class="row">
+                    {% for projection in round %}
+                        <td class="draft-slot {% if projection.selected %}pick-selected{% endif %}">{{projection.projected_price}}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+{% endblock %}

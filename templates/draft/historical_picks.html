@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% load bootstrap3 %}
+{% load static %}
+
+{% bootstrap_css %}
+{% bootstrap_javascript %}
+
+{% block extra_css %}
+    <link rel='stylesheet' href="{% static 'css/draftboard.css' %}">
+{% endblock %}
+
+{% block extra_script %}
+    <script src="{% static 'js/draftboard.js' %}"></script>
+
+{% endblock %}
+
+{% block content %}
+
+{% bootstrap_messages %}
+<div class='draft-container'>
+    {% csrf_token %}
+    <div class="col-xs-12 draft-board">
+        <table class="table col-xs-12">
+            <tbody>
+                <thead>
+                    <th>Pick</th>
+                    <th>Year</th>
+                    <th>Manager</th>
+                    <th>Price</th>
+                    <!-- <th>Rank</th> -->
+                    <th>Points</th>
+                </thead>
+                {% for pick in picks %}
+                <tr>
+                    <td style="width: 200px">{{pick}}</td>
+                    <td>{{pick.year}}</td>
+                    <td>{{pick.manager}}</td>
+                    <td>{{pick.price}}</td>
+                    <!-- <td>{{pick.historical_stat.rank}}</td> -->
+                    <td>{{pick.historical_stat.fantasy_points}}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+{% endblock %}

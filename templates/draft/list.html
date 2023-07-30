@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% load bootstrap3 %}
+{% load static %}
+
+{% bootstrap_css %}
+{% bootstrap_javascript %}
+
+{% block content %}
+
+{% bootstrap_messages %}
+
+{% comment %} <link rel='stylesheet' href="{% static 'css/rule-decisions.css' %}"> {% endcomment %}
+
+<div class='container'>
+	<br>
+	<div class=''>
+		<a class='hover:text-blue-500' href='{% url "draft:create" %}'>Create new Draft</a>
+	<div>
+	<br>
+    <table class='table'>
+        <td></td>
+        {% for draft in drafts %}
+            <tr><td><a href="{% url 'draft:board' draft.id %}">{{draft.draft_name}}</a></td></tr>
+        {% endfor %}
+
+    </table>
+</div>
+
+{% endblock %}

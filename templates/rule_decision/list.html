@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% load bootstrap3 %}
+{% load static %}
+
+{% bootstrap_css %}
+{% bootstrap_javascript %}
+
+{% block content %}
+
+{% bootstrap_messages %}
+
+<link rel='stylesheet' href="{% static 'css/rule-decisions.css' %}">
+
+<div class='container'>
+	<br>
+	<div class=''>
+		<a class='hover:text-blue-500' href='{% url "rules:rule-decision-create" %}'>Create new Rule Decisions</a>
+	<div>
+	<br>
+    <table class='table'>
+        <td></td>
+        {% for header in rule_headers %}
+            <td>{{header}}</td>
+        {% endfor %}
+
+        {% for user, votes in vdicts.items %}
+		<tr>
+            <td>{{user}}</td>
+            {% for vote, decision in votes.items %}
+                <td class=VOTE_{{ decision.decision|upper }}>{{ decision.decision|upper }}</td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+
+{% endblock %}
