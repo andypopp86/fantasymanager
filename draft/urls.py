@@ -16,6 +16,7 @@ urlpatterns = [
 	path(r'board_prices/<int:draft_id>/<int:rounds>', d.price_board, name='price_board'),
 	path(r'draft_player/<int:draft_id>/<int:player_id>/', d.draft_player, name='draft_player'),
 	path(r'undraft_player/<int:draft_id>/<int:player_id>/', d.undraft_player, name='undraft_player'),
+	path(r'unbudget_player/<int:draft_id>/<int:player_id>/', d.unbudget_player, name='undraft_player'),
 	path(r'watch_player/<int:draft_id>/<int:player_id>/', d.watch_player, name='watch_player'),
 	path(r'unwatch_player/<int:draft_id>/<int:player_id>/', d.unwatch_player, name='unwatch_player'),
 	path(r'budget_player/<int:draft_id>/<int:player_id>/', d.budget_player, name='budget_player'),

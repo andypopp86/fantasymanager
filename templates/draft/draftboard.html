@@ -25,7 +25,7 @@
     {% csrf_token %}
     <div class="col-xs-12 draft-board">
         <table class="table col-xs-12">
-            <tbody>
+            <tbody id="draft-board-header">
                 <tr class="row">
                 {% for manager in managers %}
                     <td class='text-center'>{{manager.short_name}}</td>
@@ -38,20 +38,21 @@
                 </tr>
             </tbody>
             <tbody class="draftboard">
-                {% for round_dict in draftboard %}
-                    <tr class="row">
-                        {% for num, slot_list in round_dict.items %}
-                            {% for slot_dict in slot_list %}
+                {% for round in draftboard %}
+                    {% for round_num, round_dict in round.items %}
+                        <tr id="draft-board-row-{{round_num}}" class="row" style="{% if not round_dict.active %}display: none;{% endif %}">
+                            {% for pick_dict in round_dict.picks %}
                                 <td 
-                                id="draft-board-player-{{slot_dict.pick.player.id}}" 
-                                roundid="{{slot_dict.round_num}}" columnid="{{slot_dict.column_num}}" 
-                                managerId="{{slot_dict.manager.id}}" 
-                                class='text-center draft-board-slot position-{{slot_dict.pick.player.position}}'>
-                                {{slot_dict.pick.player.name}} (${{slot_dict.pick.price}})
+                                id="draft-board-player-{{pick_dict.pick.player.id}}" 
+                                roundid="{{pick_dict.round_num}}" columnid="{{pick_dict.column_num}}" 
+                                managerId="{{pick_dict.manager.id}}" 
+                                class='text-center draft-board-slot position-{{pick_dict.pick.player.position}}'
+                                ondragover="dragoverDraft(event);" ondragleave="dragleaveDraft(event);" ondrop="dropDraft(event);">
+                                {{pick_dict.pick.player.name}} (${{pick_dict.pick.price}})
                             </td>
                             {% endfor %}
-                        {% endfor %}
-                    </tr>
+                        </tr>
+                    {% endfor %}
                 {% endfor %}
             </tbody>
         </table>
@@ -67,14 +68,21 @@
                     <th>Proj</th>
                 </thead>
                 {% for pick in picks_by_adp %}
-                    <tr class="available-player" id="available-player-{{pick.player.id}}" draft_id="{{draft.id}}" player_id="{{pick.player.id}}" position="{{pick.player.position}}" 
+                    <tr class="available-player" id="available-player-{{pick.player.id}}" draft_id="{{draft.id}}" player_id="{{pick.player.id}}" position="{{pick.player.position}}"
+                        draggable="true" ondragstart="cardDrag(event);" ondragend="cardDragEnd(event);"
                         proj-price="{% if pick.player.override_price %}{{pick.player.override_price}}{% else %}{{pick.player.projected_price}}{% endif %}" 
                         url="{% url 'draft:draft_player' draft.id pick.player.id %}" 
                         style="{% if pick.drafted %}display: none;{% endif %}">
                         <td class="draft-slot available-player position-{{pick.player.position}} available-name"  onclick="handlePickClick(this, 'draft')" style="cursor: pointer;"  >{{ pick.player.name }}</td>
-                        <td class="text-center" onclick="handlePickClick(this, 'draft')" style="cursor: pointer;" >&check;</td>
-                        <td class="text-center" style="cursor: pointer;" onclick="handlePickClick(this, 'watch')">&#128065;</td>
-                        <td class="text-center" style="cursor: pointer;" onclick="handlePickClick(this, 'budget')">&#36;&nbsp;&nbsp;</td>
+                        <td class="text-center draft-action" onclick="handlePickClick(this, 'draft')" style="cursor: pointer;" >
+                            <span class="text-center">&check;</span>
+                        </td>
+                        <td class="text-center draft-action" style="cursor: pointer;" onclick="handlePickClick(this, 'watch')">
+                            <span class="text-center">&#128065;</span>
+                        </td>
+                        <td class="text-center draft-action" style="cursor: pointer;" onclick="budgetPlayer(this)">
+                            <span class="text-center">&#36;</span>
+                        </td>
                         <td class="text-center available-price">{% if pick.player.override_price %}{{pick.player.override_price|floatformat:0}}{% else %}{{pick.player.projected_price|floatformat:0}}{% endif %}</td>
                     </tr>
                 {% endfor %}
@@ -83,7 +91,7 @@
         </table>
     </div>
     <div class="col-xs-3 sidebar">
-        <table class="drafted-list">
+        <table class="drafted-list" ondragover="allowDrop(event)" ondrop="cardDrop(event);">
             <thead>
                 <tr><th class="text-center" colspan="3"><span class="btn-info">ALL DRAFTED</span></th></tr>
                 <th>Player</th>
@@ -125,7 +133,7 @@
         <table>
             <tbody class="target-my-team">
                 <thead>
-                    <tr><th class="text-center" colspan="3"><btn id="save-budget" class="btn-success">Save Budget</btn></th></tr>
+                    <tr><th class="text-center" colspan="3"><btn id="save-budget" class="btn-success" onclick="recalculateBudget();">Recalc Budget</btn></th></tr>
                     <tr><th class="text-left" colspan="2">Budget Start:</th><th class="text-center start-budget">200</th></th></tr>
                     <tr><th class="text-left" colspan="2">Budget Remaining:</th><th class="text-center projected-budget">{{projected_remaining}}</th></th></tr>
                     <tr>
@@ -134,11 +142,27 @@
                         <th>Projected $</th>
                     </tr>
                 </thead>
-                    {% for slot, pdict in position_budget_slots.items %}
-                        <tr id="projected-slot-{{slot}}" class="projected-slot {% if pdict.source == 'drafted' %}proj-drafted{% elif pdict.source == 'budgeted' %}proj-budgeted{% endif %}">
-                            <td class="projected-pos">{{slot}}</td>
-                            <td class="projected-name text-left">{% if pdict.pick %}{{ pdict.pick.player.name }}{% else %}Unassigned{% endif %}</td>
-                            <td class="projected-spend text-right">{{ pdict.pick.price|default:"-"}}</td>
+                    {% for slot, pdict in new_projected_team.items %}
+                        <tr 
+                            id="projected-slot-{{slot}}" 
+                            class="projected-slot position-{{pdict.pick.player.position}}"
+                            data-player-id="{{pdict.pick.player.id}}"
+                            >
+                            <td class="projected-pos">
+                                <span>{{slot}}</span>
+                            </td>
+                            <td class="projected-name text-left">
+                                {% if pdict.source == 'budgeted' %}
+                                    <span class="text-danger text-center" style="cursor: pointer;" onclick="handlePickClick(this, 'unbudget');">&#10006;</span>
+                                {% elif pdict.source == 'drafted' %}
+                                    <span class="text-center" style="color: white;">&check;</span>
+                                {% else %}
+                                    <span class="text-success text-center">&#9900;</span>
+                                {% endif %}
+                                <span>{% if pdict.pick %}{{ pdict.pick.player.name }}{% else %}Unassigned{% endif %}</span>
+                                
+                            </td>
+                            <td class="projected-spend text-right"><span>{{ pdict.pick.price|default:"-"}}</span></td>
                         </tr>
                     {% endfor %}
             </tbody>
@@ -312,5 +336,14 @@
 <div id="id_drafter" style="display:none;" drafter_id="{{drafter_id}}"></div>
 <div id="id_projected_team_current_position" style="display:none;" current_position=""></div>
 
+<script id="picks_data">{
+    {% for pick in picks_by_adp %}
+    "{{pick.player.id}}": {
+        "name": "{{pick.player.name}}",
+        "position": "{{pick.player.position}}",
+        "proj_price": "{{pick.player.projected_price}}"
+    }{% if not forloop.last %},{% endif %}{% endfor %}
+}
+</script>
 
 {% endblock %}

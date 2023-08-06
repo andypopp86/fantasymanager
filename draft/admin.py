@@ -78,6 +78,7 @@ class DraftPickAdmin(admin.ModelAdmin):
 
 class WatchPickAdmin(admin.ModelAdmin):
     list_display = ('draft', 'player', 'manager', 'watched')
+    list_filter = ('draft', 'player', 'manager', 'watched')
     readonly_fields = ('draft', 'player', 'manager', )
 
 class HistoricalDraftPickAdmin(admin.ModelAdmin):
@@ -109,6 +110,7 @@ class HistoricalPlayerStatsAdmin(admin.ModelAdmin):
 
 class BudgetPlayerAdmin(admin.ModelAdmin):
     list_display = ('draft', 'player', 'manager', 'price', 'get_position_display', 'get_status_display')
+    list_filter = ('draft', 'manager', 'status')
     readonly_fields = ('draft', 'player', 'manager', 'price' )
 
 admin.site.register(d.Player, PlayerAdmin)

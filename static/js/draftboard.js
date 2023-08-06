@@ -1,23 +1,61 @@
+class GlobalState {
+    state = {}
+    subscribers = {}
+    static vars = {
+
+    }
+
+    set({key, value}) {
+        const oldValue = this.state[key];
+        this.state[key] = value;
+        this.notify(key, value, oldValue);
+        return this.state[key];
+    }
+
+    get(key) {
+        if (!Object.prototype.hasOwnProperty.call(this.state, key)) {
+            console.warn(`GlobalState: Key ${key} does not exist`);
+        }
+        return this.state[key];
+    }
+
+    subscribe({key, callback}) {
+        if (!Object.prototype.hasOwnProperty.call(this.state, key)) {
+            this.subscribers[key] = [];
+        }
+        this.subscribers[key].push(callback);
+    }
+
+    notify(key, value, oldValue) {
+        if (Object.prototype.hasOwnProperty.call(this.subscribers, key)) {
+            this.subscribers[key].forEach((callback) => {
+                callback({key, value, oldValue});
+            })
+        }
+    }
+}
+
+const globalState = new GlobalState();
+
+function initializeGlobalState(data) {
+    var picks_data = JSON.parse($('#picks_data').text());
+    var jsonData = JSON.parse(data);
+    globalState.set({key: 'draft_id', value: jsonData.data.draft_id});
+    globalState.set({key: 'drafter_id', value: jsonData.data.drafter_id});    
+}
+
+function lockDraftBoardHeader() {
+    let header = document.getElementById('draft-board-header');
+    let stickyTop = header.offsetTop;
+    if (window.pageYOffset > stickyTop) {
+        header.classList.add("sticky");
+      } else {
+        header.classList.remove("sticky");
+      }
+}
+
 function startDraftBoard() {
     let draft_id = $('#id_current_draft').attr('current_draft_id')
-    // let draftSlots = $('.draft-slot');
-    // draftSlots.each(function(idx, draftSlot) {
-    //     $(draftSlot).on('click', handlePickClick)
-    // });
-    // let undraftSlots = $('.drafted-player');
-    // undraftSlots.each(function(idx, undraftSlot) {
-    //     $(undraftSlot).on('click', handlePickClick)
-    // });
-    // let myUndraftSlots = $('.my-drafted-player');
-    // myUndraftSlots.each(function(idx, myUndraftSlot) {
-    //     $(myUndraftSlot).on('click', handlePickClick)
-    // });
-    // let watchedPlayers = $('.watched-player');
-    // watchedPlayers.each(function(idx, watchedPlayer) {
-    //     $(watchedPlayer).on('click', handlePickClick)
-    // })
-    $('#save-budget').on('click', saveProjectedTeam)
-    $('#save-position-slots').on('click', savePositionSlots)
     $.ajax({
         url: `/draft/board/${draft_id}/json`,
         datatype: 'json',
@@ -26,9 +64,10 @@ function startDraftBoard() {
             draft_id: draft_id
         },
         success: function(data) {
+            jsonData = JSON.parse(data);
             updateDraftBoard(data);
-            // updateProjectedTeam(data);
-            updatePositionSlots(data);
+            updateProjectedTeam(jsonData);
+            initializeGlobalState(data);
         }
     })
 
@@ -47,33 +86,11 @@ function handlePickClick(e, action) {
         undraftPlayer(e);
     } else if (action == 'budget') {
         budgetPlayer(e);
+    } else if (action == 'unbudget') {
+        unbudgetPlayer(e);
     }
 }
 
-// function submitWatch(e) 
-
-//     let player_id = $('#id_current_player').attr('current_player_id')
-//     let draft_id = $('#id_current_draft').attr('current_draft_id')
-    
-//     $(document).unbind('keypress')
-//     $('#draft_player_modal').modal({backdrop: false})
-//     $('#draft_player_modal').hide()
-//     $('.modal-backdrop').hide()
-//     $('#draft_player_modal').modal({backdrop: 'static'})
-
-//     let watchPlayerUrl = `/draft/watch_player/${draft_id}/${player_id}/
-//     let watchPlayerRequest = $.post(
-//         watchPlayerUrl,
-//         {
-//             csrfmiddlewaretoken: $('input[name="csrfmiddlewaretoken').val()
-//         },
-//         function(data) {
-//             if (data.status == 'watched') {
-//                 location.reload()
-//             }
-//         }
-//     )
-// }
 
 function watchPlayer(e) {
     const $player = $(e).parent();
@@ -93,7 +110,7 @@ function watchPlayer(e) {
                 let $lastRow = $('#watch-list tr:last')
                 let $watchRow = $(`<tr player_id="${player_id}"></tr>`)
                 $('<td></td>').text(player_name).appendTo($watchRow);
-                $('<td class="text-danger text-center" style="cursor: pointer;" onclick="handlePickClick(this, "unwatch");">&#10006;</td>').appendTo($watchRow);
+                $('<td class="text-danger text-center" style="cursor: pointer;" onclick="unwatchPlayer(this);">&#10006;</td>').appendTo($watchRow);
                 $('<td></td>').text(proj_price).appendTo($watchRow);
                 $watchRow.insertAfter($lastRow);
             }
@@ -157,12 +174,9 @@ function undraftPlayer(e) {
     let [current_act_price, curr_proj_price, current_player_id, draft_id, drafter_id, current_manager_id, submit_position, current_player_name] = getSubmitData();
     let [position, player_id, proj_price, round_price, player_name, managerId] = extractTargetData($player);
     setCurrentPlayerData(player_id, position, player_name, proj_price);
-    console.log($player)
-    console.log(managerId)
     $('.menu-control').hide();
     $('#menu-control-undraft').show();
 
-    // openDraftModal();
     let undraftPlayerUrl = `/draft/undraft_player/${draft_id}/${player_id}/`
     $.post(
         undraftPlayerUrl,
@@ -173,12 +187,6 @@ function undraftPlayer(e) {
         function(data) {
             jsonData = JSON.parse(data);
             if (jsonData.undrafted) {
-                // let $undrafting = $('.undrafting');
-                // $undrafting.removeClass('drafted-player');
-                // $undrafting.addClass('available-player')
-                // $undrafting.detach();
-                // $availableList.prepend($undrafting);
-                // formatAvailablePlayer(player_id, submit_position, player_name, curr_proj_price);
                 $(`#available-player-${jsonData.player_id}`).show();
                 let $draftedPlayer = $(`#drafted-player-${jsonData.player_id}`);
                 $draftedPlayer.find('.pick-price').text('0');
@@ -189,10 +197,36 @@ function undraftPlayer(e) {
                 $draftedPlayer.attr('manager-id', '');
 
                 let $boardPlayer = $(`#draft-board-player-${jsonData.player_id}`);
-                console.log($boardPlayer)
-                console.log(position)
                 $boardPlayer.removeClass(`position-${jsonData.position}`);
                 $boardPlayer.text('($)');
+
+            }
+            }
+    )
+}
+
+
+function unbudgetPlayer(e) {
+    const $player = $(e).parent().parent();
+    $player.addClass('unbudgeting');
+    
+    let [current_act_price, curr_proj_price, current_player_id, draft_id, drafter_id, current_manager_id, submit_position, current_player_name] = getSubmitData();
+    let player_id = $player.attr('data-player-id');
+
+    let undraftPlayerUrl = `/draft/unbudget_player/${draft_id}/${player_id}/`
+    $.post(
+        undraftPlayerUrl,
+        {
+            csrfmiddlewaretoken: $('input[name="csrfmiddlewaretoken').val(),
+        },
+        function(data) {
+            jsonData = JSON.parse(data);
+            if (jsonData.status == 'unbudgeted') {
+                $player.removeClass('position-QB position-RB position-WR position-TE position-DEF');
+                $player.find('td:nth-child(2)').find('span:nth-child(1)').text("⚬");
+                $player.find('td:nth-child(2)').find('span:nth-child(2)').text("Unassigned");
+                $player.find('td:nth-child(3)').text("-");
+                recalculateBudget();
 
             }
             }
@@ -248,8 +282,6 @@ function submitDraftPick(e) {
         },
         function(data) {
             jsonData = JSON.parse(data);
-            let $playerRows = $('.available-player');
-            let $draftedList = $('.drafted-list');
             if (jsonData.status == 'drafted') {
                 $(`#available-player-${jsonData.player_id}`).hide();
                 let $draftedPlayer = $(`#drafted-player-${jsonData.player_id}`);
@@ -259,13 +291,16 @@ function submitDraftPick(e) {
                 $(`#manager-budget-${current_manager_id}`).text(jsonData['updated_budget'])
 
                 let $draftSlot = $(`[roundid=${jsonData.mgr_player_ct}][columnid=${jsonData.mgr_position}]`)
-                console.log($draftSlot)
                 $draftSlot.text(`${current_player_name} ($${current_act_price.val()})`)
                 $draftSlot.addClass(`position-${submit_position}`)
                 $draftSlot.attr('id', `draft-board-player-${jsonData.player_id}`)
+                $(`#draft-board-row-${jsonData.mgr_player_ct}`).show();
 
             } else if (jsonData.status == 'error') {
                 alert(jsonData.error)
+            }
+            if (jsonData.new_projected_team) {
+                updateProjectedTeam(jsonData);
             }
         }
         
@@ -317,33 +352,14 @@ function updateDraftBoard(data) {
         let $player_selection = $(attr_get_player)
         let positionClass = `position-${draftPick['position']}`;
         if(draftPick['drafted'] == true) {
-            // $player_selection.removeClass(positionClass)
-            // $player_selection.removeClass('available-player');
-            // $player_selection.addClass('drafted-player');
             let undraftPlayerUrl = `/draft/undraft_player/${draft_id}/${player_id}/`
             $player_selection.attr('url', undraftPlayerUrl);
-
         } else {
-            // $player_selection.addClass(positionClass)
-            // $player_selection.addClass('available-player');
-            // $player_selection.removeClass('drafted-player');
             let draftPlayerUrl = `/draft/draft_player/${draft_id}/${player_id}/`
             $player_selection.attr('url', draftPlayerUrl);
-
-
         }
     }
     )
-}
-
-function updateBudgets(data) {
-    jsonData = JSON.parse(data)
-    let draftData = jsonData['data']
-    
-    let managersDict = draftData['managers_dict']
-
-    // $.each(managersDict, function(manager) {
-    // })
 }
 
 function updateWatchList(data) {
@@ -354,15 +370,6 @@ function updateWatchList(data) {
         $manager_budget.text(manager['budget'])
     })
 }
-
-// function unwatchPlayer(e) 
-//     let player_id = $(e.target).attr('player_id'
-//     $('#id_current_player').attr('current_player_id', player_id)
-//     $('.modal-backdrop').show()
-//     $('#undraft_player_modal').show()
-//     $('#undraft_player_modal').modal({backdrop: 'static'})
-//     $('body').removeClass('modal-open');
-// }
 
 function addToProjectedTeam(skipModal=false, actualPrice=null, source=null) {
 
@@ -386,7 +393,6 @@ function addToProjectedTeam(skipModal=false, actualPrice=null, source=null) {
         let $draft_slot_name = $($draft_slot.children()[0])
         $draft_slot_name.attr('projected-player-id', player_id)
         let $draft_slot_price = $($draft_slot.children()[2])
-        // let $draft_slot_td = $('#projected-slot-' + current_draft_slot_id + ' > td');
         $draft_slot_name.text(player_name)
         if (actualPrice) {
             $draft_slot_price.text(actualPrice)
@@ -465,14 +471,43 @@ function submitProjectedTeam(e) {
 
 
 function updateProjectedTeam(jsonData) {
-    let currentBudget = parseInt($('.projected-budget'));
-    console.log(currentBudget)
-    console.log(jsonData)
-    let newBudget = currentBudget - parseInt(jsonData.price);
-    $('.projected-budget').text(newBudget)
-    let $slot = $(`#projected-slot-${jsonData.slot}`);
-    $slot.find('.projected-name').text(jsonData.player_name);
-    $slot.find('.projected-spend').text(jsonData.price)
+    $('.projected-slot').removeClass('position-QB position-RB position-WR position-TE position-DEF')
+    let newTeam = jsonData.new_projected_team;
+    for (const newSlot in newTeam) {
+        let player = newTeam[newSlot];
+        if (player !== null) {
+            fillBudgetSlot(player, newSlot);
+        } else {
+            emptyBudgetSlot(newSlot);
+        }
+    }
+    recalculateBudget();
+}
+
+function fillBudgetSlot(player, slot) {
+    let $slot = $(`#projected-slot-${slot}`);
+    let positionClass = `position-${player.position}`
+    let symbol = player.source == 'drafted' ? '✓' : '✖';
+
+    $slot.addClass(positionClass);
+    $cancelSpan = $slot.find('td:nth-child(2)').find('span:nth-child(1)');
+    $cancelSpan.text(symbol)
+    $cancelSpan.addClass('text-danger', 'text-center');
+    $cancelSpan.css('cursor', 'pointer')
+    $cancelSpan.click(handlePickClick('unbudget'))
+    
+    $slot.find('span:nth-child(2)').text(player.player);
+    $slot.find('.projected-name').prepend($cancelSpan);
+    $slot.find('.projected-spend').text(player.price);
+    $slot.attr('data-player-id', player.id);
+}
+
+function emptyBudgetSlot(slot) {
+    let $slot = $(`#projected-slot-${slot}`);
+    $slot.removeClass('position-QB position-RB position-WR position-TE position-DEF');
+    $slot.find('td:nth-child(2)').find('span:nth-child(1)').text("⚬");
+    $slot.find('td:nth-child(2)').find('span:nth-child(2)').text("Unassigned");
+    $slot.find('td:nth-child(3)').find('span:nth-child(1)').text("-");
 }
 
 function getTeamPartsString() {
@@ -502,9 +537,6 @@ function highlightPick() {
 function addToPositionSlot(skipModal=false, actualPrice=null, source=null) {
 
     let player_name = $('#id_current_player').attr('current_player_name')
-    let player_id = $('#id_current_player').attr('current_player_id')
-    let player_price = $('#id_current_player').attr('current_proj_price')
-    let draft_id = $('#id_current_draft').attr('current_draft_id')
     $('.menu-control').hide();
     $('#menu-control-slot').show();
 
@@ -518,7 +550,6 @@ function addToPositionSlot(skipModal=false, actualPrice=null, source=null) {
     let $positionSlot = $(`tr[position_options_id="${current_draft_slot_id}`)
     $positionSlot.append($(`<td class='slotted_position'>${player_name}</td>`))
 
-    let $targetTeam = $('.target-my-team')
     if (!skipModal) {
         $(document).unbind('keypress')
         $('.modal').modal({backdrop: false})
@@ -579,37 +610,20 @@ function updatePositionSlots(data) {
 function budgetPlayer(e) {
     const $player = $(e).parent();
     let [position, player_id, proj_price, round_price, player_name, managerId] = extractTargetData($player);
-    $('.menu-control').hide();
-    $('#menu-control-budget').show();
-
-
-    $('#id_draft_current_manager').val('')
-    $('#id_current_price').val('')
-
-    setCurrentPlayerData(player_id, position, player_name, proj_price);
-    $('#id_draft_current_manager').find('option').first()[0].selected = true;
-    $('#id_current_price').val(round_price);
-
-    openDraftModal();
-}
-
-function submitBudgetPick(e) {
-    let [current_act_price, curr_proj_price, current_player_id, draft_id, drafter_id, current_manager_id, submit_position, current_player_name] = getSubmitData();
-    closeDraftModal();
-    // let position = $('#id_draft_player_position').val();
-    let url = `/draft/budget_player/${draft_id}/${current_player_id}/`
-    if (submit_position != undefined) {
+    let draft_id = globalState.get('draft_id');
+    let drafter_id = globalState.get('drafter_id');
+    let url = `/draft/budget_player/${draft_id}/${player_id}/`
+    if (position != undefined) {
         $.post(
             url,
             {
                 csrfmiddlewaretoken: $('input[name="csrfmiddlewaretoken').val()
-                ,manager_id: current_manager_id 
-                ,price: curr_proj_price.val()
-                ,position: submit_position
+                ,manager_id: drafter_id 
+                ,price: proj_price
+                ,position: position
             },
             function(data) {
                 jsonData = JSON.parse(data);
-                console.log(jsonData)
                 if (jsonData.status == 'budgeted') {
                     updateProjectedTeam(jsonData)
                 }
@@ -646,5 +660,78 @@ function formatAvailablePlayer(pId, pos, playerName, projPrice) {
     let cCancel = $(`<td class="text-danger text-center" style="cursor: pointer;" onclick="handlePickClick(this, 'undraft')">&#10006;</td>`);
     let cPrice = $(`<td>${actPrice}</td>`);
     $availableList.prepend([cName, cPos, cCancel, cPrice]);
+
+}
+
+function allowDrop(ev) {
+    ev.preventDefault();
+  }
+  
+function cardDrag(ev) {
+    let $src = $(ev.srcElement);
+    let data = {
+        name: $src.find('td').first().text(),
+        position: $src.attr('position'),
+        playerId: $src.attr('player_id'),
+    }
+    $src.addClass('dragging')
+    const img = new Image();
+    img.src = '/static/images/football.png';
+    img.position = 'absolute';
+    img.left = '-20px';
+    img.top = '-20px';
+    ev.dataTransfer.setDragImage(img, -25, -25)
+
+    ev.dataTransfer.setData("text/plain", [
+        data
+    ]);
+}
+
+function cardDrop(ev) {
+    ev.preventDefault();
+    var data = ev.dataTransfer.getData("text");
+}
+
+function cardDragEnd(ev) {
+    ev.preventDefault();
+    let $src = $(ev.srcElement);
+    $src.removeClass('dragging');
+}
+
+function dragoverDraft(ev) {
+    ev.preventDefault();
+    $(ev.target).addClass('draft-drag-over');
+}
+
+function dragleaveDraft(ev) {
+    ev.preventDefault();
+    $(ev.target).removeClass('draft-drag-over');
+}
+
+function dropDraft(ev) {
+    ev.preventDefault();
+    let $target = $(ev.target);
+    $target.removeClass('draft-drag-over');
+}
+
+function getDraftId() {
+    return $('#id_current_draft').attr('current_draft_id')
+}
+
+function recalculateBudget() {
+    let spent = 0;
+    let budget = parseInt($('.start-budget').text());
+    let $projSlots = $('.projected-slot');
+    let $slot;
+    let price;
+    $projSlots.each((idx, slot) => {
+        $slot = $(slot);
+        price = parseInt($slot.find('td:nth-child(3)').text());
+        if (!isNaN(price)) {
+            spent += price;
+        }
+    })
+    let newBudgetAmt = budget - spent;
+    $('.projected-budget').text(newBudgetAmt);
 
 }

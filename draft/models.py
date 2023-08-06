@@ -158,7 +158,7 @@ class WatchPick(models.Model):
     watched = models.BooleanField(default=False)
 
     class Meta:
-        unique_together = ('draft', 'player')
+        unique_together = ('draft', 'player', 'manager')
 
     def __str__(self) -> str:
 

@@ -47,3 +47,46 @@
 .proj-budgeted {
     background-color: burlywood;
 }
+
+.drafted-list {
+    border: solid 1px grey;
+}
+
+.sticky {
+    position: fixed;
+    top: 0;
+    width: 100%;
+}
+
+.draft-drag-over {
+    background-color: aquamarine;
+}
+
+.dragging {
+    height: 20px;
+    width: 20px;
+    opacity: 0.33;
+}
+
+.available-player {
+    display: flex;
+    justify-content: center;
+    min-width: 160px;
+}
+.draft-action {
+    display: flex;
+    border: solid 1px black;
+    background-color: aliceblue;
+    min-width: 20px;
+}
+
+.draft-action:active {
+    background-color: orange;
+}
+
+.draft-action span {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: center;
+}
