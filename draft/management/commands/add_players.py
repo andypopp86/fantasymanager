@@ -58,6 +58,7 @@ class Command(BaseCommand):
                     except:
                         projected_price = 0.00
                     print('updating player %s (%s) with price %s' % (player_json['name'], player_json['player_id'], projected_price))
+                    nfl_team = d.NFLTeam.objects.filter(code=player_json['team']).first()
                     player, created = d.Player.objects.get_or_create(
                         player_id=player_json['player_id'],
                         year=this_year,
@@ -65,9 +66,12 @@ class Command(BaseCommand):
                             'name': player_json['name'],
                             'position': player_json['position'],
                             'adp_formatted': player_json['adp_formatted'],
-                            'projected_price': projected_price
+                            'projected_price': projected_price,
+                            'team': nfl_team
                         }
                     )
                     player.projected_price = projected_price
+                    if not created:
+                        player.team = nfl_team
                     player.save()
                     player_ct += 1

@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load bootstrap3 %}
 {% load static %}
+{% load mathfilters %}
 
 {% bootstrap_css %}
 {% bootstrap_javascript %}
@@ -57,23 +58,29 @@
             </tbody>
         </table>
     </div>
-    <div class="col-xs-3 sidebar">
+    <div class="col-xs-6 sidebar">
         <table class="sidebar">
-            <tbody class="available-player-list">
+            <tbody class="available-player-list available-player">
                 
                 <thead>
-                    <tr><th class="text-center" colspan="3"><span class="btn-info">AVAILABLE PLAYERS</span></th></tr>
-                    <th>Player</th>
-                    <th>Pos</th>
-                    <th>Proj</th>
+                    <tr><td class="text-center" colspan="3"><span class="btn-info">AVAILABLE PLAYERS</span></td></tr>
                 </thead>
+                <tr class="available-player available-player-header row" >
+                    <td class="text-center">Player</td>
+                    <td class="text-center draft-action">D</td>
+                    <td class="text-center draft-action">W</td>
+                    <td class="text-center draft-action">B</td>
+                    <td class="text-center draft-attr">$</td>
+                    <td class="text-center draft-attr">&#9728;</td>
+                    <td class="text-center draft-attr">&#127752;</td>
+                </tr>
                 {% for pick in picks_by_adp %}
                     <tr class="available-player" id="available-player-{{pick.player.id}}" draft_id="{{draft.id}}" player_id="{{pick.player.id}}" position="{{pick.player.position}}"
                         draggable="true" ondragstart="cardDrag(event);" ondragend="cardDragEnd(event);"
                         proj-price="{% if pick.player.override_price %}{{pick.player.override_price}}{% else %}{{pick.player.projected_price}}{% endif %}" 
                         url="{% url 'draft:draft_player' draft.id pick.player.id %}" 
                         style="{% if pick.drafted %}display: none;{% endif %}">
-                        <td class="draft-slot available-player position-{{pick.player.position}} available-name"  onclick="handlePickClick(this, 'draft')" style="cursor: pointer;"  >{{ pick.player.name }}</td>
+                        <td class="available-player position-{{pick.player.position}} available-name"  onclick="handlePickClick(this, 'draft')" style="cursor: pointer;"  >{{ pick.player.name }}</td>
                         <td class="text-center draft-action" onclick="handlePickClick(this, 'draft')" style="cursor: pointer;" >
                             <span class="text-center">&check;</span>
                         </td>
@@ -83,50 +90,17 @@
                         <td class="text-center draft-action" style="cursor: pointer;" onclick="budgetPlayer(this)">
                             <span class="text-center">&#36;</span>
                         </td>
-                        <td class="text-center available-price">{% if pick.player.override_price %}{{pick.player.override_price|floatformat:0}}{% else %}{{pick.player.projected_price|floatformat:0}}{% endif %}</td>
+                        <td class="text-center available-price draft-attr"><span>{% if pick.player.override_price %}{{pick.player.override_price|floatformat:0}}{% else %}{{pick.player.projected_price|floatformat:0}}{% endif %}</span></td>
+                        <td class="text-center draft-attr"
+                            style="background-color: {{pick.weather_color}}"
+                        ><span>{{pick.player.team.playoff_weather_score|default:"-"}}</span></td>
+                        <td class="text-center draft-attr"
+                            style="background-color: {{pick.schedule_color}}"
+                        ><span>{{pick.player.team.early_season_schedule|default:"-"}}</span></td>
                     </tr>
                 {% endfor %}
             </tbody>
 
-        </table>
-    </div>
-    <div class="col-xs-3 sidebar">
-        <table class="drafted-list" ondragover="allowDrop(event)" ondrop="cardDrop(event);">
-            <thead>
-                <tr><th class="text-center" colspan="3"><span class="btn-info">ALL DRAFTED</span></th></tr>
-                <th>Player</th>
-                <th>Pos</th>
-                <th></th>
-                <th>Act $</th>
-            </thead>
-            {% for pick in picks_by_time %}
-                <!-- <tr onclick="window.location.href='{% url 'draft:undraft_player' draft.id pick.player.id %}'"> -->
-                <tr id="drafted-player-{{pick.player.id}}" class="drafted-player" player_id="{{ pick.player.id }}" manager-id="{{ pick.manager.id }}" onclick="handlePickClick('undraft')"
-                    style="{% if not pick.drafted %}display: none;{% endif %}">
-                    <td player_id="{{ pick.player.id }}">{{ pick.player.name }}</td>
-                    <td>{{ pick.player.position }}</td>
-                    <td class="text-danger text-center" style="cursor: pointer;" onclick="handlePickClick(this, 'undraft');">&#10006;</td>
-                    <td class="pick-price">{{ pick.price }}</td>
-                </tr>
-            {% endfor %}
-        </table>
-    </div>
-    <div class="col-xs-3 sidebar">
-        <table id="watch-list">
-            <tbody>
-                <tr>
-                    <tr><th class="text-center" colspan="3"><span class="btn-info">WATCHLIST</span></th></tr>
-                    <th colspan="2">Watchlist</th>
-                    <th >{{watch_total}}</th>
-                </tr>
-                {% for player in watched_players %}
-                    <tr player_id="{{ player.id }}">
-                        <td class="watch-slot watched-player" player_id="{{player.id}}" draft_id={{draft.id}}>{{player.name}}</td>
-                        <td class="text-danger text-center" style="cursor: pointer;" onclick="handlePickClick(this, 'unwatch');">&#10006;</td>
-                        <td class="watch-slot" draft_id={{draft.id}}>{{player.projected_price}}</td>
-                    </tr>
-                {% endfor %}
-            </tbody>
         </table>
     </div>
     <div class="col-xs-3 sidebar">
@@ -142,6 +116,8 @@
                         <th>Projected $</th>
                     </tr>
                 </thead>
+            </tbody>
+            <tbody class="my-proj-team">
                     {% for slot, pdict in new_projected_team.items %}
                         <tr 
                             id="projected-slot-{{slot}}" 
@@ -166,23 +142,65 @@
                         </tr>
                     {% endfor %}
             </tbody>
-            <tbody class="my-team">
-                <thead>
-                    <tr><th class="text-center" colspan="3"><span class="btn-warning">MY TEAM</span></th></tr>
-                    <th>Player</th>
-                    <th>Position</th>
-                    <th>Actual $</th>
-                </thead>
-                {% for pick in drafter_players %}
-                    <tr class="my-drafted-player" player_id="{{pick.player.id}}">
-                        <td player_id="{{pick.player.id}}">{{ pick.player.name }}</td>
-                        <td>{{ pick.player.position }}</td>
-                        <td>{{ pick.price }}</td>
+
+        </table>
+    </div>
+    <div class="col-xs-3 sidebar">
+        <table id="watch-list">
+            <tbody>
+                <tr>
+                    <tr><th class="text-center" colspan="3"><span class="btn-info">WATCHLIST</span></th></tr>
+                    <th colspan="2">Watchlist</th>
+                    <th >{{watch_total}}</th>
+                </tr>
+                {% for player in watched_players %}
+                    <tr player_id="{{ player.id }}">
+                        <td class="watch-slot watched-player" player_id="{{player.id}}" draft_id={{draft.id}}>{{player.name}}</td>
+                        <td class="text-danger text-center" style="cursor: pointer;" onclick="handlePickClick(this, 'unwatch');">&#10006;</td>
+                        <td class="watch-slot" draft_id={{draft.id}}>{{player.projected_price}}</td>
                     </tr>
                 {% endfor %}
             </tbody>
-
         </table>
+
+        <tbody class="drafted-list">
+            <table>
+            <!-- <table class="drafted-list" ondragover="allowDrop(event)" ondrop="cardDrop(event);"> -->
+                <thead>
+                    <tr><th class="text-center" colspan="3"><span class="btn-info">ALL DRAFTED</span></th></tr>
+                    <th>Player</th>
+                    <th>Pos</th>
+                    <th></th>
+                    <th>Act $</th>
+                </thead>
+                {% for pick in picks_by_time %}
+                    <!-- <tr onclick="window.location.href='{% url 'draft:undraft_player' draft.id pick.player.id %}'"> -->
+                    <tr id="drafted-player-{{pick.player.id}}" class="drafted-player" player_id="{{ pick.player.id }}" manager-id="{{ pick.manager.id }}" onclick="handlePickClick('undraft')"
+                        style="{% if not pick.drafted %}display: none;{% endif %}">
+                        <td player_id="{{ pick.player.id }}">{{ pick.player.name }}</td>
+                        <td>{{ pick.player.position }}</td>
+                        <td class="text-danger text-center" style="cursor: pointer;" onclick="handlePickClick(this, 'undraft');">&#10006;</td>
+                        <td class="pick-price">{{ pick.price }}</td>
+                    </tr>
+                {% endfor %}
+            </table>
+        </tbody>
+        <tbody class="my-team">
+            <thead>
+                <tr><th class="text-center" colspan="3"><span class="btn-warning">MY TEAM</span></th></tr>
+                <th>Player</th>
+                <th>Position</th>
+                <th>Actual $</th>
+            </thead>
+            {% for pick in drafter_players %}
+                <tr class="my-drafted-player" player_id="{{pick.player.id}}">
+                    <td player_id="{{pick.player.id}}">{{ pick.player.name }}</td>
+                    <td>{{ pick.player.position }}</td>
+                    <td>{{ pick.price }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+
     </div>
     <div class="col-xs-12 position-slot-options">
         <table class="table col-xs-12">
@@ -212,8 +230,16 @@
         <div class="modal-content">
             <div class="modal-body">
                 <div class="panel panel-default" style="margin-top: 10px">
-                    <div class="panel-heading">
-                        <big>Draft Player</big>
+                    <div class="panel-heading draft-player-header-container text-center">
+                        <big class="draft-player-header">
+                            <span class="star-icon" style="display: none;">&#9733;</span>
+                            <span class="star-icon" style="display: none;">&#9733;</span>
+                            <span class="star-icon" style="display: none;">&#9733;</span>
+                            <span>Draft Player</span>
+                            <span class="star-icon" style="display: none;">&#9733;</span>
+                            <span class="star-icon" style="display: none;">&#9733;</span>
+                            <span class="star-icon" style="display: none;">&#9733;</span>
+                        </big>
                     </div>
                     <div class="panel-body">
                         <div class="form-group">
@@ -230,7 +256,7 @@
                         <div class="form-group" style="display: none">
                             <label for="id_current_position">Position</label><input id="id_current_position" class="form-control" current_position=""></input>
                         </div>
-
+<!-- 
                         <div class="form-group">
                             <select id="id_draft_player_position" class="form-control selectpicker"  data-live-search="true" data-live-search-style="startsWith">
                                 <option draft_slot_id="unassigned">Unassigned</option>
@@ -238,7 +264,7 @@
                                     <option draft_slot_id="{{draft_slot.0}}">{{draft_slot.1}}</option>
                                 {% endfor %}
                             </select>
-                        </div>
+                        </div> -->
 
                         <div class="text-center" style="margin-top: 40px;">
                             <button class="btn btn-default" onclick="cancelDraftPick()">Cancel</button>

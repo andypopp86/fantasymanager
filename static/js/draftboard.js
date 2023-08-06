@@ -151,6 +151,15 @@ function draftPlayer(e) {
     $('.menu-control').hide();
     $('#menu-control-draft').show();
 
+    let matchFound = false;
+    $('.my-proj-team').find('tr').each((idx, row) => {
+        let $row = $(row);
+        let projName = $row.find('td:nth-child(2)').find('span:nth-child(2)').text();
+        if (player_name == projName) {
+            matchFound = true;
+        }
+    });
+    $('.star-icon').toggle(matchFound);
 
     $('#id_draft_current_manager').val('')
     $('#id_current_price').val('')

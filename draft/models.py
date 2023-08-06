@@ -42,6 +42,29 @@ POSITIONS_MAP = {
 
 FLEX_POSITIONS = ('RB', 'WR', 'TE')
 
+class NFLTeam(models.Model):
+    code = models.CharField(max_length=10)
+    name = models.CharField(max_length=100, null=True, blank=True)
+    year = models.IntegerField(null=True, blank=True)
+    playoff_weather_score = models.IntegerField(default=None, blank=True, null=True)
+    early_season_schedule = models.IntegerField(default=None, blank=True, null=True)
+    defensive_ranking = models.IntegerField(null=True, blank=True)
+
+    def __str__(self):
+        return self.code
+
+class Matchup(models.Model):
+    year = models.IntegerField()
+    week = models.IntegerField()
+    home = models.ForeignKey(NFLTeam, on_delete=models.CASCADE, related_name='home_matchup')
+    away = models.ForeignKey(NFLTeam, on_delete=models.CASCADE, related_name='away_matchup')
+
+    def __str__(self) -> str:
+        return f'{self.home.code} @ {self.away.code}'
+
+    class Meta:
+        ordering = ['-year', 'week']
+
 class Player(models.Model):
     player_id = models.CharField(max_length=100)
     name = models.CharField(max_length=100)
@@ -50,6 +73,7 @@ class Player(models.Model):
     projected_price = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     override_price = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     nickname = models.CharField(max_length=200, null=True, blank=True)
+    team = models.ForeignKey(NFLTeam, null=True, blank=True, on_delete=models.SET_NULL)
     year = models.IntegerField(default=2022)
 
     def __str__(self) -> str:

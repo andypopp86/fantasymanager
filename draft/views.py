@@ -143,7 +143,16 @@ def draft_board(request, draft_id):
             drafter = manager
         draft_dict[manager.id] = []
     # add made picks to the managers draft dict
+    wopacity_map = {1: 1, 2: 0.5, 3: 0.5, 4: 0.6, 5: 0.8}
     for pick in picks_by_adp:
+        wscore = wopacity_map.get(pick.player.team.playoff_weather_score, 1) if pick.player.team else 0
+        pick.weather_opacity = wscore
+        pick.weather_color = f'rgb(0, 255, 0, {wscore})' if wscore <= 2 else f'rgb(0, 0, 255, {wscore})' if wscore <= 4 else f'rgb(255, 0, 0, {wscore})'
+        sched_score = (pick.player.team.early_season_schedule or 0) / 32 if pick.player.team else 0
+        sched_rank = pick.player.team.early_season_schedule if pick.player.team else 0
+        pick.schedule_color = 'green' if sched_rank <= 10 else 'blue' if sched_rank <= 20 else 'red'
+        pick.schedule_opacity = 1 - sched_score if sched_rank <= 16 else sched_score
+        pick.schedule_color = f'rgb(0, 255, 0, {pick.schedule_opacity})' if sched_rank <= 10 else f'rgb(0, 0, 255, {pick.schedule_opacity})' if sched_rank <= 20 else f'rgb(255, 0, 0, {pick.schedule_opacity})'
         if pick.manager:
             draft_dict[pick.manager.id].append(pick)
     

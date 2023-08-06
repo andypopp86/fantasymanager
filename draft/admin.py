@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.db.models import Q
 from draft import models as d
 
 class SuccessFilter(admin.SimpleListFilter):
@@ -36,7 +37,7 @@ class FlexFilter(admin.SimpleListFilter):
 
 
 class PlayerAdmin(admin.ModelAdmin):
-    list_display = ('player_id', 'year', 'name', 'nickname',  'position',  'adp_formatted',  'projected_price',  'override_price')
+    list_display = ('player_id', 'year', 'name', 'team', 'nickname',  'position',  'adp_formatted',  'projected_price',  'override_price')
     search_fields = ('name', 'position', )
     list_filter = ('position', 'year')
     fields = ('player_id',  'name', 'nickname', 'position',  'adp_formatted',  'projected_price',  'override_price')
@@ -113,11 +114,41 @@ class BudgetPlayerAdmin(admin.ModelAdmin):
     list_filter = ('draft', 'manager', 'status')
     readonly_fields = ('draft', 'player', 'manager', 'price' )
 
+class NFLTeamAdmin(admin.ModelAdmin):
+    list_display = ('code', 'name', 'year', 'playoff_weather_score', 'early_season_schedule', 'defensive_ranking')
+    list_filter = ('code', 'year',)
+    fields = ('code', 'name', 'year', 'playoff_weather_score', 'early_season_schedule', 'defensive_ranking')
+    readonly_fields = ('code', 'year',)
+
+class TeamMatchupFilter(admin.SimpleListFilter):
+    title = 'Team'
+    parameter_name = 'team'
+
+    def lookups(self, request, model_admin):
+        teams = list([(d.code, d.name) for d in d.NFLTeam.objects.distinct('code')])
+        return teams
+
+    def queryset(self, request, queryset):
+        if not self.value():
+            return queryset
+        else:
+            return queryset.filter(Q(home__code=self.value()) | Q(away__code=self.value()))
+        
+class MatchupAdmin(admin.ModelAdmin):
+    list_display = ('year', 'week', 'home', 'away')
+    list_filter = ('year', 'week', TeamMatchupFilter)
+    readonly_fields = ('year', 'week', 'home', 'away')
+
+
+
+
+admin.site.register(d.NFLTeam, NFLTeamAdmin)
 admin.site.register(d.Player, PlayerAdmin)
 admin.site.register(d.Manager, ManagerAdmin)
 admin.site.register(d.Draft, DraftAdmin)
 admin.site.register(d.DraftPick, DraftPickAdmin)
 admin.site.register(d.WatchPick, WatchPickAdmin)
+admin.site.register(d.Matchup, MatchupAdmin)
 admin.site.register(d.BudgetPlayer, BudgetPlayerAdmin)
 admin.site.register(d.HistoricalDraftPicks, HistoricalDraftPickAdmin)
 admin.site.register(d.HistoricalPlayerStats, HistoricalPlayerStatsAdmin)
