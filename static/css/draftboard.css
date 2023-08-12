@@ -1,3 +1,7 @@
+.filtered-out {
+    display: none !important;
+}
+
 .draft-board-slot {
     font-size: 9pt;
     border: solid lightgoldenrodyellow 1px;
@@ -52,24 +56,24 @@
     height: 25px;
 }
 .position-WR {
-    background-color: green;
-    color: white;
+    background-color: #9df2a7;
+    color: black;
 }
 .position-RB {
-    background-color: blue;
-    color: white;
+    background-color: #b8caea;
+    color: black;
 }
 .position-QB {
-    background-color: red;
-    color: white;
+    background-color: #f2a29d;
+    color: black;
 }
 .position-TE {
-    background-color: burlywood;
+    background-color: #f2e09d;
     color: black;
 }
 .position-DEF {
-    background-color: black;
-    color: grey;
+    background-color: #cdbe70;
+    color: black;
 }
 .pick-selected {
     background-color: darkcyan;

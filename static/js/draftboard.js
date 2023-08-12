@@ -68,6 +68,8 @@ function startDraftBoard() {
             updateDraftBoard(data);
             updateProjectedTeam(jsonData);
             initializeGlobalState(data);
+            $('#ap_filter_toggle').click(toggleFilterType);
+            $('#ap_filter').keyup(filterAvailablePlayers);
         }
     })
 
@@ -742,5 +744,57 @@ function recalculateBudget() {
     })
     let newBudgetAmt = budget - spent;
     $('.projected-budget').text(newBudgetAmt);
+
+}
+
+function toggleFilterType() {
+    let $toggle = $('#ap_filter_toggle');
+    let types = ['Player', 'Position']
+    let current = $toggle.text();
+    let index = types.indexOf(current);
+    if (index == (types.length - 1)) { 
+        index = 0; 
+    } else {
+        index += 1;
+    }
+    $toggle.text(types[index]);
+
+}
+function filterAvailablePlayers() {
+    let filterType = $('#ap_filter_toggle').text();
+    let val = $('#ap_filter').val().toLowerCase();
+    console.log(val)
+
+    if (filterType == 'Player') {
+        if (val.length <= 2) {
+            $('tr.filtered-out').removeClass('filtered-out');
+        } else {
+            let playerRows = $('tr.available-player');
+            playerRows.each((idx, pRow) => {
+                let $row = $(pRow);
+                let pCell = $row.find('td:nth-child(1)');
+                let playerName = pCell.text().toLowerCase();
+                if (playerName.indexOf(val) == -1) {
+                    $row.addClass('filtered-out');
+                }
+            })
+        }
+    } else if (filterType == 'Position') {
+        if (['qb', 'rb', 'wr', 'te', 'def'].indexOf(val) != -1) {
+            let filterKey = `position-${val.toUpperCase()}`
+            let playerRows = $('tr.available-player');
+            playerRows.each((idx, pRow) => {
+                let $row = $(pRow);
+                let $pCell = $row.find('td:nth-child(1)');
+                if ($pCell.hasClass(filterKey)) {
+                    $row.removeClass('filtered-out')
+                } else {
+                    $row.addClass('filtered-out')
+                }
+            });
+        } else {
+            $('tr.filtered-out').removeClass('filtered-out');
+        }
+    }
 
 }

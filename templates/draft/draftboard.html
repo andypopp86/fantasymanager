@@ -58,15 +58,20 @@
             </tbody>
         </table>
     </div>
-    <div class="col-xs-6 sidebar">
+    <div class="col-xs-5 sidebar">
         <table class="sidebar">
-            <tbody class="available-player-list available-player">
+            
                 
                 <thead>
-                    <tr><td class="text-center" colspan="3"><span class="btn-info">AVAILABLE PLAYERS</span></td></tr>
                 </thead>
+                    <tr class="text-left">
+                        <td>
+                            <span id="ap_filter_toggle" style="width: 30%;">Player</span>
+                            <input id="ap_filter" style="width: 70%" />
+                        </td>
+                    </tr>
                 <tr class="available-player available-player-header row" >
-                    <td class="text-center">Player</td>
+                    <td class="text-center"></td>
                     <td class="text-center draft-action">D</td>
                     <td class="text-center draft-action">W</td>
                     <td class="text-center draft-action">B</td>
@@ -99,11 +104,10 @@
                         ><span>{{pick.player.team.early_season_schedule|default:"-"}}</span></td>
                     </tr>
                 {% endfor %}
-            </tbody>
 
         </table>
     </div>
-    <div class="col-xs-3 sidebar">
+    <div class="col-xs-4 sidebar">
         <table>
             <tbody class="target-my-team">
                 <thead>

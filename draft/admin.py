@@ -40,7 +40,7 @@ class PlayerAdmin(admin.ModelAdmin):
     list_display = ('player_id', 'year', 'name', 'team', 'nickname',  'position',  'adp_formatted',  'projected_price',  'override_price')
     search_fields = ('name', 'position', )
     list_filter = ('position', 'year')
-    fields = ('player_id',  'name', 'nickname', 'position',  'adp_formatted',  'projected_price',  'override_price')
+    fields = ('player_id', 'team', 'year',  'name', 'nickname', 'position',  'adp_formatted',  'projected_price',  'override_price')
     
 class DraftAdmin(admin.ModelAdmin):
     list_display = ('draft_name', 'year', 'drafter', 'projected_draft', )
