@@ -68,15 +68,17 @@ function startDraftBoard() {
             updateDraftBoard(data);
             updateProjectedTeam(jsonData);
             initializeGlobalState(data);
-            $('#ap_filter_toggle').click(toggleFilterType);
-            $('#ap_filter').keyup(filterAvailablePlayers);
+            $('#ap-filter-player').keyup(applyFilters);
+            $('#ap-filter-position').keyup(applyFilters);
+            $('#ap-filter-price').keyup(applyFilters);
+            $('#ap-filter-weather').keyup(applyFilters);
+            $('#ap-filter-schedule').keyup(applyFilters);
+            $('#ap-filter-clear').click(clearFilters);
         }
     })
 
 }
-function handlePickClick(e, action) {
-    let classList = $(e.target).classList;
-    
+function handlePickClick(e, action) {  
     if(action === 'draft') {
         draftPlayer(e);
         $('#id_draft_current_manager').focus();
@@ -216,14 +218,11 @@ function undraftPlayer(e) {
     )
 }
 
-
 function unbudgetPlayer(e) {
-    const $player = $(e).parent().parent();
-    $player.addClass('unbudgeting');
-    
+    const $playerRow = $(e.target).parent().parent();
+    $playerRow.addClass('unbudgeting');
     let [current_act_price, curr_proj_price, current_player_id, draft_id, drafter_id, current_manager_id, submit_position, current_player_name] = getSubmitData();
-    let player_id = $player.attr('data-player-id');
-
+    let player_id = $playerRow.attr('data-player-id');
     let undraftPlayerUrl = `/draft/unbudget_player/${draft_id}/${player_id}/`
     $.post(
         undraftPlayerUrl,
@@ -233,10 +232,10 @@ function unbudgetPlayer(e) {
         function(data) {
             jsonData = JSON.parse(data);
             if (jsonData.status == 'unbudgeted') {
-                $player.removeClass('position-QB position-RB position-WR position-TE position-DEF');
-                $player.find('td:nth-child(2)').find('span:nth-child(1)').text("⚬");
-                $player.find('td:nth-child(2)').find('span:nth-child(2)').text("Unassigned");
-                $player.find('td:nth-child(3)').text("-");
+                $playerRow.removeClass('position-QB position-RB position-WR position-TE position-DEF');
+                $playerRow.find('td:nth-child(2)').find('span:nth-child(1)').text("⚬");
+                $playerRow.find('td:nth-child(2)').find('span:nth-child(2)').text("Unassigned");
+                $playerRow.find('td:nth-child(3)').text("-");
                 recalculateBudget();
 
             }
@@ -504,8 +503,8 @@ function fillBudgetSlot(player, slot) {
     $cancelSpan = $slot.find('td:nth-child(2)').find('span:nth-child(1)');
     $cancelSpan.text(symbol)
     $cancelSpan.addClass('text-danger', 'text-center');
-    $cancelSpan.css('cursor', 'pointer')
-    $cancelSpan.click(handlePickClick('unbudget'))
+    $cancelSpan.css('cursor', 'pointer');
+    $cancelSpan.click(unbudgetPlayer);
     
     $slot.find('span:nth-child(2)').text(player.player);
     $slot.find('.projected-name').prepend($cancelSpan);
@@ -760,41 +759,86 @@ function toggleFilterType() {
     $toggle.text(types[index]);
 
 }
-function filterAvailablePlayers() {
-    let filterType = $('#ap_filter_toggle').text();
-    let val = $('#ap_filter').val().toLowerCase();
-    console.log(val)
+function clearFilters() {
+    $('#ap-filter-player').val('');
+    $('#ap-filter-position').val('');
+    $('#ap-filter-price').val('');
+    $('#ap-filter-weather').val('');
+    $('#ap-filter-schedule').val('');
+    $('tr.filtered-out').removeClass('filtered-out');
+}
 
-    if (filterType == 'Player') {
-        if (val.length <= 2) {
-            $('tr.filtered-out').removeClass('filtered-out');
-        } else {
-            let playerRows = $('tr.available-player');
-            playerRows.each((idx, pRow) => {
-                let $row = $(pRow);
-                let pCell = $row.find('td:nth-child(1)');
-                let playerName = pCell.text().toLowerCase();
-                if (playerName.indexOf(val) == -1) {
-                    $row.addClass('filtered-out');
-                }
-            })
-        }
-    } else if (filterType == 'Position') {
-        if (['qb', 'rb', 'wr', 'te', 'def'].indexOf(val) != -1) {
-            let filterKey = `position-${val.toUpperCase()}`
-            let playerRows = $('tr.available-player');
-            playerRows.each((idx, pRow) => {
-                let $row = $(pRow);
-                let $pCell = $row.find('td:nth-child(1)');
-                if ($pCell.hasClass(filterKey)) {
-                    $row.removeClass('filtered-out')
-                } else {
-                    $row.addClass('filtered-out')
-                }
-            });
-        } else {
-            $('tr.filtered-out').removeClass('filtered-out');
-        }
+function filterPlayers($row) {
+    let val = $('#ap-filter-player').val().toLowerCase();
+    let pCell = $row.find('td:nth-child(1)');
+    let playerName = pCell.text().toLowerCase();
+    return playerName.indexOf(val) != -1
     }
 
+function filterPosition($row) {
+    let val = $('#ap-filter-position').val().toUpperCase();
+    let $cell = $row.find('td:nth-child(1)');
+    let filterKey = 'position-' + val;
+    return $cell.hasClass(filterKey)
+}
+
+function filterPrice($row) {
+    let val = parseInt($('#ap-filter-price').val());
+    let $pCell = $row.find('td:nth-child(5)');
+    let $span = $pCell.find('span:nth-child(1)');
+    let cellValue = parseInt($span.text());
+    return cellValue <= val
+}
+
+function filterWeather($row) {
+    let val = parseInt($('#ap-filter-weather').val());
+    let $pCell = $row.find('td:nth-child(6)');
+    let $span = $pCell.find('span:nth-child(1)');
+    let cellValue = parseInt($span.text());
+    return cellValue <= val
+}
+
+function filterSchedule($row) {
+    let val = parseInt($('#ap-filter-schedule').val());
+    let $pCell = $row.find('td:nth-child(7)');
+    let $span = $pCell.find('span:nth-child(1)');
+    let cellValue = parseInt($span.text());
+    return cellValue <= val
+}
+
+function applyFilters() {
+    let playerFilter = $('#ap-filter-player').val().toLowerCase();
+    let positionFilter = $('#ap-filter-position').val().toLowerCase();
+    let priceFilter = parseInt($('#ap-filter-price').val());
+    priceFilter = (isNaN(priceFilter)) ? 0 : priceFilter;
+    let weatherFilter = parseInt($('#ap-filter-weather').val());
+    weatherFilter = (isNaN(weatherFilter)) ? 0 : weatherFilter;
+    let scheduleFilter = parseInt($('#ap-filter-schedule').val());
+    scheduleFilter = (isNaN(scheduleFilter)) ? 0 : scheduleFilter;
+    let filterList = [];
+    if (playerFilter.length > 2) {filterList.push(filterPlayers)}
+    if (['qb', 'rb', 'wr', 'te', 'def'].includes(positionFilter)) {filterList.push(filterPosition)}
+    if (priceFilter > 0) {filterList.push(filterPrice)}
+    if (weatherFilter > 0) {filterList.push(filterWeather)}
+    if (scheduleFilter > 0) {filterList.push(filterSchedule)}
+    if (filterList.length == 0) {
+        $('tr.filtered-out').removeClass('filtered-out');
+        return
+    }
+    let playerRows = $('tr.available-player');
+    playerRows.each((idx, pRow) => {
+        let $row = $(pRow);
+        let results = []
+        for (let i = 0; i < filterList.length; i++) {
+            let filterFn = filterList[i];
+            let result = filterFn($row);
+            results.push(result);
+        }
+        if (results.includes(false)) {
+            $row.addClass('filtered-out');
+        } else {
+            $row.removeClass('filtered-out');
+        }
+        }
+    )
 }

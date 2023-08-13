@@ -79,6 +79,10 @@ class Player(models.Model):
     def __str__(self) -> str:
         return self.name
 
+    def save(self, *args, **kwargs):
+        self.projected_price = max(self.projected_price, 1)
+        super().save(*args, **kwargs)
+
     class Meta:
         ordering = ['adp_formatted']
         unique_together = ('player_id', 'year')
@@ -102,6 +106,16 @@ class Draft(models.Model):
         if self.locked:
             return
         super(Draft, self).delete(*args, **kwargs)
+
+    def add_missing_players(self):
+        missing_players =  Player.objects.filter(year=self.year, drafted_players__isnull=True)
+        players_to_add = []
+        for player_to_add in missing_players:
+            players_to_add.append(DraftPick(
+                draft=self,
+                player=player_to_add
+            ))
+        DraftPick.objects.bulk_create(players_to_add)
 
 
 class Manager(models.Model):

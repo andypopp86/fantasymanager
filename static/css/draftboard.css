@@ -18,6 +18,17 @@
     border: 1px solid #dddddd;
 }
 
+.ap-filter-box {
+    display: flex;
+}
+
+.ap-filter-input {
+    width: 60%;
+}
+
+.ap-filter-label {
+    width: 60%;
+}
 
 .available-player-header > td:nth-child(1) {
     text-align: left;

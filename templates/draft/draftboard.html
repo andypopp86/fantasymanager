@@ -60,51 +60,78 @@
     </div>
     <div class="col-xs-5 sidebar">
         <table class="sidebar">
-            
-                
-                <thead>
-                </thead>
-                    <tr class="text-left">
-                        <td>
-                            <span id="ap_filter_toggle" style="width: 30%;">Player</span>
-                            <input id="ap_filter" style="width: 70%" />
-                        </td>
-                    </tr>
-                <tr class="available-player available-player-header row" >
-                    <td class="text-center"></td>
-                    <td class="text-center draft-action">D</td>
-                    <td class="text-center draft-action">W</td>
-                    <td class="text-center draft-action">B</td>
-                    <td class="text-center draft-attr">$</td>
-                    <td class="text-center draft-attr">&#9728;</td>
-                    <td class="text-center draft-attr">&#127752;</td>
+            <thead>
+            </thead>
+                <tr class="text-left ap-filter-box">
+                    <td class="ap-filter-label">Player</td>
+                    <td>
+                        <input id="ap-filter-player" class="ap-filter-input"/>
+                    </td>
                 </tr>
-                {% for pick in picks_by_adp %}
-                    <tr class="available-player" id="available-player-{{pick.player.id}}" draft_id="{{draft.id}}" player_id="{{pick.player.id}}" position="{{pick.player.position}}"
-                        draggable="true" ondragstart="cardDrag(event);" ondragend="cardDragEnd(event);"
-                        proj-price="{% if pick.player.override_price %}{{pick.player.override_price}}{% else %}{{pick.player.projected_price}}{% endif %}" 
-                        url="{% url 'draft:draft_player' draft.id pick.player.id %}" 
-                        style="{% if pick.drafted %}display: none;{% endif %}">
-                        <td class="available-player position-{{pick.player.position}} available-name"  onclick="handlePickClick(this, 'draft')" style="cursor: pointer;"  >{{ pick.player.name }}</td>
-                        <td class="text-center draft-action" onclick="handlePickClick(this, 'draft')" style="cursor: pointer;" >
-                            <span class="text-center">&check;</span>
-                        </td>
-                        <td class="text-center draft-action" style="cursor: pointer;" onclick="handlePickClick(this, 'watch')">
-                            <span class="text-center">&#128065;</span>
-                        </td>
-                        <td class="text-center draft-action" style="cursor: pointer;" onclick="budgetPlayer(this)">
-                            <span class="text-center">&#36;</span>
-                        </td>
-                        <td class="text-center available-price draft-attr"><span>{% if pick.player.override_price %}{{pick.player.override_price|floatformat:0}}{% else %}{{pick.player.projected_price|floatformat:0}}{% endif %}</span></td>
-                        <td class="text-center draft-attr"
-                            style="background-color: {{pick.weather_color}}"
-                        ><span>{{pick.player.team.playoff_weather_score|default:"-"}}</span></td>
-                        <td class="text-center draft-attr"
-                            style="background-color: {{pick.schedule_color}}"
-                        ><span>{{pick.player.team.early_season_schedule|default:"-"}}</span></td>
-                    </tr>
-                {% endfor %}
-
+                <tr class="text-left ap-filter-box">
+                    <td class="ap-filter-label">Position</td>
+                    <td>
+                    <input id="ap-filter-position" class="ap-filter-input"/>
+                    </td>
+                </tr>
+                <tr class="text-left ap-filter-box">
+                    <td class="ap-filter-label">Price</td>
+                    <td>
+                        <input id="ap-filter-price" class="ap-filter-input"/>
+                    </td>
+                </tr>
+                <tr class="text-left ap-filter-box">
+                    <td class="ap-filter-label">Weather</td>
+                    <td>
+                        <input id="ap-filter-weather" class="ap-filter-input"/>
+                    </td>
+                </tr>
+                <tr class="text-left ap-filter-box">
+                    <td class="ap-filter-label">Schedule</td>
+                    <td>
+                        <input id="ap-filter-schedule" class="ap-filter-input"/>
+                    </td>
+                </tr>
+                <tr class="text-left ap-filter-box">
+                    <td class="ap-filter-label"></td>
+                    <td>
+                        <button id="ap-filter-clear" class="ap-filter-input btn btn-normal">Clear All</button>
+                    </td>
+                </tr>
+            <tr class="available-player available-player-header row" >
+                <td class="text-center"></td>
+                <td class="text-center draft-action">D</td>
+                <td class="text-center draft-action">W</td>
+                <td class="text-center draft-action">B</td>
+                <td class="text-center draft-attr">$</td>
+                <td class="text-center draft-attr">&#9728;</td>
+                <td class="text-center draft-attr">&#127752;</td>
+            </tr>
+            {% for pick in picks_by_adp %}
+                <tr class="available-player" id="available-player-{{pick.player.id}}" draft_id="{{draft.id}}" player_id="{{pick.player.id}}" position="{{pick.player.position}}"
+                    draggable="true" ondragstart="cardDrag(event);" ondragend="cardDragEnd(event);"
+                    proj-price="{% if pick.player.override_price %}{{pick.player.override_price}}{% else %}{{pick.player.projected_price}}{% endif %}"
+                    url="{% url 'draft:draft_player' draft.id pick.player.id %}"
+                    style="{% if pick.drafted %}display: none;{% endif %}">
+                    <td class="available-player position-{{pick.player.position}} available-name"  onclick="handlePickClick(this, 'draft')" style="cursor: pointer;"  >{{ pick.player.name }}</td>
+                    <td class="text-center draft-action" onclick="handlePickClick(this, 'draft')" style="cursor: pointer;" >
+                        <span class="text-center">&check;</span>
+                    </td>
+                    <td class="text-center draft-action" style="cursor: pointer;" onclick="handlePickClick(this, 'watch')">
+                        <span class="text-center">&#128065;</span>
+                    </td>
+                    <td class="text-center draft-action" style="cursor: pointer;" onclick="budgetPlayer(this)">
+                        <span class="text-center">&#36;</span>
+                    </td>
+                    <td class="text-center available-price draft-attr"><span>{% if pick.player.override_price %}{{pick.player.override_price|floatformat:0}}{% else %}{{pick.player.projected_price|floatformat:0}}{% endif %}</span></td>
+                    <td class="text-center draft-attr"
+                        style="background-color: {{pick.weather_color}}"
+                    ><span>{{pick.player.team.playoff_weather_score|default:"-"}}</span></td>
+                    <td class="text-center draft-attr"
+                        style="background-color: {{pick.schedule_color}}"
+                    ><span>{{pick.player.team.early_season_schedule|default:"-"}}</span></td>
+                </tr>
+            {% endfor %}
         </table>
     </div>
     <div class="col-xs-4 sidebar">

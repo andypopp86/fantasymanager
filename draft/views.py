@@ -15,7 +15,8 @@ from draft import models as d
 from draft.utils import GENERIC_RANK_COLORS, WEATHER_RANK_COLORS
 
 def get_draft_board_data(request, draft_id):
-    player_pool = d.Player.objects.filter(drafted_players__draft__id=draft_id)
+    draft = d.Draft.objects.get(id=draft_id)
+    player_pool = d.Player.objects.filter(year=draft.year)
     player_pool = player_pool.annotate(draft_id=F('drafted_players__draft__id'))
     player_pool = player_pool.annotate(manager=F('drafted_players__manager__name'))
     player_pool = player_pool.annotate(price=F('drafted_players__price'))
@@ -116,6 +117,7 @@ def draft_board(request, draft_id):
     drafter = None
     teams = 10
     rounds = 16
+    draft.add_missing_players()
     players = d.Player.objects.filter(year=draft.year)
     managers = d.Manager.objects.filter(draft=draft).order_by('id')
     # picks = d.DraftPick.objects.filter(draft=draft).order_by('-player__projected_price')
@@ -144,7 +146,6 @@ def draft_board(request, draft_id):
             drafter = manager
         draft_dict[manager.id] = []
     # add made picks to the managers draft dict
-    wopacity_map = {1: 1, 2: 0.5, 3: 0.5, 4: 0.6, 5: 0.8}
     for pick in picks_by_adp:
         wscore = pick.player.team.playoff_weather_score if pick.player.team else 0
         pick.weather_color = WEATHER_RANK_COLORS.get(wscore, WEATHER_RANK_COLORS[100])
@@ -163,7 +164,7 @@ def draft_board(request, draft_id):
                 slot_dict = {'round_num': round_num, 'column_num': manager.position, 'pick': pick}
                 rdict[round_num]['picks'].append(slot_dict)
                 rdict[round_num]['active'] = True
-            except:
+            except Exception as exc:
                 slot_dict = {'round_num': round_num, 'column_num': manager.position, 'pick': None}
                 rdict[round_num]['picks'].append(slot_dict)
         draft_board.append(rdict)
