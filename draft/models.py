@@ -45,10 +45,19 @@ FLEX_POSITIONS = ('RB', 'WR', 'TE')
 class NFLTeam(models.Model):
     code = models.CharField(max_length=10)
     name = models.CharField(max_length=100, null=True, blank=True)
+    short_name = models.CharField(max_length=50, null=True, blank=True)
     year = models.IntegerField(null=True, blank=True)
     playoff_weather_score = models.IntegerField(default=None, blank=True, null=True)
     early_season_schedule = models.IntegerField(default=None, blank=True, null=True)
+    early_season_qb = models.IntegerField(default=None, blank=True, null=True)
+    early_season_wr = models.IntegerField(default=None, blank=True, null=True)
+    early_season_rb = models.IntegerField(default=None, blank=True, null=True)
+    early_season_te = models.IntegerField(default=None, blank=True, null=True)
+    early_season_def = models.IntegerField(default=None, blank=True, null=True)
     defensive_ranking = models.IntegerField(null=True, blank=True)
+    oline_ranking = models.IntegerField(default=0)
+    run_ranking = models.IntegerField(default=0)
+    pass_ranking = models.IntegerField(default=0)
 
     def __str__(self):
         return self.code
@@ -75,6 +84,9 @@ class Player(models.Model):
     nickname = models.CharField(max_length=200, null=True, blank=True)
     team = models.ForeignKey(NFLTeam, null=True, blank=True, on_delete=models.SET_NULL)
     year = models.IntegerField(default=2022)
+    favorite = models.BooleanField(default=False)
+    offensive_support = models.IntegerField(default=0)
+    skepticism = models.IntegerField(default=0)
 
     def __str__(self) -> str:
         return self.name
@@ -94,6 +106,7 @@ class Draft(models.Model):
     projected_draft = models.TextField(blank=True)
     saved_slots = models.TextField(blank=True)
     locked = models.BooleanField(default=False)
+    starting_budget = models.IntegerField(default=200)
 
     def __str__(self) -> str:
         return '%s' % (self.draft_name)
@@ -139,6 +152,14 @@ class Manager(models.Model):
 
     def long_name(self) -> str:
         return '%s - %s' % (self.draft.draft_name, self.name)
+    
+    def refresh_budget(self):
+        pick_prices = list(int(x) for x in self.manager_players.filter(drafted=True).values_list('price', flat=True))
+        print(pick_prices)
+        spent = sum(pick_prices)
+        print(spent)
+        self.budget = self.draft.starting_budget - spent
+        self.save(update_fields=['budget'])
     
     @cached_property
     def current_team(self):

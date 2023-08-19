@@ -23,4 +23,7 @@ urlpatterns = [
 	path(r'save_projected_team/<int:draft_id>/', d.save_projected_team, name='save_projected_team'),
 	path(r'historical_picks/', d.historical_draft_picks, name='historical_picks'),
 	path(r'save_position_slots/<int:draft_id>/', d.save_position_slots, name='save_position_slots'),
+	path(r'favorite_player/<int:draft_id>/<int:player_id>/', d.favorite_player, name='favorite_player'),
+	path(r'unfavorite_player/<int:draft_id>/<int:player_id>/', d.unfavorite_player, name='unfavorite_player'),
+	path(r'skepticism_rating/<int:draft_id>/<int:player_id>/', d.skepticism_rating, name='skepticism_rating'),
 ]

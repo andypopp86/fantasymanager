@@ -68,12 +68,18 @@ function startDraftBoard() {
             updateDraftBoard(data);
             updateProjectedTeam(jsonData);
             initializeGlobalState(data);
+            $('input.skepticism').change(setSkepticismRating);
             $('#ap-filter-player').keyup(applyFilters);
             $('#ap-filter-position').keyup(applyFilters);
             $('#ap-filter-price').keyup(applyFilters);
             $('#ap-filter-weather').keyup(applyFilters);
             $('#ap-filter-schedule').keyup(applyFilters);
+            $('#ap-filter-oline-ranking').keyup(applyFilters);
+            $('#ap-filter-skepticism').keyup(applyFilters);
+            $('#ap-filter-offensive-support').keyup(applyFilters);
+            $('#ap-filter-favorite').change(applyFilters);
             $('#ap-filter-clear').click(clearFilters);
+            $('.toggle-favorite').click(toggleFavoritePlayer);
         }
     })
 
@@ -154,6 +160,7 @@ function draftPlayer(e) {
     let [position, player_id, proj_price, round_price, player_name, managerId] = extractTargetData($player);
     $('.menu-control').hide();
     $('#menu-control-draft').show();
+    $('#draft-player-header').text(player_name);
 
     let matchFound = false;
     $('.my-proj-team').find('tr').each((idx, row) => {
@@ -213,6 +220,10 @@ function undraftPlayer(e) {
                 $boardPlayer.removeClass(`position-${jsonData.position}`);
                 $boardPlayer.text('($)');
 
+                if (jsonData.new_projected_team) {
+                    updateProjectedTeam(jsonData);
+                }
+
             }
             }
     )
@@ -222,7 +233,7 @@ function unbudgetPlayer(e) {
     const $playerRow = $(e.target).parent().parent();
     $playerRow.addClass('unbudgeting');
     let [current_act_price, curr_proj_price, current_player_id, draft_id, drafter_id, current_manager_id, submit_position, current_player_name] = getSubmitData();
-    let player_id = $playerRow.attr('data-player-id');
+    let player_id = $playerRow.attr('budget-player-id');
     let undraftPlayerUrl = `/draft/unbudget_player/${draft_id}/${player_id}/`
     $.post(
         undraftPlayerUrl,
@@ -278,9 +289,8 @@ function closeDraftModal() {
 
 function submitDraftPick(e) {
     let [current_act_price, curr_proj_price, current_player_id, draft_id, drafter_id, current_manager_id, submit_position, current_player_name] = getSubmitData();
+    $('#draft-player-header').text("Draft Player");
     closeDraftModal();
-
-
     let draftPlayerUrl = `/draft/draft_player/${draft_id}/${current_player_id}/`
     let draftPlayerRequest = $.post(
         draftPlayerUrl,
@@ -300,6 +310,15 @@ function submitDraftPick(e) {
                 $draftedPlayer.show();
                 $(`#manager-budget-${current_manager_id}`).text(jsonData['updated_budget'])
 
+                if (jsonData.was_drafter == true) {
+                    if (jsonData.new_projected_team) {
+                        updateProjectedTeam(jsonData);
+                    }
+                    let playerSelector = `[budget-player-id=${current_player_id}]`
+                    let $budgetedPlayerPrice = $(playerSelector).find('.projected-spend')
+                    $budgetedPlayerPrice.text(current_act_price.val())       
+                    recalculateBudget();
+                }
                 let $draftSlot = $(`[roundid=${jsonData.mgr_player_ct}][columnid=${jsonData.mgr_position}]`)
                 $draftSlot.text(`${current_player_name} ($${current_act_price.val()})`)
                 $draftSlot.addClass(`position-${submit_position}`)
@@ -309,9 +328,7 @@ function submitDraftPick(e) {
             } else if (jsonData.status == 'error') {
                 alert(jsonData.error)
             }
-            if (jsonData.new_projected_team) {
-                updateProjectedTeam(jsonData);
-            }
+
         }
         
     )
@@ -488,6 +505,7 @@ function updateProjectedTeam(jsonData) {
         if (player !== null) {
             fillBudgetSlot(player, newSlot);
         } else {
+            console.log('empty budget slot for', newSlot)
             emptyBudgetSlot(newSlot);
         }
     }
@@ -509,15 +527,16 @@ function fillBudgetSlot(player, slot) {
     $slot.find('span:nth-child(2)').text(player.player);
     $slot.find('.projected-name').prepend($cancelSpan);
     $slot.find('.projected-spend').text(player.price);
-    $slot.attr('data-player-id', player.id);
+    $slot.attr('budget-player-id', player.id);
 }
 
 function emptyBudgetSlot(slot) {
     let $slot = $(`#projected-slot-${slot}`);
     $slot.removeClass('position-QB position-RB position-WR position-TE position-DEF');
     $slot.find('td:nth-child(2)').find('span:nth-child(1)').text("⚬");
+    $slot.find('td:nth-child(2)').find('span:nth-child(1)').css("color: black");
     $slot.find('td:nth-child(2)').find('span:nth-child(2)').text("Unassigned");
-    $slot.find('td:nth-child(3)').find('span:nth-child(1)').text("-");
+    $slot.find('td:nth-child(3)').text("-");
 }
 
 function getTeamPartsString() {
@@ -644,6 +663,60 @@ function budgetPlayer(e) {
 
 }
 
+
+function toggleFavoritePlayer(e) {
+    const $playerCell = $(e.target).parent();
+    const $playerRow = $playerCell.parent();
+    const $playerSpan = $(e.target);
+    const action = $playerSpan.hasClass('player-favorite') ? 'unfavorite' : 'favorite'
+    let [current_act_price, curr_proj_price, current_player_id, draft_id, drafter_id, current_manager_id, submit_position, current_player_name] = getSubmitData();
+    let player_id = $playerRow.attr('player_id');
+    let toggleFavUrl = `/draft/favorite_player/${draft_id}/${player_id}/`
+    $.post(
+        toggleFavUrl,
+        {
+            csrfmiddlewaretoken: $('input[name="csrfmiddlewaretoken').val(),
+            action: action
+        },
+        function(data) {
+            jsonData = JSON.parse(data);
+            if (jsonData.status == 'favorited') {
+                $playerSpan.addClass('player-favorite')
+                $playerSpan.text('★')
+            } else if (jsonData.status == 'unfavorited') {
+                $playerSpan.removeClass('player-favorite')
+                $playerSpan.text('☆')
+
+            }
+        }
+    )
+ 
+}
+
+
+function setSkepticismRating(e) {
+    const $playerCell = $(e.target).parent();
+    const $playerRow = $playerCell.parent();
+    const $playerInput = $(e.target);
+    const rating = $playerInput.val();
+
+    let [current_act_price, curr_proj_price, current_player_id, draft_id, drafter_id, current_manager_id, submit_position, current_player_name] = getSubmitData();
+    let player_id = $playerRow.attr('player_id');
+    let ratingUrl = `/draft/skepticism_rating/${draft_id}/${player_id}/`
+    $.post(
+        ratingUrl,
+        {
+            csrfmiddlewaretoken: $('input[name="csrfmiddlewaretoken').val(),
+            rating: rating
+        },
+        function(data) {
+            jsonData = JSON.parse(data);
+        }
+    )
+ 
+}
+
+
 function formatDraftPick(pId, pos, actPrice, projPrice, playerName) {
     let $playerRow = $(`<tr class="drafted-player" player_id="${pId}" proj-price=${projPrice}></tr>`);
     let cName = $(`<td>${playerName}</td>`);
@@ -730,13 +803,13 @@ function getDraftId() {
 
 function recalculateBudget() {
     let spent = 0;
-    let budget = parseInt($('.start-budget').text());
+    let budget = parseFloat($('.start-budget').text());
     let $projSlots = $('.projected-slot');
     let $slot;
     let price;
     $projSlots.each((idx, slot) => {
         $slot = $(slot);
-        price = parseInt($slot.find('td:nth-child(3)').text());
+        price = parseFloat($slot.find('td:nth-child(3)').text());
         if (!isNaN(price)) {
             spent += price;
         }
@@ -765,6 +838,8 @@ function clearFilters() {
     $('#ap-filter-price').val('');
     $('#ap-filter-weather').val('');
     $('#ap-filter-schedule').val('');
+    $('#ap-filter-skepticism').val('');
+    $('#ap-filter-offensive-support').val('');
     $('tr.filtered-out').removeClass('filtered-out');
 }
 
@@ -806,6 +881,37 @@ function filterSchedule($row) {
     return cellValue <= val
 }
 
+function filterOLine($row) {
+    let val = parseInt($('#ap-filter-oline-ranking').val());
+    let $pCell = $row.find('td:nth-child(8)');
+    let $span = $pCell.find('span:nth-child(1)');
+    let cellValue = parseInt($span.text());
+    return cellValue <= val
+}
+
+function filterSkepticism($row) {
+    let val = parseInt($('#ap-filter-skepticism').val());
+    let $pCell = $row.find('td:nth-child(9)');
+    let $input = $pCell.find('input:nth-child(1)');
+    let cellValue = parseInt($input.val());
+    return cellValue <= val && cellValue != 0
+}
+
+function filterOffensiveSupport($row) {
+    let val = parseInt($('#ap-filter-offensive-support').val());
+    let $pCell = $row.find('td:nth-child(10)');
+    let $span = $pCell.find('span:nth-child(1)');
+    let cellValue = parseInt($span.text());
+    console.log(cellValue, val)
+    return cellValue <= val
+}
+
+function filterFavorites($row) {
+    let $pCell = $row.find('td:nth-child(11)');
+    let $span = $pCell.find('span:nth-child(1)');
+    return $span.hasClass('player-favorite')
+}
+
 function applyFilters() {
     let playerFilter = $('#ap-filter-player').val().toLowerCase();
     let positionFilter = $('#ap-filter-position').val().toLowerCase();
@@ -815,12 +921,22 @@ function applyFilters() {
     weatherFilter = (isNaN(weatherFilter)) ? 0 : weatherFilter;
     let scheduleFilter = parseInt($('#ap-filter-schedule').val());
     scheduleFilter = (isNaN(scheduleFilter)) ? 0 : scheduleFilter;
+    let favoriteFilterBox = document.getElementById('ap-filter-favorite')
+    let olineFilter = parseInt($('#ap-filter-oline-ranking').val());
+    let skepticismFilter = parseInt($('#ap-filter-skepticism').val());
+    let offSupportFilter = parseInt($('#ap-filter-offensive-support').val());
+    console.log(offSupportFilter);
+    
     let filterList = [];
     if (playerFilter.length > 2) {filterList.push(filterPlayers)}
     if (['qb', 'rb', 'wr', 'te', 'def'].includes(positionFilter)) {filterList.push(filterPosition)}
     if (priceFilter > 0) {filterList.push(filterPrice)}
     if (weatherFilter > 0) {filterList.push(filterWeather)}
     if (scheduleFilter > 0) {filterList.push(filterSchedule)}
+    if (olineFilter > 0) {filterList.push(filterOLine)}
+    if (skepticismFilter > 0) {filterList.push(filterSkepticism)}
+    if (offSupportFilter > 0) {filterList.push(filterOffensiveSupport)}
+    if (favoriteFilterBox.checked == true) {filterList.push(filterFavorites)}
     if (filterList.length == 0) {
         $('tr.filtered-out').removeClass('filtered-out');
         return

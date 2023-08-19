@@ -115,9 +115,11 @@ class BudgetPlayerAdmin(admin.ModelAdmin):
     readonly_fields = ('draft', 'player', 'manager', 'price' )
 
 class NFLTeamAdmin(admin.ModelAdmin):
-    list_display = ('code', 'name', 'year', 'playoff_weather_score', 'early_season_schedule', 'defensive_ranking')
+    list_display = ('code', 'name', 'year', 'playoff_weather_score', 'early_season_schedule', 'defensive_ranking', 'pass_ranking', 'run_ranking')
     list_filter = ('code', 'year',)
-    fields = ('code', 'name', 'year', 'playoff_weather_score', 'early_season_schedule', 'defensive_ranking')
+    fields = ('code', 'name', 'year', 'playoff_weather_score', 
+              'early_season_schedule', 'early_season_qb', 'early_season_rb', 'early_season_wr', 'early_season_te', 'early_season_def',
+              'defensive_ranking', 'oline_ranking', 'pass_ranking', 'run_ranking')
     readonly_fields = ('code', 'year',)
 
 class TeamMatchupFilter(admin.SimpleListFilter):

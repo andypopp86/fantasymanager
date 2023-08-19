@@ -27,6 +27,7 @@
     <div class="col-xs-12 draft-board">
         <table class="table col-xs-12">
             <tbody id="draft-board-header">
+                <tr class="row"><td><h2>{{ draft.draft_name }}</h2></td></tr>
                 <tr class="row">
                 {% for manager in managers %}
                     <td class='text-center'>{{manager.short_name}}</td>
@@ -93,12 +94,36 @@
                     </td>
                 </tr>
                 <tr class="text-left ap-filter-box">
-                    <td class="ap-filter-label"></td>
+                    <td class="ap-filter-label">OLline</td>
                     <td>
-                        <button id="ap-filter-clear" class="ap-filter-input btn btn-normal">Clear All</button>
+                        <input id="ap-filter-oline-ranking" class="ap-filter-input"/>
                     </td>
                 </tr>
-            <tr class="available-player available-player-header row" >
+                <tr class="text-left ap-filter-box">
+                    <td class="ap-filter-label">Skep</td>
+                    <td>
+                        <input id="ap-filter-skepticism" class="ap-filter-input"/>
+                    </td>
+                </tr>
+                <tr class="text-left ap-filter-box">
+                    <td class="ap-filter-label">Off Support</td>
+                    <td>
+                        <input id="ap-filter-offensive-support" class="ap-filter-input"/>
+                    </td>
+                </tr>
+                <tr class="text-left ap-filter-box">
+                    <td class="ap-filter-label">Favorite</td>
+                    <td>
+                        <input id="ap-filter-favorite" type="checkbox" class="ap-filter-input"></input>
+                    </td>
+                </tr>
+                <tr class="text-left ap-filter-box">
+                    <td class="ap-filter-label"></td>
+                    <td class="btn btn-normal">
+                        <button id="ap-filter-clear" class="ap-filter-input">Clear</button>
+                    </td>
+                </tr>
+            <tr class="available-player-header row" >
                 <td class="text-center"></td>
                 <td class="text-center draft-action">D</td>
                 <td class="text-center draft-action">W</td>
@@ -106,6 +131,10 @@
                 <td class="text-center draft-attr">$</td>
                 <td class="text-center draft-attr">&#9728;</td>
                 <td class="text-center draft-attr">&#127752;</td>
+                <td class="text-center draft-attr">OL</td>
+                <td class="text-center draft-attr">SK</td>
+                <td class="text-center draft-attr">OS</td>
+                <td class="text-center draft-attr">&#9734;</td>
             </tr>
             {% for pick in picks_by_adp %}
                 <tr class="available-player" id="available-player-{{pick.player.id}}" draft_id="{{draft.id}}" player_id="{{pick.player.id}}" position="{{pick.player.position}}"
@@ -129,7 +158,16 @@
                     ><span>{{pick.player.team.playoff_weather_score|default:"-"}}</span></td>
                     <td class="text-center draft-attr"
                         style="background-color: {{pick.schedule_color}}"
-                    ><span>{{pick.player.team.early_season_schedule|default:"-"}}</span></td>
+                    ><span>{{pick.early_season_rank|default:"-"}}</span></td>
+                    <td class="text-center draft-attr"
+                        style="background-color: {{pick.oline_color}}"
+                    ><span>{{pick.player.team.oline_ranking|default:"-"}}</span></td>
+                    <td class="text-center draft-attr"
+                    ><input class="skepticism draft-attr" style="background-color: {{pick.skepticism_color}}" value="{{pick.player.skepticism}}"></input></td>
+                    <td class="text-center draft-attr"
+                        style="background-color: {{pick.offensive_support_color}}"
+                    ><span>{{pick.offensive_support_rank|default:"-"}}</span></td>
+                    <td class="text-center draft-attr toggle-favorite"><span class="{% if pick.player.favorite %}player-favorite{% endif %}">{% if pick.player.favorite %}&#9733;{% else %}&#9734;{% endif %}</span></td>
                 </tr>
             {% endfor %}
         </table>
@@ -153,7 +191,7 @@
                         <tr 
                             id="projected-slot-{{slot}}" 
                             class="projected-slot position-{{pdict.pick.player.position}}"
-                            data-player-id="{{pdict.pick.player.id}}"
+                            budget-player-id="{{pdict.pick.player.id}}"
                             >
                             <td class="projected-pos">
                                 <span>{{slot}}</span>
@@ -266,7 +304,7 @@
                             <span class="star-icon" style="display: none;">&#9733;</span>
                             <span class="star-icon" style="display: none;">&#9733;</span>
                             <span class="star-icon" style="display: none;">&#9733;</span>
-                            <span>Draft Player</span>
+                            <span id="draft-player-header">Draft Player</span>
                             <span class="star-icon" style="display: none;">&#9733;</span>
                             <span class="star-icon" style="display: none;">&#9733;</span>
                             <span class="star-icon" style="display: none;">&#9733;</span>

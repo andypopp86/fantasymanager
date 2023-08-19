@@ -12,7 +12,7 @@ from django.db.models.functions import RowNumber, Coalesce
 
 
 from draft import models as d 
-from draft.utils import GENERIC_RANK_COLORS, WEATHER_RANK_COLORS
+from draft.utils import GENERIC_RANK_COLORS, STOPLIGHT_COLORS
 
 def get_draft_board_data(request, draft_id):
     draft = d.Draft.objects.get(id=draft_id)
@@ -148,9 +148,24 @@ def draft_board(request, draft_id):
     # add made picks to the managers draft dict
     for pick in picks_by_adp:
         wscore = pick.player.team.playoff_weather_score if pick.player.team else 0
-        pick.weather_color = WEATHER_RANK_COLORS.get(wscore, WEATHER_RANK_COLORS[100])
+        early_season_pos =  f'early_season_{pick.player.position.lower()}'
+        early_season_rank = getattr(pick.player.team, early_season_pos)  if pick.player.team and pick.player.position in ('QB', 'WR', 'RB', 'TE', 'DEF') else 0
+        if early_season_rank:
+            early_season_rank = 1 if early_season_rank <= 5 else 2 if early_season_rank <= 12 else 3 if early_season_rank <=20 else 4 if early_season_rank <= 25 else 5
+        else:
+            early_season_rank = 0
+        pick.early_season_rank = early_season_rank
+        pick.weather_color = STOPLIGHT_COLORS.get(wscore, STOPLIGHT_COLORS[100])
+        pick.oline_color = STOPLIGHT_COLORS.get(pick.player.team.oline_ranking, STOPLIGHT_COLORS[100]) if pick.player.team else STOPLIGHT_COLORS[100]
+        pick.skepticism_color = STOPLIGHT_COLORS.get(pick.player.skepticism, STOPLIGHT_COLORS[100]) if pick.player.skepticism else STOPLIGHT_COLORS[100]
         sched_rank = pick.player.team.early_season_schedule if pick.player.team else 0
-        pick.schedule_color = GENERIC_RANK_COLORS.get(sched_rank)
+        pick.schedule_color = STOPLIGHT_COLORS.get(early_season_rank)
+        if pick.player.team:
+            offensive_support_rank = pick.player.team.run_ranking if pick.player.position == 'RB' else pick.player.team.pass_ranking if pick.player.position in ('QB', 'WR', 'TE') else 0
+            offensive_support_rank = 0 if offensive_support_rank == 0 else 1 if offensive_support_rank <= 5 else 2 if offensive_support_rank <= 12 else 3 if offensive_support_rank <=20 else 4 if offensive_support_rank <= 25 else 5
+            pick.offensive_support_rank = offensive_support_rank
+            pick.offensive_support_color = STOPLIGHT_COLORS.get(offensive_support_rank)
+
         if pick.manager:
             draft_dict[pick.manager.id].append(pick)
     
@@ -213,6 +228,7 @@ def draft_board(request, draft_id):
     return render(request, 'draft/draftboard.html', var_dict)
 
 def draft_player(request, draft_id, player_id):
+    draft = d.Draft.objects.get(id=draft_id)
     manager_id = request.POST.get('manager_id', None)
     price = float(request.POST.get('price', 0))
     position = request.POST.get('position', 'unknown')
@@ -220,8 +236,10 @@ def draft_player(request, draft_id, player_id):
     data = {
         'draft_id': draft_id,
         'player_id': player_id,
+        'was_drafter': False
     }
     manager = d.Manager.objects.get(id=manager_id)
+    drafter = draft.managers.filter(drafter=True).first()
     team_slots, open_position_slots, filled_slot = manager.current_team
     next_slot = get_next_open_slot(position, team_slots)
     new_projected_team = None
@@ -235,7 +253,10 @@ def draft_player(request, draft_id, player_id):
     else:
         d.DraftPick.objects.filter(draft_id=draft_id, player_id=player_id, drafted=False) \
             .update(drafted=True, manager_id=manager_id, price=price, last_update_time=now, position_slot=next_slot)
+        update_budget = False
         if manager.drafter:
+            # you drafted a player you budgeted - update that players status
+            update_budget = True
             default_data = {'price': price, 'position': next_slot, 'status': 'drafted'}
             budget_player, created = d.BudgetPlayer.objects.get_or_create(
             draft_id = draft_id
@@ -245,16 +266,23 @@ def draft_player(request, draft_id, player_id):
             )
             budget_player.status = 'drafted'
             budget_player.save(update_fields=['status'])
+            data['was_drafter'] = True
         else:
-            drafter = d.Manager.objects.get(draft_id=draft_id, drafter=True)
-            bplayer = d.BudgetPlayer.objects.filter(player_id=player_id, draft_id=draft_id, manager_id=drafter).first()
-            if bplayer:
-                bplayer.delete()
-                new_projected_team = get_new_projected_team(drafter)
-                if new_projected_team:
-                    refresh_player_budget(new_projected_team, draft_id, manager_id)
-        manager.budget -= price
-        manager.save(update_fields=['budget'])
+            # someone else drafted your player - remove him from your budget
+            budget_player = d.BudgetPlayer.objects.filter(
+                player_id=player_id,
+                draft_id=draft_id,
+                manager_id=drafter.id,
+                status__in=('drafted', 'budgeted'))
+            if budget_player:
+                update_budget = True
+                budget_player.update(status='none')
+        # your budgeted player was impacted, update team
+        if update_budget:
+            new_projected_team = get_new_projected_team(drafter)
+            if new_projected_team:
+                refresh_player_budget(new_projected_team, draft_id, manager_id)
+        manager.refresh_budget()
         manager_player_ct = manager.manager_players.filter(drafted=True).count()
         data['status'] = 'drafted'
         data['updated_budget'] = manager.budget
@@ -265,26 +293,44 @@ def draft_player(request, draft_id, player_id):
     return response
 
 def undraft_player(request, draft_id, player_id):
+    update_projected_team = False
+    draft = d.Draft.objects.get(id=draft_id)
+    drafter = draft.managers.filter(drafter=True).first()
     pick = d.DraftPick.objects.filter(draft_id=draft_id, player_id=player_id, drafted=True).first()
-    price = int(pick.price)
-    manager_id = int(pick.manager.id)
-    position = str(pick.player.position)
+    if pick:
+        if pick.manager == drafter:
+            update_projected_team = True
+        price = int(pick.price)
+        manager_id = int(pick.manager.id)
+        position = str(pick.player.position)
 
-    pick.drafted=False
-    pick.manager=None
-    pick.price=None
-    pick.save()
+        pick.drafted=False
+        pick.manager=None
+        pick.price=None
+        pick.save()
+
+    budget_player = d.BudgetPlayer.objects.filter(draft_id=draft_id, player_id=player_id, status='drafted').first()
+    if budget_player:
+        budget_player.status='none'
+        budget_player.save()
+        if budget_player.manager == drafter:
+            update_projected_team = True
+    new_projected_team = None
+    if update_projected_team:
+        new_projected_team = get_new_projected_team(drafter)
+        if new_projected_team:
+            refresh_player_budget(new_projected_team, draft_id, manager_id)
 
     manager = d.Manager.objects.get(id=manager_id)
-    manager.budget += price
-    manager.save(update_fields=['budget'])
+    manager.refresh_budget()
     data = {
         'draft_id': draft_id,
         'player_id': player_id,
         'manager_id': manager.id,
         'undrafted': True,
         'updated_budget': manager.budget,
-        'position': position
+        'position': position,
+        'new_projected_team': new_projected_team
     }
 
     response = JsonResponse(json.dumps(data), safe=False)
@@ -601,11 +647,16 @@ def get_next_open_slot(position, team_slots):
     return next_slot
 
 def get_new_projected_team(owner, player=None):
-    if d.BudgetPlayer.objects.filter(manager=owner, status__in=('budgeted', 'drafted'), player=player).first():
-        return
-    if d.DraftPick.objects.filter(manager=owner, drafted=True, player=player).first():
-        return
+    print('getting new proj team')
+    if player:
+        if d.BudgetPlayer.objects.filter(manager=owner, status__in=('budgeted', 'drafted'), player=player).first():
+            print('skip on budget')
+            return
+        if d.DraftPick.objects.filter(manager=owner, drafted=True, player=player).first():
+            print('skip on draft pick')
+            return
     drafted_players = d.DraftPick.objects.filter(manager=owner, drafted=True)
+    print(drafted_players)
     drafted_players = drafted_players.annotate(pos_order=Case(
         When(player__position='QB', then=1),
         When(player__position='RB', then=2),
@@ -617,6 +668,7 @@ def get_new_projected_team(owner, player=None):
     drafted_players = drafted_players.annotate(pick_price=Coalesce('price', 'player__projected_price', output_field=DecimalField()))
     drafted_players = drafted_players.order_by('pos_order', '-pick_price')
     budgeted_players = d.BudgetPlayer.objects.filter(manager=owner, status__in=('budgeted', 'drafted'))
+    print(budgeted_players)
     budgeted_players = budgeted_players.annotate(pos_order=Case(
         When(player__position='QB', then=1),
         When(player__position='RB', then=2),
@@ -640,7 +692,7 @@ def get_new_projected_team(owner, player=None):
             continue
         player_ids_selected.add(bplayer.player.id)
         projected_players.append({'id': bplayer.player.id, 'player': bplayer, 'name': bplayer.player.name, 'position': bplayer.player.position, 'source': 'budgeted', 'price': float(bplayer.player.override_price or bplayer.player.projected_price)})
-
+    print(projected_players)
     sorted_proj_players = sorted(projected_players, key=lambda x: x['price'], reverse=True)
 
     projected_team = {pos: None for pos in d.POSITIONS_MAP.keys()}
@@ -682,3 +734,40 @@ def refresh_player_budget(new_projected_team, draft_id, manager_id):
                 budget_player.position = slot
                 budget_player.status = 'budgeted'
                 budget_player.save(update_fields=['price', 'position', 'status'])
+
+
+def favorite_player(request, draft_id, player_id):
+    draft = d.Draft.objects.get(id=draft_id)
+    favorite = True if request.POST['action'] == 'favorite' else False
+    d.Player.objects.filter(year=draft.year, id=player_id).update(favorite=favorite)
+    data = {
+        'draft_id': draft_id,
+        'player_id': player_id,
+        'status': 'favorited' if request.POST['action'] == 'favorite' else 'unfavorited'
+    }
+    response = JsonResponse(json.dumps(data), safe=False)
+    return response
+
+def unfavorite_player(request, draft_id, player_id):
+    draft = d.Draft.objects.get(id=draft_id)
+    d.Player.objects.filter(year=draft.year, id=player_id).update(favorite=False)
+    data = {
+        'draft_id': draft_id,
+        'player_id': player_id,
+        'status': 'unfavorited'
+    }
+    response = JsonResponse(json.dumps(data), safe=False)
+    return response
+
+def skepticism_rating(request, draft_id, player_id):
+    rating = request.POST['rating'] or 0
+    draft = d.Draft.objects.get(id=draft_id)
+    d.Player.objects.filter(year=draft.year, id=player_id).update(skepticism=rating)
+    data = {
+        'draft_id': draft_id,
+        'player_id': player_id,
+        'status': 'rated'
+    }
+    response = JsonResponse(json.dumps(data), safe=False)
+    return response
+
