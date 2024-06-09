@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
 
     'bootstrap3',
     'mathfilters',
@@ -173,3 +174,8 @@ if not DEBUG:
     # DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL")
 
 # django_heroku.settings(locals())
+
+REST_FRAMEWORK = {
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
+    'PAGE_SIZE': 10
+}

@@ -1,0 +1,32 @@
+<div id="unwatch_player_modal" class="modal fade" tabindex="-1" role="dialog" aria-labeledby="">
+    <div class="modal-dialog" role="document" style="width: 400px: margin-top: 225px">
+        <div class="modal-content">
+            <div class="modal-body">
+                <div class="panel panel-default" style="margin-top: 10px">
+                    <div class="panel-heading">
+                        <big>Unwatch Player</big>
+                    </div>
+                    <div class="panel-body">
+                        <div class="text-center" style="margin-top: 40px;">
+                            <button class="btn btn-default" onclick="cancelUnwatchPick()">Cancel</button>
+                            <button class="btn btn-info" onclick="submitUnwatchPlayer()">Unwatch</button>
+                            <button class="btn btn-primary" onclick="submitUndraftPlayer()">Undraft</button>
+                        </div>
+                        <div class="form-group">
+                            <select id="id_unwatch_current_position" class="form-control selectpicker"  data-live-search="true" data-live-search-style="startsWith">
+                                <option draft_slot_id="unassigned">Unassigned</option>
+                                {% for draft_slot in team_draft_slots %}
+                                    <option draft_slot_id="{{draft_slot.0}}">{{draft_slot.1}}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="text-center" style="margin-top: 10px;">
+                            <button class="btn btn-primary" onclick="addToProjectedTeam(false, null, 'unwatch')">Add to Projected Team</button>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

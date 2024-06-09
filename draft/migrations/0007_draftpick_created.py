@@ -2,7 +2,6 @@
 
 import datetime
 from django.db import migrations, models
-from django.utils.timezone import utc
 
 
 class Migration(migrations.Migration):
@@ -15,7 +14,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='draftpick',
             name='created',
-            field=models.DateTimeField(auto_created=True, default=datetime.datetime(2022, 7, 17, 14, 37, 38, 444953, tzinfo=utc)),
+            field=models.DateTimeField(auto_created=True, default=datetime.datetime(2022, 7, 17, 14, 37, 38, 444953, tzinfo=datetime.UTC)),
             preserve_default=False,
         ),
     ]

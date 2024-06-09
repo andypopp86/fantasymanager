@@ -1,0 +1,42 @@
+<div class="col-xs-4 sidebar">
+    <table>
+        <tbody class="target-my-team">
+            <thead>
+                <tr><th class="text-center" colspan="3"><btn id="save-budget" class="btn-success" onclick="recalculateBudget();">Recalc Budget</btn></th></tr>
+                <tr><th class="text-left" colspan="2">Budget Start:</th><th class="text-center start-budget">200</th></th></tr>
+                <tr><th class="text-left" colspan="2">Budget Remaining:</th><th class="text-center projected-budget">{{projected_remaining}}</th></th></tr>
+                <tr>
+                    <th>Player</th>
+                    <th>Slot</th>
+                    <th>Projected $</th>
+                </tr>
+            </thead>
+        </tbody>
+        <tbody class="my-proj-team">
+                {% for slot, pdict in new_projected_team.items %}
+                    <tr 
+                        id="projected-slot-{{slot}}" 
+                        class="projected-slot position-{{pdict.pick.player.position}}"
+                        budget-player-id="{{pdict.pick.player.id}}"
+                        >
+                        <td class="projected-pos">
+                            <span>{{slot}}</span>
+                        </td>
+                        <td class="projected-name text-left">
+                            {% if pdict.source == 'budgeted' %}
+                                <span class="text-danger text-center" style="cursor: pointer;" onclick="handlePickClick(this, 'unbudget');">&#10006;</span>
+                            {% elif pdict.source == 'drafted' %}
+                                <span class="text-center" style="color: white;">&check;</span>
+                            {% else %}
+                                <span class="text-success text-center">&#9900;</span>
+                            {% endif %}
+                            <span>{% if pdict.pick %}{{ pdict.pick.player.name }}{% else %}Unassigned{% endif %}</span>
+                            
+                        </td>
+                        <td class="projected-spend text-right"><span>{{ pdict.pick.price|default:"-"}}</span></td>
+                    </tr>
+                {% endfor %}
+        </tbody>
+
+    </table>
+</div>

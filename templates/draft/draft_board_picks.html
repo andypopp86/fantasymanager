@@ -1,0 +1,22 @@
+<div class="col-xs-12 draft-board">
+    <table class="table col-xs-12">
+        <tbody class="draftboard">
+            {% for round in draftboard %}
+                {% for round_num, round_dict in round.items %}
+                    <tr id="draft-board-row-{{round_num}}" class="" style="{% if not round_dict.active %}display: none;{% endif %}">
+                        {% for pick_dict in round_dict.picks %}
+                            <td 
+                            id="draft-board-player-{{pick_dict.pick.player.id}}" 
+                            roundid="{{pick_dict.round_num}}" columnid="{{pick_dict.column_num}}" 
+                            managerId="{{pick_dict.manager.id}}" 
+                            class='col-xs-1 draft-board-slot position-{{pick_dict.pick.player.position}}'
+                            ondragover="dragoverDraft(event);" ondragleave="dragleaveDraft(event);" ondrop="dropDraft(event);">
+                            {{pick_dict.pick.player.name}} (${{pick_dict.pick.price}})
+                        </td>
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

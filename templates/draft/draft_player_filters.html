@@ -1,0 +1,131 @@
+<div class="col-xs-5 sidebar" style="padding-top: 10px;">
+    <table class="sidebar">
+        <thead>
+        </thead>
+            <tr class="text-left ap-filter-box">
+                <td class="ap-filter-label">Player</td>
+                <td>
+                    <input id="ap-filter-player" class="ap-filter-input"/>
+                </td>
+            </tr>
+            <tr class="text-left ap-filter-box">
+                <td class="ap-filter-label">Position</td>
+                <td>
+                <input id="ap-filter-position" class="ap-filter-input"/>
+                </td>
+            </tr>
+            <tr class="text-left ap-filter-box">
+                <td class="ap-filter-label">Price</td>
+                <td>
+                    <input id="ap-filter-price" class="ap-filter-input"/>
+                </td>
+            </tr>
+            <tr class="text-left ap-filter-box">
+                <td class="ap-filter-label">Weather</td>
+                <td>
+                    <input id="ap-filter-weather" class="ap-filter-input"/>
+                </td>
+            </tr>
+            <tr class="text-left ap-filter-box">
+                <td class="ap-filter-label">ESchedule</td>
+                <td>
+                    <input id="ap-filter-schedule" class="ap-filter-input"/>
+                </td>
+            </tr>
+            <tr class="text-left ap-filter-box">
+                <td class="ap-filter-label">POSchedule</td>
+                <td>
+                    <input id="ap-filter-playoffs" class="ap-filter-input"/>
+                </td>
+            </tr>
+            <tr class="text-left ap-filter-box">
+                <td class="ap-filter-label">OLline</td>
+                <td>
+                    <input id="ap-filter-oline-ranking" class="ap-filter-input"/>
+                </td>
+            </tr>
+            <tr class="text-left ap-filter-box">
+                <td class="ap-filter-label">Skep</td>
+                <td>
+                    <input id="ap-filter-skepticism" class="ap-filter-input"/>
+                </td>
+            </tr>
+            <tr class="text-left ap-filter-box">
+                <td class="ap-filter-label">Off Support</td>
+                <td>
+                    <input id="ap-filter-offensive-support" class="ap-filter-input"/>
+                </td>
+            </tr>
+            <tr class="text-left ap-filter-box">
+                <td class="ap-filter-label">Favorite</td>
+                <td>
+                    <input id="ap-filter-favorite" type="checkbox" class="ap-filter-input ap-filter-checkbox"></input>
+                </td>
+            </tr>
+            <tr class="text-left ap-filter-box">
+                <td class="ap-filter-label">Budget</td>
+                <td>
+                    <input id="ap-filter-budget" type="checkbox" class="ap-filter-input ap-filter-checkbox"></input>
+                </td>
+            </tr>
+            <tr class="text-left ap-filter-box">
+                <td class="ap-filter-label"></td>
+                <td class="btn btn-normal">
+                    <button id="ap-filter-clear" class="ap-filter-input">Clear</button>
+                </td>
+            </tr>
+        <tr class="available-player-header row" >
+            <td class="text-center"></td>
+            <td class="text-center draft-action">D</td>
+            <td class="text-center draft-action">W</td>
+            <td class="text-center draft-action">B</td>
+            <td class="text-center draft-attr">$</td>
+            <td class="text-center draft-attr">&#10052;</td> 
+            <td class="text-center draft-attr">&#127752;</td>
+            <td class="text-center draft-attr">PO</td>
+            <td class="text-center draft-attr">OL</td>
+            <td class="text-center draft-attr">SK</td>
+            <td class="text-center draft-attr">OS</td>
+            <td class="text-center draft-attr">&#9734;</td>
+        </tr>
+        {% for pick in picks_by_adp %}
+            <tr class="available-player" id="available-player-{{pick.player.id}}" draft_id="{{draft.id}}" player_id="{{pick.player.id}}" position="{{pick.player.position}}"
+                draggable="true" ondragstart="cardDrag(event);" ondragend="cardDragEnd(event);"
+                proj-price="{% if pick.player.override_price %}{{pick.player.override_price}}{% else %}{{pick.player.projected_price}}{% endif %}"
+                url="{% url 'draft:draft_player' draft.id pick.player.id %}"
+                style="{% if pick.drafted %}display: none;{% endif %}">
+                <td class="available-player position-{{pick.player.position}} available-name"  onclick="handlePickClick(this, 'draft')" style="cursor: pointer;"  >{{ pick.player.name }}</td>
+                <td class="text-center draft-action" onclick="handlePickClick(this, 'draft')" style="cursor: pointer;" >
+                    <span class="text-center">&check;</span>
+                </td>
+                <td class="text-center draft-action add-to-watch" style="cursor: pointer;" onclick="handlePickClick(this, 'watch')">
+                    <span class="text-center">&#128065;</span>
+                </td>
+                <td class="text-center draft-action add-to-budget" style="cursor: pointer;" onclick="budgetPlayer(this)">
+                    <span class="text-center">&#36;</span>
+                </td>
+                <td class="text-center available-price draft-attr rank-price"><span>{% if pick.player.override_price %}{{pick.player.override_price|floatformat:0}}{% else %}{{pick.player.projected_price|floatformat:0}}{% endif %}</span></td>
+                <td title="Weather" class="text-center draft-attr rank-weather" style="background-color: {{pick.weather_color}}">
+                    <span>{{pick.weather_rank|default:"-"}}</span>
+                </td>
+                <td title="Schedule" class="text-center draft-attr rank-schedule" style="background-color: {{pick.schedule_color}}">
+                    <span>{{pick.early_season_rank|default:"-"}}</span>
+                </td>
+                <td title="Playoffs" class="text-center draft-attr rank-playoffs" style="background-color: {{pick.playoff_color}}">
+                    <span>{{pick.playoff_rank|default:"-"}}</span>
+                </td>
+                <td title="Oline" class="text-center draft-attr rank-oline" style="background-color: {{pick.oline_color}}">
+                    <span>{{pick.oline_rank|default:"-"}}</span>
+                </td>
+                <td title="Skep" class="text-center draft-attr rank-skepticism">
+                    <input class="skepticism draft-attr" style="background-color: {{pick.skepticism_color}}" value="{{pick.player.skepticism}}"></input>
+                </td>
+                <td title="Volume" class="text-center draft-attr rank-volume" style="background-color: {{pick.offensive_support_color}}">
+                    <span>{{pick.offensive_support_rank|default:"-"}}</span>
+                </td>
+                <td class="text-center draft-attr toggle-favorite favorite"><span class="{% if pick.player.favorite %}player-favorite{% endif %}">{% if pick.player.favorite %}&#9733;{% else %}&#9734;{% endif %}</span></td>
+                <td class="text-center draft-attr budgeted" style="display: none;"><span>{% if pick.budgeted %}X{% endif %}</span></td>
+            </tr>
+        {% endfor %}
+    </table>
+</div>

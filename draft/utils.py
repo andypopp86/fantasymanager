@@ -50,3 +50,23 @@ STOPLIGHT_COLORS = {
     5: RED,
     100: GREY,
 }
+
+def weather_rank_to_quint(rank):
+    if rank >= 1 and rank <= 5:
+        return rank
+    elif rank > 5:
+        return 5
+
+def team_rank_to_quint(rank):
+    if rank == 0:
+        return 5
+    elif rank <= 5:
+        return 1
+    elif rank <= 12:
+        return 2
+    elif rank <=20:
+        return 3
+    elif rank <= 25:
+        return 4
+    else:
+        return 5

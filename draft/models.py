@@ -48,16 +48,23 @@ class NFLTeam(models.Model):
     short_name = models.CharField(max_length=50, null=True, blank=True)
     year = models.IntegerField(null=True, blank=True)
     playoff_weather_score = models.IntegerField(default=None, blank=True, null=True)
+    playoff_schedule = models.IntegerField(default=None, blank=True, null=True)
     early_season_schedule = models.IntegerField(default=None, blank=True, null=True)
     early_season_qb = models.IntegerField(default=None, blank=True, null=True)
     early_season_wr = models.IntegerField(default=None, blank=True, null=True)
     early_season_rb = models.IntegerField(default=None, blank=True, null=True)
     early_season_te = models.IntegerField(default=None, blank=True, null=True)
     early_season_def = models.IntegerField(default=None, blank=True, null=True)
+    playoff_qb = models.IntegerField(default=None, blank=True, null=True)
+    playoff_wr = models.IntegerField(default=None, blank=True, null=True)
+    playoff_rb = models.IntegerField(default=None, blank=True, null=True)
+    playoff_te = models.IntegerField(default=None, blank=True, null=True)
+    playoff_def = models.IntegerField(default=None, blank=True, null=True)
     defensive_ranking = models.IntegerField(null=True, blank=True)
     oline_ranking = models.IntegerField(default=0)
     run_ranking = models.IntegerField(default=0)
     pass_ranking = models.IntegerField(default=0)
+
 
     def __str__(self):
         return self.code
@@ -83,7 +90,7 @@ class Player(models.Model):
     override_price = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     nickname = models.CharField(max_length=200, null=True, blank=True)
     team = models.ForeignKey(NFLTeam, null=True, blank=True, on_delete=models.SET_NULL)
-    year = models.IntegerField(default=2022)
+    year = models.IntegerField(default=2023)
     favorite = models.BooleanField(default=False)
     offensive_support = models.IntegerField(default=0)
     skepticism = models.IntegerField(default=0)
@@ -99,6 +106,10 @@ class Player(models.Model):
         ordering = ['adp_formatted']
         unique_together = ('player_id', 'year')
 
+class YearlyNotes(models.Model):
+    year =  models.IntegerField()
+    notes = models.TextField(null=True, blank=True)
+
 class Draft(models.Model):
     year = models.IntegerField()
     draft_name = models.CharField(max_length=100)
@@ -107,6 +118,11 @@ class Draft(models.Model):
     saved_slots = models.TextField(blank=True)
     locked = models.BooleanField(default=False)
     starting_budget = models.IntegerField(default=200)
+    limit_qb = models.IntegerField(default=3)
+    limit_rb = models.IntegerField(default=8)
+    limit_wr = models.IntegerField(default=8)
+    limit_te = models.IntegerField(default=3)
+    limit_def = models.IntegerField(default=2)
 
     def __str__(self) -> str:
         return '%s' % (self.draft_name)
@@ -121,13 +137,24 @@ class Draft(models.Model):
         super(Draft, self).delete(*args, **kwargs)
 
     def add_missing_players(self):
-        missing_players =  Player.objects.filter(year=self.year, drafted_players__isnull=True)
+        player_names = list(Player.objects.filter(year=self.year).exclude(position='K').values_list('name', flat=True))
+        pick_names = list(DraftPick.objects.filter(draft=self).values_list('player__name', flat=True))
+        missing_players = []
+        for player_name in player_names:
+            if player_name not in pick_names:
+                added_player = Player.objects.filter(name=player_name).order_by('id').first()
+                missing_players.append(added_player)
         players_to_add = []
         for player_to_add in missing_players:
-            players_to_add.append(DraftPick(
+            dp = DraftPick(
                 draft=self,
                 player=player_to_add
-            ))
+            )
+            try:
+                dp.save()
+            except Exception as exc:
+                print(f"could not save {dp.player.id} {dp.player.name}")
+
         DraftPick.objects.bulk_create(players_to_add)
 
 
@@ -155,9 +182,7 @@ class Manager(models.Model):
     
     def refresh_budget(self):
         pick_prices = list(int(x) for x in self.manager_players.filter(drafted=True).values_list('price', flat=True))
-        print(pick_prices)
         spent = sum(pick_prices)
-        print(spent)
         self.budget = self.draft.starting_budget - spent
         self.save(update_fields=['budget'])
     
@@ -224,7 +249,7 @@ class WatchPick(models.Model):
         return '%s - %s' % (self.draft.draft_name, self.player.name)
     
 class DraftPick(models.Model):
-    draft = models.ForeignKey(Draft, on_delete=models.CASCADE)
+    draft = models.ForeignKey(Draft, on_delete=models.CASCADE, related_name="drafted_players")
     player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='drafted_players')
     manager = models.ForeignKey(Manager, on_delete=models.CASCADE, related_name='manager_players', null=True, blank=True)
     price = models.IntegerField(null=True, blank=True)
@@ -235,7 +260,7 @@ class DraftPick(models.Model):
 
     class Meta:
         unique_together = ('draft', 'player')
-        ordering = ('-last_update_time',)
+        ordering = ('player__adp_formatted',)
 
     def __str__(self) -> str:
         return self.player.name
@@ -317,9 +342,9 @@ BUDGET_STATUSES = (
     ('drafted', 'Drafted')
 )
 class BudgetPlayer(models.Model):
-    draft = models.ForeignKey(Draft, on_delete=models.CASCADE)
-    player = models.ForeignKey(Player, on_delete=models.CASCADE)
-    manager = models.ForeignKey(Manager, on_delete=models.CASCADE, null=True, blank=True)
+    draft = models.ForeignKey(Draft, on_delete=models.CASCADE, related_name="budgeted_players")
+    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='budgeted_players')
+    manager = models.ForeignKey(Manager, on_delete=models.CASCADE, related_name="budgeted_players", null=True, blank=True)
     price = models.IntegerField(null=True, blank=True)
     position = models.CharField(max_length=50, choices=POSITIONS)
     status = models.CharField(max_length=50, choices=BUDGET_STATUSES, default='none')

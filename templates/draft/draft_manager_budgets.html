@@ -1,0 +1,16 @@
+<div class="col-xs-12 draft-board-headers">
+    <table class="table col-xs-12">
+        <tbody id="draft-board-header">
+            <tr class="">
+            {% for manager in managers %}
+                <td class='col-xs-1 text-center'>{{manager.short_name}}</td>
+            {% endfor %}
+            </tr>
+            <tr class="">
+            {% for manager in managers %}
+                <td class='text-center' id="manager-budget-{{manager.id}}">{{manager.budget}}</td>
+            {% endfor %}
+            </tr>
+        </tbody>
+    </table>
+</div>

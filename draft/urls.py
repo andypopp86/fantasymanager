@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, include
 
 from draft import views as d
 
@@ -26,4 +26,5 @@ urlpatterns = [
 	path(r'favorite_player/<int:draft_id>/<int:player_id>/', d.favorite_player, name='favorite_player'),
 	path(r'unfavorite_player/<int:draft_id>/<int:player_id>/', d.unfavorite_player, name='unfavorite_player'),
 	path(r'skepticism_rating/<int:draft_id>/<int:player_id>/', d.skepticism_rating, name='skepticism_rating'),
+	path(r'notes/<int:draft_id>/', d.update_notes, name='update_notes'),
 ]

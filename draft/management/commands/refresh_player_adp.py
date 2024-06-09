@@ -22,10 +22,8 @@ class Command(BaseCommand):
 
         url = f'https://fantasyfootballcalculator.com/api/v1/adp/{type}?teams={team_ct}&year={this_year}'
         resp = requests.get(url)
-        jresp = json.loads(resp)
-        print(jresp)
-
-        return
+        jresp = json.loads(resp.content)
+        player_jsons = jresp['players']
         kickers = d.Player.objects.filter(position='PK')
         kickers.delete()
         yearly_prices = {}
@@ -56,31 +54,31 @@ class Command(BaseCommand):
         # for price in average_adp_prices:
         #     print(price)
         
-        data_path = os.path.join(os.getcwd(),'data','players.json')
-        with open(data_path, 'r') as f:
-            data = json.load(f)
-            player_ct = 0
-            for player_json in data['players']:
-                if player_json['position'] != 'PK':
-                    try:
-                        projected_price = round(average_adp_prices[player_ct],2)
-                    except:
-                        projected_price = 0.00
-                    print('updating player %s (%s) with price %s' % (player_json['name'], player_json['player_id'], projected_price))
-                    nfl_team = d.NFLTeam.objects.filter(code=player_json['team']).first()
-                    player, created = d.Player.objects.get_or_create(
-                        player_id=player_json['player_id'],
-                        year=this_year,
-                        defaults={
-                            'name': player_json['name'],
-                            'position': player_json['position'],
-                            'adp_formatted': player_json['adp_formatted'],
-                            'projected_price': projected_price,
-                            'team': nfl_team
-                        }
-                    )
-                    player.projected_price = projected_price
-                    if not created:
-                        player.team = nfl_team
-                    player.save()
-                    player_ct += 1
+        # data_path = os.path.join(os.getcwd(),'data','players.json')
+        # with open(data_path, 'r') as f:
+            # data = json.load(f)
+        player_ct = 0
+        for player_json in player_jsons:
+            if player_json['position'] != 'PK':
+                try:
+                    projected_price = round(average_adp_prices[player_ct],2)
+                except:
+                    projected_price = 0.00
+                print('updating player %s (%s) with price %s' % (player_json['name'], player_json['player_id'], projected_price))
+                nfl_team = d.NFLTeam.objects.filter(code=player_json['team']).first()
+                player, created = d.Player.objects.get_or_create(
+                    player_id=player_json['player_id'],
+                    year=this_year,
+                    defaults={
+                        'name': player_json['name'],
+                        'position': player_json['position'],
+                        'adp_formatted': player_json['adp_formatted'],
+                        'projected_price': projected_price,
+                        'team': nfl_team
+                    }
+                )
+                player.projected_price = projected_price
+                if not created:
+                    player.team = nfl_team
+                player.save()
+                player_ct += 1

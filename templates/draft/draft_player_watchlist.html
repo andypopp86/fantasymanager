@@ -1,0 +1,60 @@
+<div class="col-xs-3 sidebar">
+    <table id="watch-list">
+        <tbody>
+            <tr>
+                <th><textarea id="draft-notes" style="min-height: 200px;">{{ note.notes }}</textarea></th>
+            </tr>
+            <tr>
+                <tr><th class="text-center" colspan="3"><span class="btn-info">WATCHLIST</span></th></tr>
+                <th colspan="2">Watchlist</th>
+                <th >{{watch_total}}</th>
+            </tr>
+            {% for player in watched_players %}
+                <tr player_id="{{ player.id }}">
+                    <td class="watch-slot watched-player" player_id="{{player.id}}" draft_id={{draft.id}}>{{player.name}}</td>
+                    <td class="text-danger text-center" style="cursor: pointer;" onclick="handlePickClick(this, 'unwatch');">&#10006;</td>
+                    <td class="watch-slot" draft_id={{draft.id}}>{{player.projected_price}}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <tbody class="drafted-list">
+        <table>
+        <!-- <table class="drafted-list" ondragover="allowDrop(event)" ondrop="cardDrop(event);"> -->
+            <thead>
+                <tr><th class="text-center" colspan="3"><span class="btn-info">ALL DRAFTED</span></th></tr>
+                <th>Player</th>
+                <th>Pos</th>
+                <th></th>
+                <th>Act $</th>
+            </thead>
+            {% for pick in picks_by_time %}
+                <!-- <tr onclick="window.location.href='{% url 'draft:undraft_player' draft.id pick.player.id %}'"> -->
+                <tr id="drafted-player-{{pick.player.id}}" class="drafted-player" player_id="{{ pick.player.id }}" manager-id="{{ pick.manager.id }}" onclick="handlePickClick('undraft')"
+                    style="{% if not pick.drafted %}display: none;{% endif %}">
+                    <td player_id="{{ pick.player.id }}">{{ pick.player.name }}</td>
+                    <td>{{ pick.player.position }}</td>
+                    <td class="text-danger text-center" style="cursor: pointer;" onclick="handlePickClick(this, 'undraft');">&#10006;</td>
+                    <td class="pick-price">{{ pick.price }}</td>
+                </tr>
+            {% endfor %}
+        </table>
+    </tbody>
+    <tbody class="my-team">
+        <thead>
+            <tr><th class="text-center" colspan="3"><span class="btn-warning">MY TEAM</span></th></tr>
+            <th>Player</th>
+            <th>Position</th>
+            <th>Actual $</th>
+        </thead>
+        {% for pick in drafter_players %}
+            <tr class="my-drafted-player" player_id="{{pick.player.id}}">
+                <td player_id="{{pick.player.id}}">{{ pick.player.name }}</td>
+                <td>{{ pick.player.position }}</td>
+                <td>{{ pick.price }}</td>
+            </tr>
+        {% endfor %}
+    </tbody>
+
+</div>

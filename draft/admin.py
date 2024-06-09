@@ -40,7 +40,7 @@ class PlayerAdmin(admin.ModelAdmin):
     list_display = ('player_id', 'year', 'name', 'team', 'nickname',  'position',  'adp_formatted',  'projected_price',  'override_price')
     search_fields = ('name', 'position', )
     list_filter = ('position', 'year')
-    fields = ('player_id', 'team', 'year',  'name', 'nickname', 'position',  'adp_formatted',  'projected_price',  'override_price')
+    fields = ('player_id', 'team', 'year',  'name', 'nickname', 'position',  'adp_formatted',  'projected_price',  'override_price', 'skepticism')
     
 class DraftAdmin(admin.ModelAdmin):
     list_display = ('draft_name', 'year', 'drafter', 'projected_draft', )
@@ -115,7 +115,7 @@ class BudgetPlayerAdmin(admin.ModelAdmin):
     readonly_fields = ('draft', 'player', 'manager', 'price' )
 
 class NFLTeamAdmin(admin.ModelAdmin):
-    list_display = ('code', 'name', 'year', 'playoff_weather_score', 'early_season_schedule', 'defensive_ranking', 'pass_ranking', 'run_ranking')
+    list_display = ('code', 'name', 'year', 'playoff_weather_score', 'early_season_schedule', 'playoff_schedule', 'defensive_ranking', 'pass_ranking', 'run_ranking')
     list_filter = ('code', 'year',)
     fields = ('code', 'name', 'year', 'playoff_weather_score', 
               'early_season_schedule', 'early_season_qb', 'early_season_rb', 'early_season_wr', 'early_season_te', 'early_season_def',

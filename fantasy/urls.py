@@ -30,5 +30,14 @@ urlpatterns = [
     path('draft/', include('draft.urls', namespace='draft')),
     # path('users/', include('users.urls', namespace='users')),
 ]
+
+api_urlpatterns = [
+    path("drafts/", include(("draft.api.urls", "drafts"), namespace="drafts")),
+]
+
+urlpatterns += [
+    path("api/", include((api_urlpatterns, "api"), namespace="api"))
+]
+
 if settings.DEBUG:
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

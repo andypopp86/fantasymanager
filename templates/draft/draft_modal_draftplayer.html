@@ -1,0 +1,76 @@
+<div id="draft_player_modal" class="modal fade" tabindex="-1" role="dialog" aria-labeledby="">
+    <div class="modal-dialog" role="document" style="width: 400px: margin-top: 225px">
+        <div class="modal-content">
+            <div class="modal-body">
+                <div class="panel panel-default" style="margin-top: 10px">
+                    <div class="panel-heading draft-player-header-container text-center">
+                        <big class="draft-player-header">
+                            <span class="star-icon" style="display: none;">&#9733;</span>
+                            <span class="star-icon" style="display: none;">&#9733;</span>
+                            <span class="star-icon" style="display: none;">&#9733;</span>
+                            <span id="draft-player-header">Draft Player</span>
+                            <span class="star-icon" style="display: none;">&#9733;</span>
+                            <span class="star-icon" style="display: none;">&#9733;</span>
+                            <span class="star-icon" style="display: none;">&#9733;</span>
+                        </big>
+                    </div>
+                    <div class="panel-body">
+                        <div class="draft-icon-container">
+                            <div class="draft-icon">&#10052;</div>
+                            <div class="draft-icon">&#127752;</div>
+                            <div class="draft-icon">PO</div>
+                            <div class="draft-icon">OL</div>
+                            <div class="draft-icon">SK</div>
+                            <div class="draft-icon">OS</div>
+                            <div class="draft-icon">&#9734;</div>
+                        </div>
+                        <div class="draft-icon-container">
+                            <div id="modal-draft-weather" class="draft-icon">0</div>
+                            <div id="modal-draft-schedule" class="draft-icon">0</div>
+                            <div id="modal-draft-playoffs" class="draft-icon">0</div>
+                            <div id="modal-draft-oline" class="draft-icon">0</div>
+                            <div id="modal-draft-skepticism" class="draft-icon">0</div>
+                            <div id="modal-draft-volume" class="draft-icon">0</div>
+                            <div id="modal-draft-favorite" class="draft-icon">0</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="id_draft_current_manager">Manager</label>
+                            <select id="id_draft_current_manager" class="form-control selectpicker"  data-live-search="true" data-live-search-style="startsWith" current_manager_name="">
+                                {% for manager in draft.managers.all %}
+                                    <option manager_id="{{manager.id}}">{{manager.short_name}}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="id_current_price">Price</label><input id="id_current_price" class="form-control" current_price=""></input>
+                        </div>
+                        <div class="form-group" style="display: none">
+                            <label for="id_current_position">Position</label><input id="id_current_position" class="form-control" current_position=""></input>
+                        </div>
+<!-- 
+                        <div class="form-group">
+                            <select id="id_draft_player_position" class="form-control selectpicker"  data-live-search="true" data-live-search-style="startsWith">
+                                <option draft_slot_id="unassigned">Unassigned</option>
+                                {% for draft_slot in team_draft_slots %}
+                                    <option draft_slot_id="{{draft_slot.0}}">{{draft_slot.1}}</option>
+                                {% endfor %}
+                            </select>
+                        </div> -->
+
+                        <div class="text-center" style="margin-top: 40px;">
+                            <button class="btn btn-default" onclick="cancelDraftPick()">Cancel</button>
+                            <button id='menu-control-draft' class="btn btn-primary menu-control" onclick="submitDraftPick()">Draft!</button>
+                            <button id='menu-control-undraft' class="btn btn-primary menu-control" onclick="submitUndraftPick()">Undraft</button>
+                            <button id='menu-control-watch' class="btn btn-primary menu-control" onclick="submitWatch()">Watch</button>
+                        </div>
+                        <div class="text-center" style="margin-top: 10px;">
+                            <button id='menu-control-budget' class="btn btn-primary menu-control" onclick="submitBudgetPick()">Add to Projected Team</button>
+                            <button id='menu-control-slot' class="btn btn-primary menu-control" onclick="addToPositionSlot(false, null, 'draft')">Add to Position Slot</button>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

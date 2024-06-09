@@ -38,7 +38,6 @@ class GlobalState {
 const globalState = new GlobalState();
 
 function initializeGlobalState(data) {
-    var picks_data = JSON.parse($('#picks_data').text());
     var jsonData = JSON.parse(data);
     globalState.set({key: 'draft_id', value: jsonData.data.draft_id});
     globalState.set({key: 'drafter_id', value: jsonData.data.drafter_id});    
@@ -52,6 +51,23 @@ function lockDraftBoardHeader() {
       } else {
         header.classList.remove("sticky");
       }
+}
+
+function submitNotes() {
+    let notes = $('#draft-notes').val();
+    let draftId = getDraftId();
+    let notesUrl = `/draft/notes/${draftId}/`
+    $.ajax({
+        url: notesUrl,
+        datatype: 'json',
+        type: 'POST',
+        data: {
+            csrfmiddlewaretoken: $('input[name="csrfmiddlewaretoken').val(),
+            notes
+        },
+        success: function(data) {
+        }
+    })
 }
 
 function startDraftBoard() {
@@ -78,8 +94,10 @@ function startDraftBoard() {
             $('#ap-filter-skepticism').keyup(applyFilters);
             $('#ap-filter-offensive-support').keyup(applyFilters);
             $('#ap-filter-favorite').change(applyFilters);
+            $('#ap-filter-budget').change(applyFilters);
             $('#ap-filter-clear').click(clearFilters);
             $('.toggle-favorite').click(toggleFavoritePlayer);
+            $('#draft-notes').focusout(submitNotes)
         }
     })
 
@@ -155,6 +173,7 @@ function openDraftModal() {
 
 function draftPlayer(e) {
     const $player = $(e).parent();
+    updateModalIcons($player);
     $('.available-player').removeClass('drafting');
     $player.addClass('drafting');
     let [position, player_id, proj_price, round_price, player_name, managerId] = extractTargetData($player);
@@ -324,6 +343,9 @@ function submitDraftPick(e) {
                 $draftSlot.addClass(`position-${submit_position}`)
                 $draftSlot.attr('id', `draft-board-player-${jsonData.player_id}`)
                 $(`#draft-board-row-${jsonData.mgr_player_ct}`).show();
+                if (jsonData.messages.length >= 1) {
+                    alert(jsonData.messages[0])
+                }
 
             } else if (jsonData.status == 'error') {
                 alert(jsonData.error)
@@ -505,7 +527,6 @@ function updateProjectedTeam(jsonData) {
         if (player !== null) {
             fillBudgetSlot(player, newSlot);
         } else {
-            console.log('empty budget slot for', newSlot)
             emptyBudgetSlot(newSlot);
         }
     }
@@ -843,23 +864,60 @@ function clearFilters() {
     $('tr.filtered-out').removeClass('filtered-out');
 }
 
+function updateModalIcons($row) {
+    let rankWeather = $row.find('td.rank-weather').find('span:nth-child(1)').text();
+    $('#modal-draft-weather').text(rankWeather);
+    let bgWeather = $row.find('td.rank-weather').css('background-color');
+    $('#modal-draft-weather').css('background-color', bgWeather)
+    
+    let rankSchedule = $row.find('td.rank-schedule').find('span:nth-child(1)').text();
+    let bgSchedule = $row.find('td.rank-schedule').css('background-color');
+    $('#modal-draft-schedule').text(rankSchedule);
+    $('#modal-draft-schedule').css('background-color', bgSchedule)
+    let rankPlayoffs = $row.find('td.rank-playoffs').find('span:nth-child(1)').text();
+    let bgPlayoffs = $row.find('td.rank-playoffs').css('background-color');
+    $('#modal-draft-playoffs').text(rankPlayoffs);
+    $('#modal-draft-playoffs').css('background-color', bgPlayoffs)
+    let rankOLine = $row.find('td.rank-oline').find('span:nth-child(1)').text();
+    let bgOLine = $row.find('td.rank-oline').css('background-color');
+    $('#modal-draft-oline').text(rankOLine);
+    $('#modal-draft-oline').css('background-color', bgOLine)
+    let rankVolume = $row.find('td.rank-volume').find('span:nth-child(1)').text();
+    let bgVolume = $row.find('td.rank-volume').css('background-color');
+    $('#modal-draft-volume').text(rankVolume);
+    $('#modal-draft-volume').css('background-color', bgVolume)
+    let rankSkepticism = $row.find('td.rank-skepticism').find('input:nth-child(1)').val();
+    let bgSkepticism = $row.find('td.rank-skepticism').find('input:nth-child(1)').css('background-color');
+    $('#modal-draft-skepticism').text(rankSkepticism);
+    $('#modal-draft-skepticism').css('background-color', bgSkepticism)
+    
+    let isFavorite = $row.find('td.favorite').find('span:nth-child(1)').hasClass('player-favorite');
+    let iconFavorite = (isFavorite) ? '★' : '☆';
+    $('#modal-draft-favorite').text(iconFavorite);
+    $('#modal-draft-favorite').removeClass('player-favorite');
+    if (isFavorite) {
+        $('#modal-draft-favorite').addClass('player-favorite');
+    }
+    $('#modal-draft-favorite').text(iconFavorite);
+}
+
 function filterPlayers($row) {
     let val = $('#ap-filter-player').val().toLowerCase();
-    let pCell = $row.find('td:nth-child(1)');
+    let pCell = $row.find('td.available-player');
     let playerName = pCell.text().toLowerCase();
     return playerName.indexOf(val) != -1
     }
 
 function filterPosition($row) {
     let val = $('#ap-filter-position').val().toUpperCase();
-    let $cell = $row.find('td:nth-child(1)');
+    let $cell = $row.find('td.available-player');
     let filterKey = 'position-' + val;
     return $cell.hasClass(filterKey)
 }
 
 function filterPrice($row) {
     let val = parseInt($('#ap-filter-price').val());
-    let $pCell = $row.find('td:nth-child(5)');
+    let $pCell = $row.find('td.rank-price');
     let $span = $pCell.find('span:nth-child(1)');
     let cellValue = parseInt($span.text());
     return cellValue <= val
@@ -867,7 +925,7 @@ function filterPrice($row) {
 
 function filterWeather($row) {
     let val = parseInt($('#ap-filter-weather').val());
-    let $pCell = $row.find('td:nth-child(6)');
+    let $pCell = $row.find('td.rank-weather');
     let $span = $pCell.find('span:nth-child(1)');
     let cellValue = parseInt($span.text());
     return cellValue <= val
@@ -875,7 +933,15 @@ function filterWeather($row) {
 
 function filterSchedule($row) {
     let val = parseInt($('#ap-filter-schedule').val());
-    let $pCell = $row.find('td:nth-child(7)');
+    let $pCell = $row.find('td.rank-schedule');
+    let $span = $pCell.find('span:nth-child(1)');
+    let cellValue = parseInt($span.text());
+    return cellValue <= val
+}
+
+function filterPlayoffs($row) {
+    let val = parseInt($('#ap-filter-playoffs').val());
+    let $pCell = $row.find('td.rank-playoffs');
     let $span = $pCell.find('span:nth-child(1)');
     let cellValue = parseInt($span.text());
     return cellValue <= val
@@ -883,7 +949,7 @@ function filterSchedule($row) {
 
 function filterOLine($row) {
     let val = parseInt($('#ap-filter-oline-ranking').val());
-    let $pCell = $row.find('td:nth-child(8)');
+    let $pCell = $row.find('td.rank-oline');
     let $span = $pCell.find('span:nth-child(1)');
     let cellValue = parseInt($span.text());
     return cellValue <= val
@@ -891,7 +957,7 @@ function filterOLine($row) {
 
 function filterSkepticism($row) {
     let val = parseInt($('#ap-filter-skepticism').val());
-    let $pCell = $row.find('td:nth-child(9)');
+    let $pCell = $row.find('td.rank-skepticism');
     let $input = $pCell.find('input:nth-child(1)');
     let cellValue = parseInt($input.val());
     return cellValue <= val && cellValue != 0
@@ -899,17 +965,22 @@ function filterSkepticism($row) {
 
 function filterOffensiveSupport($row) {
     let val = parseInt($('#ap-filter-offensive-support').val());
-    let $pCell = $row.find('td:nth-child(10)');
+    let $pCell = $row.find('td.rank-volume');
     let $span = $pCell.find('span:nth-child(1)');
     let cellValue = parseInt($span.text());
-    console.log(cellValue, val)
     return cellValue <= val
 }
 
 function filterFavorites($row) {
-    let $pCell = $row.find('td:nth-child(11)');
+    let $pCell = $row.find('td.favorite');
     let $span = $pCell.find('span:nth-child(1)');
     return $span.hasClass('player-favorite')
+}
+
+function filterBudgeted($row) {
+    let $pCell = $row.find('td.budgeted');
+    let $span = $pCell.find('span:nth-child(1)');
+    return $span.text() === 'X';
 }
 
 function applyFilters() {
@@ -921,11 +992,13 @@ function applyFilters() {
     weatherFilter = (isNaN(weatherFilter)) ? 0 : weatherFilter;
     let scheduleFilter = parseInt($('#ap-filter-schedule').val());
     scheduleFilter = (isNaN(scheduleFilter)) ? 0 : scheduleFilter;
+    let playoffsFilter = parseInt($('#ap-filter-playoffs').val());
+    playoffsFilter = (isNaN(playoffsFilter)) ? 0 : playoffsFilter;
     let favoriteFilterBox = document.getElementById('ap-filter-favorite')
     let olineFilter = parseInt($('#ap-filter-oline-ranking').val());
     let skepticismFilter = parseInt($('#ap-filter-skepticism').val());
     let offSupportFilter = parseInt($('#ap-filter-offensive-support').val());
-    console.log(offSupportFilter);
+    let budgetFilter = document.getElementById('ap-filter-budget')
     
     let filterList = [];
     if (playerFilter.length > 2) {filterList.push(filterPlayers)}
@@ -933,10 +1006,12 @@ function applyFilters() {
     if (priceFilter > 0) {filterList.push(filterPrice)}
     if (weatherFilter > 0) {filterList.push(filterWeather)}
     if (scheduleFilter > 0) {filterList.push(filterSchedule)}
+    if (playoffsFilter > 0) {filterList.push(filterPlayoffs)}
     if (olineFilter > 0) {filterList.push(filterOLine)}
     if (skepticismFilter > 0) {filterList.push(filterSkepticism)}
     if (offSupportFilter > 0) {filterList.push(filterOffensiveSupport)}
     if (favoriteFilterBox.checked == true) {filterList.push(filterFavorites)}
+    if (budgetFilter.checked == true) {filterList.push(filterBudgeted)}
     if (filterList.length == 0) {
         $('tr.filtered-out').removeClass('filtered-out');
         return
