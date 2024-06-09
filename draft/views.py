@@ -5,18 +5,25 @@ from decimal import Decimal
 
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import render, reverse
-from django.db.models import F, Case, When, DecimalField
+from django.db.models import F
 from django.utils import timezone
 from django.db.models.expressions import Window
-from django.db.models.functions import RowNumber, Coalesce
+from django.db.models.functions import RowNumber
 
 
 from draft import models as d 
 from draft.services.draft.draft import (
     init_managers, init_adp_rounds,
-    get_draft_board_objects, enrich_picks_data, populate_draft_board, get_draft_object_lists,
-    get_draft_context
-
+    get_draft_board_objects, populate_draft_board, get_draft_object_lists, get_draft_context,
+    get_new_projected_team,
+    picks_data_add_budgeted,
+    picks_data_add_early_season_rank,
+    picks_data_add_playoff_rank,
+    picks_data_add_weather_rank,
+    picks_data_add_oline_rank,
+    picks_data_add_skepticism_rank,
+    picks_data_add_offensive_support_rank,
+    refresh_player_budget,
 )
 
 def get_draft_board_data(request, draft_id):
@@ -81,13 +88,14 @@ def list(request):
 def create_draft(request):
     if request.method == 'POST':
         draft_name = html.unescape(request.POST['draft_name'])
+        draft_year = html.unescape(request.POST['draft_year'])
         managers = html.unescape(request.POST['draft_managers'])
         managers_to_create = [manager for manager in managers.splitlines() if len(manager.strip()) > 0 ]
         for manager in managers.splitlines():
             if '*' in manager:
                 drafter = manager.replace('*', '')
         
-        draft = d.Draft.objects.create(draft_name=draft_name, drafter=drafter)
+        draft = d.Draft.objects.create(draft_name=draft_name, year=draft_year, drafter=drafter)
         draft.save()
         draft_managers = []
         for i, new_manager in enumerate(managers_to_create, start=1):
@@ -127,12 +135,24 @@ def draft_board(request, draft_id):
     adp_rounds = init_adp_rounds(players, teams)
     draft_dict = {}
     drafter = init_managers(managers, draft_dict)
-    enrich_picks_data(picks_by_adp, draft, draft_dict)
+
+    budgeted_players = draft.budgeted_players.select_related("player").filter(status__in=('drafted', 'budgeted'))
+    budget_dict = {bp.player.id: bp for bp in budgeted_players}
+    for pick in picks_by_adp:
+        if pick.manager:
+            draft_dict[pick.manager.id].append(pick)
+        picks_data_add_budgeted(pick, budget_dict)
+        picks_data_add_early_season_rank(pick)
+        picks_data_add_playoff_rank(pick)
+        picks_data_add_weather_rank(pick)
+        picks_data_add_oline_rank(pick)
+        picks_data_add_skepticism_rank(pick)
+        picks_data_add_offensive_support_rank(pick)
     draft_board = populate_draft_board(rounds, managers, draft_dict)
     new_projected_team = get_new_projected_team(owner=drafter)
-    slot_list, watched_players, available_players, drafter_players, watch_total = get_draft_object_lists(rounds, picks_by_adp, watches, players, draft, managers)
+    watched_players, available_players, drafter_players, watch_total = get_draft_object_lists(picks_by_adp, watches, players, draft, managers)
     context = get_draft_context(
-        draft, slot_list, managers, players, adp_rounds, picks_by_adp,
+        draft, managers, players, adp_rounds, picks_by_adp,
         picks_by_time, available_players, drafter_players, watched_players, 
         watch_total, draft_board, new_projected_team, notes
     )
@@ -548,7 +568,7 @@ def budget_player(request, draft_id, player_id):
     new_projected_team = None
     if price <= manager.budget:
         player = d.Player.objects.get(year=draft.year, id=player_id)
-        new_projected_team = get_new_projected_team(manager, player)
+        new_projected_team = get_new_projected_team(manager, player_to_add=player)
         if new_projected_team:
             refresh_player_budget(new_projected_team, draft_id, manager_id)
     data = {
@@ -579,103 +599,22 @@ def update_notes(request, draft_id):
     response = JsonResponse(json.dumps(data), safe=False)
     return response
 
-def get_next_open_slot(position, team_slots):
-    # need to update this to handle either next draft spot or next budgeted spot
-    next_slot = None
-    for slot, sdict in team_slots.items():
-        if position in slot and sdict['pick'] is None:
-            next_slot = slot
-            break
-        elif position in d.FLEX_POSITIONS and 'FLEX' in slot and sdict['pick'] is None:
-            next_slot = slot
-            break
-        elif 'BENCH' in slot and sdict['pick'] is None:
-            next_slot = slot
-            break
-    return next_slot
-
-def get_new_projected_team(owner, player=None):
-    if player:
-        if d.BudgetPlayer.objects.filter(manager=owner, status__in=('budgeted', 'drafted'), player=player).first():
-            return
-        if d.DraftPick.objects.filter(manager=owner, drafted=True, player=player).first():
-            return
-    drafted_players = d.DraftPick.objects.filter(manager=owner, drafted=True).select_related("player")
-    drafted_players = drafted_players.annotate(pos_order=Case(
-        When(player__position='QB', then=1),
-        When(player__position='RB', then=2),
-        When(player__position='WR', then=3),
-        When(player__position='TE', then=4),
-        When(player__position='DEF', then=5),
-        default=10
-    ))
-    drafted_players = drafted_players.annotate(pick_price=Coalesce('price', 'player__projected_price', output_field=DecimalField()))
-    drafted_players = drafted_players.order_by('pos_order', '-pick_price')
-    budgeted_players = d.BudgetPlayer.objects.filter(manager=owner, status__in=('budgeted', 'drafted')).select_related("player")
-    budgeted_players = budgeted_players.annotate(pos_order=Case(
-        When(player__position='QB', then=1),
-        When(player__position='RB', then=2),
-        When(player__position='WR', then=3),
-        When(player__position='TE', then=4),
-        When(player__position='DEF', then=5),
-        default=10
-    ))
-    budgeted_players = budgeted_players.order_by('-player__projected_price')
-    player_ids_selected = set()
-    projected_players = [{
-        'id': player.id, 'player': player, 'name': player.name, 'position': player.position, 'source': 'budgeted', 'price': float(player.override_price or player.projected_price)}
-        ] if player else []
-    for dplayer in drafted_players:
-        if dplayer.player.id in player_ids_selected:
-            continue
-        player_ids_selected.add(dplayer.player.id)
-        projected_players.append({'id': dplayer.player.id, 'player': dplayer, 'name': dplayer.player.name, 'position': dplayer.player.position, 'source': 'drafted', 'price': float(dplayer.price)})
-    for bplayer in budgeted_players:
-        if bplayer.player.id in player_ids_selected:
-            continue
-        player_ids_selected.add(bplayer.player.id)
-        projected_players.append({'id': bplayer.player.id, 'player': bplayer, 'name': bplayer.player.name, 'position': bplayer.player.position, 'source': 'budgeted', 'price': float(bplayer.player.override_price or bplayer.player.projected_price)})
-    sorted_proj_players = sorted(projected_players, key=lambda x: x['price'], reverse=True)
-
-    projected_team = {pos: None for pos in d.POSITIONS_MAP.keys()}
-    for pdict in sorted_proj_players:
-        if pdict['position'] == 'QB' and projected_team['QB1'] is None:
-            assign_to_projected_team(projected_team, pdict, ('QB1', 'BENCH1', 'BENCH2', 'BENCH3', 'BENCH4', 'BENCH5', 'BENCH6', 'BENCH7'))
-        elif pdict['position'] == 'RB':
-            assign_to_projected_team(projected_team, pdict, ('RB1', 'RB2', 'FLEX1', 'FLEX2', 'BENCH1', 'BENCH2', 'BENCH3', 'BENCH4', 'BENCH5', 'BENCH6', 'BENCH7'))
-        elif pdict['position'] == 'WR':
-            assign_to_projected_team(projected_team, pdict, ('WR1', 'WR2', 'FLEX1', 'FLEX2', 'BENCH1', 'BENCH2', 'BENCH3', 'BENCH4', 'BENCH5', 'BENCH6', 'BENCH7'))
-        elif pdict['position'] == 'TE':
-            assign_to_projected_team(projected_team, pdict, ('TE1', 'FLEX1', 'FLEX2', 'BENCH1', 'BENCH2', 'BENCH3', 'BENCH4', 'BENCH5', 'BENCH6', 'BENCH7'))
-        elif pdict['position'] == 'DEF':
-            assign_to_projected_team(projected_team, pdict, ('DEF1', 'FLEX1', 'FLEX2', 'BENCH1', 'BENCH2', 'BENCH3', 'BENCH4', 'BENCH5', 'BENCH6', 'BENCH7'))
-    return projected_team
+# def get_next_open_slot(position, team_slots):
+#     # need to update this to handle either next draft spot or next budgeted spot
+#     next_slot = None
+#     for slot, sdict in team_slots.items():
+#         if position in slot and sdict['pick'] is None:
+#             next_slot = slot
+#             break
+#         elif position in d.FLEX_POSITIONS and 'FLEX' in slot and sdict['pick'] is None:
+#             next_slot = slot
+#             break
+#         elif 'BENCH' in slot and sdict['pick'] is None:
+#             next_slot = slot
+#             break
+#     return next_slot
 
 
-def assign_to_projected_team(projected_team, pdict, slots_to_check):
-    for pos in slots_to_check:
-        if projected_team[pos] is None:
-            projected_team[pos] = {'id': pdict['id'], 'player': pdict['name'], 'price': pdict['price'], 'source': pdict['source'], 'position': pdict['position']}
-            break
-        # else:
-
-def refresh_player_budget(new_projected_team, draft_id, manager_id):
-    players_to_delete = d.BudgetPlayer.objects.filter(draft_id=draft_id, manager_id=manager_id)
-    players_to_delete.delete()
-    for slot, pdict in new_projected_team.items():
-        if pdict:
-            default_data = {'price': pdict['price'], 'status': pdict['source'], 'position': slot}
-            budget_player, created = d.BudgetPlayer.objects.get_or_create(
-            draft_id = draft_id
-            ,player_id=pdict['id']
-            ,manager_id=manager_id
-            ,defaults=default_data
-            )
-            if not created:
-                budget_player.price = pdict['price']
-                budget_player.position = slot
-                budget_player.status = 'budgeted'
-                budget_player.save(update_fields=['price', 'position', 'status'])
 
 
 def favorite_player(request, draft_id, player_id):

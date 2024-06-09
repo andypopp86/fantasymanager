@@ -1,14 +1,8 @@
-from email.policy import default
-from django.core.management.base import BaseCommand, CommandError
-
-import os 
-import csv
-
+from django.core.management.base import BaseCommand
 from django.utils import timezone
-from django.db.models import Q
 
 from draft import models as d
-from draft.views import get_new_projected_team
+from draft.services.draft.draft import get_new_projected_team
 
 class Command(BaseCommand):
     # help = 'Closes the specified poll for voting'

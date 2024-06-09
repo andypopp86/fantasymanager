@@ -128,7 +128,9 @@ class Draft(models.Model):
         return '%s' % (self.draft_name)
     
     def save(self, *args, **kwargs):
-        self.year = timezone.now().year
+        print(f'year {self.year}')
+        if not self.year:
+            self.year = timezone.now().year
         super(Draft, self).save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
