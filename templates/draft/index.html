@@ -6,9 +6,11 @@
     <head>
         <title>Draft</title>
         {% vite_react_refresh app="draftboard" %}
-        <div>Hello</div>
         {% vite_hmr_client app="draftboard" %}
         {% vite_asset "src/main.jsx" app="draftboard" %}
     </head>
+    <body>
+        <div id="root"></div>
+    </body>
 
 </html>

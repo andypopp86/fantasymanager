@@ -184,5 +184,5 @@ REST_FRAMEWORK = {
 
 DJANGO_VITE = {
     "default": {"dev_mode": DEBUG},
-    "draftboard": {"static_url_prefix": "js/draftboard/", "dev_server_port": 5173, "dev_mode": DEBUG}
+    "draftboard": {"static_url_prefix": "js/draftboard/", "dev_server_port": 3001, "dev_mode": DEBUG}
 }
