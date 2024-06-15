@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'bootstrap3',
     'mathfilters',
     'crispy_forms',
+    'django_vite',
 
     'users',
     'rules',
@@ -140,7 +141,8 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, "static")
+    os.path.join(BASE_DIR, "static"),
+    os.path.join(BASE_DIR, "frontend/draftboard/dist"),
 ]
 STATIC_ROOT = "static_root"
 
@@ -178,4 +180,9 @@ if not DEBUG:
 REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
     'PAGE_SIZE': 10
+}
+
+DJANGO_VITE = {
+    "default": {"dev_mode": DEBUG},
+    "draftboard": {"static_url_prefix": "js/draftboard/", "dev_server_port": 5173, "dev_mode": DEBUG}
 }

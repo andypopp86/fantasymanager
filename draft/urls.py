@@ -11,6 +11,7 @@ urlpatterns = [
 	path(r'create/', d.create_draft, name='create'),
 	path(r'start/', d.start_draft, name='start'),
 	path(r'board/<int:draft_id>/', d.draft_board, name='board'),
+	path(r'react_draft_entrypoint/', d.react_draft_entrypoint, name='react_draft_entrypoint'),
 	# path(r'board/<int:draft_id>/json/', d.get_draft_board_json, name='board_data_json'),
 	# path(r'board/<int:draft_id>/data/', d.get_draft_board_data, name='board_data'),
 	# path(r'board_prices/<int:draft_id>/<int:rounds>', d.price_board, name='price_board'),

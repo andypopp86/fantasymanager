@@ -652,3 +652,6 @@ def skepticism_rating(request, draft_id, player_id):
     response = JsonResponse(json.dumps(data), safe=False)
     return response
 
+def react_draft_entrypoint(request):
+    context = {}
+    return render(request, "draft/index.html", context)
