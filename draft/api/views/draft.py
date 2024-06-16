@@ -5,7 +5,7 @@ from rest_framework.views import APIView
 from rest_framework.pagination import PageNumberPagination
 
 from core.api.serializers.base import BaseSerializer
-from draft.services.draft.draft import DraftReadService
+from draft.services.draft.draft import DraftReadService, DraftManagersReadService, DraftBoardReadService
 
 class LargeResultsSetPagination(PageNumberPagination):
     page_size = 1000
@@ -80,6 +80,73 @@ class ManagerOutputSerializer(BaseSerializer):
     budget = serializers.FloatField()
     drafter = serializers.BooleanField()
     position = serializers.IntegerField()
+
+class DraftManagersAPI(APIView):
+    year = serializers.IntegerField()
+    draft_name = serializers.CharField()
+    drafter = serializers.CharField()
+
+    class DraftManagersOutputSerializer(BaseSerializer):
+        name = serializers.CharField()
+        budget = serializers.FloatField()
+        drafter = serializers.BooleanField()
+        position = serializers.IntegerField()
+
+    managers = DraftManagersOutputSerializer(
+        many=True,
+        read_only=True
+    )
+
+    def get(self, request, draft_id):
+        managers = DraftManagersReadService(
+            user=request.user
+        ).get(draft_id=draft_id)
+        output_data = [self.DraftManagersOutputSerializer.serialize(manager) for manager in managers]
+        # print(output_data)
+        return Response(output_data, status=status.HTTP_200_OK)
+    
+class DraftBoardAPI(APIView):
+
+    manager = serializers.CharField()
+    manager_position = serializers.IntegerField()
+    round = serializers.IntegerField()
+
+    class DraftPickOutputSerializer(BaseSerializer):
+        name = serializers.CharField()
+        price = serializers.IntegerField()
+        position = serializers.CharField()
+
+    picks = DraftPickOutputSerializer(
+        many=True,
+        read_only=True
+    )
+
+    def get(self, request, draft_id):
+        draft_board = DraftBoardReadService(
+            user=request.user
+        ).get(draft_id=draft_id)
+        # output_data = [[self.DraftPickOutputSerializer.serialize(pick["pick"]) for pick in draft_round] for draft_round in draft_board]
+        output_data = [[pick for pick in draft_round] for draft_round in draft_board]
+        return Response(output_data, status=status.HTTP_200_OK)
+    
+    # def get(self, request, draft_id):
+    #     draft_board = DraftBoardReadService(
+    #         user=request.user
+    #     ).get(draft_id=draft_id)
+    #     output_data = []
+    #     for draft_round in draft_board:
+    #         print(draft_round)
+    #         round_picks = []
+    #         for pick in draft_round:
+    #             print(pick)
+    #             serialized_pick = self.DraftPickOutputSerializer.serialize(pick)
+    #             print(serialized_pick)
+    #             round_picks.append(serialized_pick)
+    #         output_data.append(round_picks)
+    #     output_data = [[self.DraftPickOutputSerializer.serialize(pick) for pick in draft_round] for draft_round in draft_board]
+    #     print(output_data)
+    #     return Response(output_data, status=status.HTTP_200_OK)
+
 
 class DraftDetailAPI(APIView):
     pagination_class = SmallResultsSetPagination

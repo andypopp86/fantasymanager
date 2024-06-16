@@ -118,6 +118,7 @@ class Draft(models.Model):
     saved_slots = models.TextField(blank=True)
     locked = models.BooleanField(default=False)
     starting_budget = models.IntegerField(default=200)
+    rounds = models.IntegerField(default=19)
     limit_qb = models.IntegerField(default=3)
     limit_rb = models.IntegerField(default=8)
     limit_wr = models.IntegerField(default=8)
@@ -158,6 +159,41 @@ class Draft(models.Model):
                 print(f"could not save {dp.player.id} {dp.player.name}")
 
         DraftPick.objects.bulk_create(players_to_add)
+
+    def draft_rounds(self):
+        """
+        Output a list of lists of draft pick objects
+        """
+        managers = self.managers.all().order_by("position")
+        rounds = [[
+            {
+                "manager": manager.name,
+                "manager_position": manager.position,
+                "pick": {"name": "No Selection", "price": 0, "position": ""},
+                "round": round_number
+             } for manager in managers
+        ] for round_number in range(self.rounds)]
+
+        current_manager = None
+        manager_player_ct = 0
+        for pick in self.drafted_players.filter(drafted=True).order_by("manager__position", "-last_update_time"):
+            if current_manager != pick.manager:
+                current_manager = pick.manager
+                manager_player_ct = 0
+            round_pick_dict = rounds[manager_player_ct][pick.manager.position]
+            round_pick_dict["pick"] = {"name": pick.player.name, "price": pick.price, "position": pick.player.position}
+            manager_player_ct += 1
+
+        for draft_round in rounds:
+            for pick in draft_round:
+                print(pick)
+
+        return rounds
+            
+
+          
+
+
 
 
 class Manager(models.Model):

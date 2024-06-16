@@ -10,6 +10,28 @@ from draft.utils import (
     STOPLIGHT_COLORS
 )
 
+class DraftManagersReadService(BaseService):
+
+    def get(
+        self,
+        draft_id
+    ):
+        managers = d.Manager.objects.filter(draft_id=draft_id).order_by("position")
+        if not managers:
+            raise Http404
+        return managers
+    
+class DraftBoardReadService(BaseService):
+    def get(
+        self,
+        draft_id
+    ):
+        draft = d.Draft.objects.filter(id=draft_id).first()
+        if not draft:
+            raise Http404
+        return draft.draft_rounds()
+        
+
 class DraftReadService(BaseService):
 
     def get_draft_detail(
