@@ -1,6 +1,20 @@
 import * as axios from "axios";
 import type { AxiosResponse, AxiosRequestConfig  } from "axios";
-import type { DraftRetrieveOutput, DraftRetrieveParams } from "./draft.schemas";
+import type { DraftRetrieveOutput, DraftListRetrieveOutput, DraftRetrieveParams } from "./draft.schemas";
+
+export const draftListRetrieve = <
+  TData = AxiosResponse<DraftListRetrieveOutput>,
+  >(
+    params?:DraftRetrieveParams,
+    options?: AxiosRequestConfig,
+  ): Promise<TData> => {
+    console.log("draft list retrieve")
+    return axios.default.get(`/api/drafts/draft/drafts`, {
+        ...options,
+        params: { ...params, ...options?.params }
+    })
+  }
+
 
 export const draftRetrieve = <
   TData = AxiosResponse<DraftRetrieveOutput>,

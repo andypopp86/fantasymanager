@@ -1,4 +1,4 @@
-import { useLocation } from "@reach/router";
+import { useLocation } from "react-router-dom";
 import * as qs from "qs";
 
 export const useQueryParams = () => {

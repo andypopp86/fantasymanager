@@ -1,5 +1,6 @@
-import React, { ReactNode, lazy } from "react";
-import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import React from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { draftManagersRetrieve, draftSlotsRetrieve } from "../lib/data";
 import { useQueryParams } from "../hooks/useQueryParams";
 
@@ -26,15 +27,10 @@ export const Draft = () => {
         }
 
     })
-    // console.log(draftSlotData)
-    // draftSlotData?.data.map((round) => {
-    //     round.map((slot) => {
-    //         console.log(slot) 
-    //     })
-    // })
-    console.log(draftRoundData?.data)
+
   return (
     <>
+        <Link to="/draft/react_draft_entrypoint/">Draft Dashboard</Link>
       <div>Draft</div>
       <DraftBoard managers={managerData?.data} draft_rounds={draftRoundData?.data} />
     </>

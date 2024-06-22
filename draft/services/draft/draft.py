@@ -22,10 +22,7 @@ class DraftManagersReadService(BaseService):
         return managers
     
 class DraftBoardReadService(BaseService):
-    def get(
-        self,
-        draft_id
-    ):
+    def get(self, draft_id):
         draft = d.Draft.objects.filter(id=draft_id).first()
         if not draft:
             raise Http404
@@ -42,6 +39,10 @@ class DraftReadService(BaseService):
         if not draft:
             raise Http404
         return draft
+    
+    def get_drafts(self):
+        drafts = d.Draft.objects.all()
+        return drafts
     
 
 def init_managers(managers, draft_dict):

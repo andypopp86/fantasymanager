@@ -1,3 +1,6 @@
+export interface DraftListRetrieveOutput {
+
+}
 export interface DraftRetrieveOutput {
 
 }
