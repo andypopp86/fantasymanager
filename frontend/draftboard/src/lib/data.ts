@@ -4,6 +4,7 @@ import type { DraftRetrieveOutput,
     DraftListRetrieveOutput,
     DraftRetrieveParams,
     DraftManagersOutput,
+    DraftSlotsRetrieveOutput,
     AvailablePlayersRetrieveOutput,
 } from "./draft.schemas";
 
@@ -77,7 +78,7 @@ export const draftRetrieve = <
   }
 
   export const draftSlotsRetrieve = <
-  TData = AxiosResponse<DraftRetrieveOutput>,
+  TData = AxiosResponse<DraftSlotsRetrieveOutput>,
   >(
     draft_id: string,
     params?:DraftRetrieveParams,
