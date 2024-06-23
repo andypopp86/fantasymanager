@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 from django.core.management.base import BaseCommand
 
 from django.utils import timezone
@@ -14,7 +17,7 @@ class Command(BaseCommand):
         this_year = timezone.now().year
         draft = d.Draft.objects.filter(id=options['draft_id']).first()
         if not draft:
-            print('NO SUCH DRAFT')
+            logger.info('NO SUCH DRAFT')
         
         ranks = []
         for manager in draft.managers.all():
@@ -25,7 +28,7 @@ class Command(BaseCommand):
                 actuals.append(pick.price)
                 projects.append(pick.projected_price())
                 diffs.append(pick.price - pick.projected_price())
-                print(manager.name, pick, pick.price, pick.projected_price())
+                logger.info(manager.name, pick, pick.price, pick.projected_price())
             
             sum_act = sum(actuals)
             sum_proj = sum(projects)
@@ -34,4 +37,4 @@ class Command(BaseCommand):
         
         sorted_ranks = sorted(ranks, key=lambda x: x[3])
         for idx, srank in enumerate(sorted_ranks, start=1):
-            print(f"{idx}. {srank[0]} - {srank[3]}")
+            logger.info(f"{idx}. {srank[0]} - {srank[3]}")

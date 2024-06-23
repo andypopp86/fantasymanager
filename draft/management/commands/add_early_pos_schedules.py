@@ -8,6 +8,9 @@ from django.utils import timezone
 
 from draft import models as d
 
+import logging
+logger = logging.getLogger(__name__)
+
 class Command(BaseCommand):
     # help = 'Closes the specified poll for voting'
 
@@ -22,7 +25,7 @@ class Command(BaseCommand):
         with open(data_path, 'r') as f:
             reader = csv.reader(f, delimiter='\t')
             for idx, row in enumerate(reader):
-                print(idx, row)
+                logger.info(idx, row)
                 if idx <= 1:
                     continue
                 team = row[0].upper().strip()
@@ -36,8 +39,8 @@ class Command(BaseCommand):
                     nflteam.save()
                     # weather_score = row[4]
                 except Exception as e:
-                    print(e)
-                    print('couldnt get', idx, team, len(team), this_year)
+                    logger.info(e)
+                    logger.info('couldnt get', idx, team, len(team), this_year)
 
                     break
         

@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 from django.core.management.base import BaseCommand, CommandError
 
 import csv
@@ -28,7 +31,7 @@ class Command(BaseCommand):
                         'watched': True
                     })
                 if not created and not pick.drafted and not pick.watched:
-                    print('watching player', line[0])
+                    logger.info('watching player', line[0])
                     pick.watched = True 
                     pick.save()
                     

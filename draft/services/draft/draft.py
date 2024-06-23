@@ -44,6 +44,13 @@ class DraftReadService(BaseService):
         drafts = d.Draft.objects.all()
         return drafts
     
+    def get_picks(self, draft_id):
+        picks = d.DraftPick.objects.filter(draft_id=draft_id).order_by("manager__name", "-price")
+        return picks
+    
+    def get_available_players(self, draft_id):
+        return d.DraftPick.objects.filter(draft_id=draft_id, drafted=False).order_by("-player__projected_price")
+    
 
 def init_managers(managers, draft_dict):
     for manager in managers:

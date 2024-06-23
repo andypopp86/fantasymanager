@@ -2,7 +2,6 @@ import React from "react";
 import { Link } from "react-router-dom";
 
 export default function DraftList({ draft_list }) {
-    console.log(draft_list)
     return (
         <div className={"container mx-auto"}>
             <div className={"bg-white shadow-md rounded my-6"}>

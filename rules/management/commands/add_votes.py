@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 from django.core.management.base import BaseCommand, CommandError
 
 import os 
@@ -24,7 +27,7 @@ class Command(BaseCommand):
             for line in lines:
                 row = line.strip()
                 rule, voter, decision = row.split('\t')
-                print(rule, voter, decision)
+                logger.info(rule, voter, decision)
                 user = u.FUser.objects.get(username=voter)
                 rule_obj = r.Rule.objects.get(name=rule)
 

@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 from django.core.management.base import BaseCommand, CommandError
 
 import os 
@@ -35,7 +38,7 @@ class Command(BaseCommand):
                 for line in lines:
                     row = line.strip()
                     email, username, password = row.split(',')
-                    print(email, username)
+                    logger.info(email, username)
 
                     user = u.FUser.objects.create(email=email, username=username, password=password)
                     user.save()

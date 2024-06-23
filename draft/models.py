@@ -1,7 +1,11 @@
+import logging
+
 from functools import cached_property
 from django.utils import timezone
 from django.db import models
 from django.db.models import Case, Value, When, F
+
+logger = logging.getLogger(__name__)
 
 POSITIONS = (
     (0, 'QB1'),
@@ -129,7 +133,6 @@ class Draft(models.Model):
         return '%s' % (self.draft_name)
     
     def save(self, *args, **kwargs):
-        print(f'year {self.year}')
         if not self.year:
             self.year = timezone.now().year
         super(Draft, self).save(*args, **kwargs)
@@ -156,7 +159,7 @@ class Draft(models.Model):
             try:
                 dp.save()
             except Exception as exc:
-                print(f"could not save {dp.player.id} {dp.player.name}")
+                logger.error(f"could not save {dp.player.id} {dp.player.name}")
 
         DraftPick.objects.bulk_create(players_to_add)
 
@@ -183,10 +186,6 @@ class Draft(models.Model):
             round_pick_dict = rounds[manager_player_ct][pick.manager.position]
             round_pick_dict["pick"] = {"name": pick.player.name, "price": pick.price, "position": pick.player.position}
             manager_player_ct += 1
-
-        for draft_round in rounds:
-            for pick in draft_round:
-                print(pick)
 
         return rounds
             

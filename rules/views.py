@@ -83,7 +83,6 @@ class RuleDecisionListView(generic.ListView):
             if rule_decision:
                 for topic, vote in rule_decision.items():
                     if topic not in headers:
-                        # print(rule_decision.name)
                         headers.append(topic)
 
         context.update({

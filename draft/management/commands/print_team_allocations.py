@@ -15,7 +15,7 @@ class Command(BaseCommand):
         draft = d.Draft.objects.filter(id=options['draft_id']).first()
         sort_pos = options["sort_pos"]
         if not draft:
-            print('NO SUCH DRAFT')
+            logger.info('NO SUCH DRAFT')
         budget = 200.0
         picks = draft.drafted_players.filter(drafted=True)
         picks = picks.values('manager__name', 'player__position')
@@ -30,4 +30,4 @@ class Command(BaseCommand):
 
         sorted_mdict = dict(sorted(mdict.items(), key=lambda x: x[1][sort_pos], reverse=True))
         for k,v in sorted_mdict.items():
-            print(k,v)
+            logger.info(k,v)

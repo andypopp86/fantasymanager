@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 from email.policy import default
 from django.core.management.base import BaseCommand, CommandError
 
@@ -31,8 +34,8 @@ class Command(BaseCommand):
                     nflteam.save()
                     # weather_score = row[4]
                 except Exception as e:
-                    print(e)
-                    print('couldnt get', idx, team, len(team), this_year)
+                    logger.info(e)
+                    logger.info('couldnt get', idx, team, len(team), this_year)
 
                     break
         

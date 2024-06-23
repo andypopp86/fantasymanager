@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 from email.policy import default
 from django.core.management.base import BaseCommand, CommandError
 
@@ -44,10 +47,10 @@ class Command(BaseCommand):
                 matchup_symbol = away_symbol + location
                 opposing_team = match.home if match.home.code != team.code else match.away
                 single_team_opps.append(opposing_team.defensive_ranking)
-                # print(single_team_opps)
+                # logger.info(single_team_opps)
                 if len(single_team_opps) == 3:
                     rank_vals.append((team.code, round(sum(single_team_opps) / len(single_team_opps),1)))
-                # print(team, 'vs', opposing_team, opposing_team.defensive_ranking)
+                # logger.info(team, 'vs', opposing_team, opposing_team.defensive_ranking)
                 # rank_val = match.home.code if match.home.defensive_ranking == team.code else match.away.defensive_ranking
                 # rank_val = rank_val / 32
                 # rank_vals.append(rank_val)
@@ -58,14 +61,14 @@ class Command(BaseCommand):
             #     rank_sum = int(round(sum(rank_vals), 2) * 100)
             #     team_sos.append((team, rank_sum))
             # except:
-            #     print(team, rank_vals, opp_string)
+            #     logger.info(team, rank_vals, opp_string)
             # matchups = matchups.values_list
             # if team.code != 'FA':
-            #     print(f'{team.code}\t{rank_sum}\t{opp_string}')
+            #     logger.info(f'{team.code}\t{rank_sum}\t{opp_string}')
         
         rank = 1
         for ttup in sorted(rank_vals, key=lambda x: x[1], reverse=True):
-            print(rank, ttup)
+            logger.info(rank, ttup)
             team_code = ttup[0]
             try:
                 team = d.NFLTeam.objects.get(code=team_code)
@@ -73,4 +76,4 @@ class Command(BaseCommand):
                 team.save(update_fields=['playoff_schedule'])
                 rank += 1
             except Exception as e:
-                print(ttup, e)
+                logger.info(ttup, e)

@@ -32,7 +32,6 @@ class FlexFilter(admin.SimpleListFilter):
         elif self.value() == 'False':
             return queryset.filter(position__in=['QB', 'Def'])
         else:
-            print(self.value())
             return queryset
 
 

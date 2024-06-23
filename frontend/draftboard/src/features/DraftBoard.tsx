@@ -1,6 +1,6 @@
 import React from "react";
-import { DraftSlot } from "./DraftSlot";
-import { DraftManagersOutput, DraftSlotOutput, DraftRound } from "../lib/draft.schemas";
+import { Link } from "react-router-dom";
+import { DraftManagersOutput, DraftSlotsRetrieveOutput } from "../lib/draft.schemas";
 
 const BG_COLORS = [
     "red", "blue", "green", "orange", "purple", "grey", "yellow", "Goldenrod", "DodgerBlue", "IndianRed", "MediumPurple"
@@ -23,8 +23,8 @@ const POSITION_FG_COLORS = {
     "DEF": "white",
 }
 type DraftBoardProps = {
-    managers: DraftManagersOutput[]
-    draft_rounds: DraftRound[]
+    managers: DraftManagersOutput,
+    draft_rounds: DraftSlotsRetrieveOutput,
 }
 export const DraftBoard = ({managers, draft_rounds}: DraftBoardProps) => {
     return (
@@ -42,9 +42,9 @@ export const DraftBoard = ({managers, draft_rounds}: DraftBoardProps) => {
                 }
             </div>
             <div className={"bg-slate-200 overflow-x-auto"}>
-                <table className={"table-auto min-w-full"}>
-                {draft_rounds?.map((round) => (
-                            <div key={round.round} round-key={round.round} className={"flex"}>
+                <div className={"table-auto min-w-full"}>
+                {draft_rounds?.map((round, idx) => (
+                            <div key={idx} round-key={round.round} className={"flex"}>
                                 {round?.map((slot) => (
                                     <div key={`${slot.round}-${slot.manager_position}`} slot-key={`${slot.round}-${slot.manager_position}`} className={"w-24"} >{slot.pick.name}</div>
                                         )
@@ -55,7 +55,7 @@ export const DraftBoard = ({managers, draft_rounds}: DraftBoardProps) => {
                     )
                 }
 
-                </table>
+                </div>
             </div>
         </>
     )

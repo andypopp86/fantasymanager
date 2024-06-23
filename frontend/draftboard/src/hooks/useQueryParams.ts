@@ -1,7 +1,11 @@
-import { useLocation } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import * as qs from "qs";
 
 export const useQueryParams = () => {
-    const location = useLocation();
-    return qs.parse(location.search, { ignoreQueryPrefix: true })
+    return useParams();
+    // const location = useLocation();
+    // console.log(location)
+    // const params = useParams();
+    // console.log(params)
+    // return qs.parse(location.search, { ignoreQueryPrefix: true })
 }

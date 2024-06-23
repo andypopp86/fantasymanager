@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 from django.core.management.base import BaseCommand, CommandError
 
 from django.db.models import Q
@@ -22,11 +25,11 @@ class Command(BaseCommand):
                     )
                 hp.save()
                 assigned.append(hp)
-                print(hp, 'saved')
+                logger.info(hp, 'saved')
             except Exception as exc:
-                print(exc)
+                logger.info(exc)
                 unassigned.append(hp)
-                print(hp, 'not saved')
+                logger.info(hp, 'not saved')
 
         with open('assigned_players.txt', 'w') as f:
             for assignee in assigned:

@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 from email.policy import default
 from django.core.management.base import BaseCommand, CommandError
 
@@ -44,10 +47,10 @@ class Command(BaseCommand):
                 rank_sum = int(round(sum(rank_vals), 2) * 100)
                 team_sos.append((team, rank_sum))
             except:
-                print(team, rank_vals, opp_string)
+                logger.info(team, rank_vals, opp_string)
             # matchups = matchups.values_list
             # if team.code != 'FA':
-            #     print(f'{team.code}\t{rank_sum}\t{opp_string}')
+            #     logger.info(f'{team.code}\t{rank_sum}\t{opp_string}')
         
         # rank = 1
         # for ttup in sorted(team_sos, key=lambda x: x[1], reverse=True):
@@ -57,18 +60,18 @@ class Command(BaseCommand):
         #         team.save(update_fields=['early_season_schedule'])
         #         rank += 1
         #     except Exception as e:
-        #         print(ttup, e)
+        #         logger.info(ttup, e)
         
         week_nums = range(1, total_weeks)
         headers = ['Team' ]
         for num in week_nums:
             headers.append(str(num))
         
-        print('\t'.join(headers))
+        logger.info('\t'.join(headers))
         for team_code, matchup_dict in schedule.items():
-            # print(team_code, matchup_dict)
+            # logger.info(team_code, matchup_dict)
             team_matchups = [team_code]
             for i in range(1, total_weeks):
                 matchup = matchup_dict.get(i, 'BYE')
                 team_matchups.append(matchup)
-            print('\t'.join(team_matchups))
+            logger.info('\t'.join(team_matchups))

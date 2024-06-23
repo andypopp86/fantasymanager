@@ -1,6 +1,11 @@
 import * as axios from "axios";
 import type { AxiosResponse, AxiosRequestConfig  } from "axios";
-import type { DraftRetrieveOutput, DraftListRetrieveOutput, DraftRetrieveParams } from "./draft.schemas";
+import type { DraftRetrieveOutput,
+    DraftListRetrieveOutput,
+    DraftRetrieveParams,
+    DraftManagersOutput,
+    AvailablePlayersRetrieveOutput,
+} from "./draft.schemas";
 
 export const draftListRetrieve = <
   TData = AxiosResponse<DraftListRetrieveOutput>,
@@ -24,7 +29,7 @@ export const draftRetrieve = <
     options?: AxiosRequestConfig,
   ): Promise<TData> => {
     console.log("draft retrieve")
-    return axios.default.get(`/api/drafts/draft/${draft_id}/`, {
+    return axios.default.get(`/api/drafts/draft/${draft_id}/detail`, {
         ...options,
         params: { ...params, ...options?.params }
     })
@@ -32,7 +37,7 @@ export const draftRetrieve = <
 
 
   export const draftManagersRetrieve = <
-  TData = AxiosResponse<DraftRetrieveOutput>,
+  TData = AxiosResponse<DraftManagersOutput>,
   >(
     draft_id: string,
     params?:DraftRetrieveParams,
@@ -40,6 +45,32 @@ export const draftRetrieve = <
   ): Promise<TData> => {
     console.log("draft managers retrieve")
     return axios.default.get(`/api/drafts/draft/${draft_id}/managers/detail`, {
+        ...options,
+        params: { ...params, ...options?.params }
+    })
+  }
+
+  export const draftPicksRetrieve = <
+  TData = AxiosResponse<DraftRetrieveOutput>,
+  >(
+    draft_id: string,
+    params?:DraftRetrieveParams,
+    options?: AxiosRequestConfig,
+  ): Promise<TData> => {
+    return axios.default.get(`/api/drafts/draft/${draft_id}/picks`, {
+        ...options,
+        params: { ...params, ...options?.params }
+    })
+  }
+
+  export const draftAvailablePlayersRetrieve = <
+  TData = AxiosResponse<AvailablePlayersRetrieveOutput>,
+  >(
+    draft_id: string,
+    params?:DraftRetrieveParams,
+    options?: AxiosRequestConfig,
+  ): Promise<TData> => {
+    return axios.default.get(`/api/drafts/draft/${draft_id}/available_players`, {
         ...options,
         params: { ...params, ...options?.params }
     })
