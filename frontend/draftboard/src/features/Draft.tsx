@@ -6,8 +6,14 @@ import { useQueryParams } from "../hooks/useQueryParams";
 
 import { DraftBoard } from "../features/DraftBoard";
 import { AvailablePlayers } from "../features/AvailablePlayers";
+import { ActorRefFrom } from "xstate";
+
+type DraftProps = {
+    // contextMachineRef: ActorRefFrom<typeof appStateMachine>
+};
 
 export const Draft = () => {
+    
     const { draft_id } = useQueryParams();
     console.log(draft_id)
     const { data: managerData } = useQuery({

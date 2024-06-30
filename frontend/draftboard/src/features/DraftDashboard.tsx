@@ -1,11 +1,17 @@
-import React from "react";
+import React, {HTMLProps} from "react";
 import { useQuery } from "@tanstack/react-query";
 import { draftListRetrieve } from "../lib/data";
 
 import DraftList from "../features/DraftList";
 
-export const DraftDashboard = () => {
+type DraftDashboardProps = {
+    draftAppActor: any,
+};
+
+export const DraftDashboard = ( { draftAppActor }: DraftDashboardProps) => {
     // const { draft_id } = useQueryParams();
+    console.log(draftAppActor)
+    console.log(draftAppActor.state)
     const { data: draftListData } = useQuery({
         queryKey: ["draft_list"],
         queryFn: () =>
@@ -19,7 +25,7 @@ export const DraftDashboard = () => {
 
   return (
     <>
-      <DraftList draft_list={draftListData?.data} />
+      <DraftList draft_list={draftListData?.data} draftAppActor={draftAppActor} />
     </>
   )
 }
