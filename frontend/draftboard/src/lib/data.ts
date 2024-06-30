@@ -14,7 +14,6 @@ export const draftListRetrieve = <
     params?:DraftRetrieveParams,
     options?: AxiosRequestConfig,
   ): Promise<TData> => {
-    console.log("draft list retrieve")
     return axios.default.get(`/api/drafts/draft/drafts`, {
         ...options,
         params: { ...params, ...options?.params }
@@ -29,7 +28,6 @@ export const draftRetrieve = <
     params?:DraftRetrieveParams,
     options?: AxiosRequestConfig,
   ): Promise<TData> => {
-    console.log("draft retrieve")
     return axios.default.get(`/api/drafts/draft/${draft_id}/detail`, {
         ...options,
         params: { ...params, ...options?.params }
@@ -44,7 +42,6 @@ export const draftRetrieve = <
     params?:DraftRetrieveParams,
     options?: AxiosRequestConfig,
   ): Promise<TData> => {
-    console.log("draft managers retrieve")
     return axios.default.get(`/api/drafts/draft/${draft_id}/managers/detail`, {
         ...options,
         params: { ...params, ...options?.params }
@@ -84,7 +81,6 @@ export const draftRetrieve = <
     params?:DraftRetrieveParams,
     options?: AxiosRequestConfig,
   ): Promise<TData> => {
-    console.log("draft slots retrieve")
     return axios.default.get(`/api/drafts/draft/${draft_id}/draft_board/detail`, {
         ...options,
         params: { ...params, ...options?.params }

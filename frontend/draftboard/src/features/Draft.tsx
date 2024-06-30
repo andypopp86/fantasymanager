@@ -12,10 +12,9 @@ type DraftProps = {
     // contextMachineRef: ActorRefFrom<typeof appStateMachine>
 };
 
-export const Draft = () => {
+export default function Draft() {
     
     const { draft_id } = useQueryParams();
-    console.log(draft_id)
     const { data: managerData } = useQuery({
         queryKey: ["managers", draft_id],
         queryFn: () =>
@@ -33,7 +32,6 @@ export const Draft = () => {
             return data;
         }
     })
-    console.log(draftRoundData?.data.draft_rounds)
     const { data: picksData } = useQuery({
         queryKey: ["picks", draft_id],
         queryFn: () =>
@@ -42,7 +40,6 @@ export const Draft = () => {
             return data;
         }
     })
-    // console.log(picksData)
 
   return (
     <>

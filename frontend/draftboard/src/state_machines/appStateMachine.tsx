@@ -12,7 +12,7 @@ export const appStateMachine = createMachine({
     selecting: {
       on: {
         'draft.selected': {
-            actions: assign({ draftId: (context, event) => {console.log(context);console.log(event); return context.event.draft_id} }), 
+            actions: assign({ draftId: (context, event) => context.event.draft_id }), 
             target: 'drafting' 
         },
       },
@@ -21,23 +21,10 @@ export const appStateMachine = createMachine({
       on: {
         'draft.player': {
             actions: selectPlayer,
-            
-        //   actions: assign({
-        //     draftId: ({ context }) => context.draftId,
-        //   }),
           target: 'selecting',
         },
       },
     },
   },
 });
-
-// export const draftAppActor = createActor(appStateMachine).start();
-
-// draftAppActor.subscribe((state) => {
-//   console.log(state.context);
-// });
-
-// draftAppActor.send({ type: 'draft.selected' });
-// draftAppActor.send({ type: 'draft.player' });
 

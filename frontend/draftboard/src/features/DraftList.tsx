@@ -1,22 +1,10 @@
 import React from "react";
 
 export default function DraftList({ draft_list, send }) {
-    console.log("DraftList", send)
     const sendDraftSelected = (draft_id) => {
-        console.log("Sending draft selected", draft_id)
         send({ type: "draft.selected", draft_id: draft_id })
-        console.log("Sent draft selected", draft_id)
     }
-    
-    // const sendDraftSelected = (draft_id) => {
-    //     console.log("Sending draft selected", draft_id)
-    //     if (draftAppRef.current) {
-    //         draftAppRef.current.send(
-    //             { type: "draft.selected", draft_id: draft_id }
-    //         )
-    //         console.log("Sent draft selected", draft_id)
-    //     }
-    // }
+
     return (
         <div className={"container mx-auto"}>
             <div className={"bg-white shadow-md rounded my-6"}>
@@ -33,7 +21,6 @@ export default function DraftList({ draft_list, send }) {
                             <tr key={draft.id}>
                                 <td>{draft.year}</td>
                                 <td>
-                                    {/* <Link to={`/drafts/${draft.id}`}>{draft.draft_name}</Link> */}
                                     <button onClick={() => sendDraftSelected(draft.id)}>{draft.draft_name}</button>
                                 </td>
                             </tr>
