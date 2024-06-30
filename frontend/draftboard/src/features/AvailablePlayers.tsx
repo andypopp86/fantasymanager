@@ -1,25 +1,22 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
 import { draftAvailablePlayersRetrieve } from "../lib/data";
-import { useQueryParams } from "../hooks/useQueryParams";
+import AvailablePlayer from "./AvailablePlayer.tsx";
 
 
-export const AvailablePlayers = () => {
-    const { draft_id } = useQueryParams();
+export const AvailablePlayers = ({selectedDraftId, send}) => {
     const { data: playersData } = useQuery({
-        queryKey: ["picks", draft_id],
+        queryKey: ["picks", selectedDraftId],
         queryFn: () =>
-            draftAvailablePlayersRetrieve(draft_id!),
+            draftAvailablePlayersRetrieve(selectedDraftId!),
         select: (data) => {
             return data.data;
         }
     })
-    console.log(playersData)
 
   return (
     <div>
-        <h1>Available Players</h1>
+        <div style={{fontSize: "24px", fontWeight: "bold"}}>Available Players</div>
         <table>
             <thead>
                 <tr>
@@ -29,10 +26,7 @@ export const AvailablePlayers = () => {
             </thead>
             <tbody>
                 {playersData?.map((player) => (
-                    <tr key={player.player.player_id}>
-                        <td>{player.player.name}</td>
-                        <td>{player.player.position}</td>
-                    </tr>
+                    <AvailablePlayer key={player.player.player_id} player={player} send={send} />
                 ))}
             </tbody>
         </table>

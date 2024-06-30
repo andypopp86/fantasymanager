@@ -1,41 +1,38 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
 import { draftManagersRetrieve, draftSlotsRetrieve, draftPicksRetrieve } from "../lib/data";
-import { useQueryParams } from "../hooks/useQueryParams";
 
 import { DraftBoard } from "../features/DraftBoard";
 import { AvailablePlayers } from "../features/AvailablePlayers";
-import { ActorRefFrom } from "xstate";
 
 type DraftProps = {
-    // contextMachineRef: ActorRefFrom<typeof appStateMachine>
+    draftId: string
+    send: any
 };
 
-export default function Draft() {
+export default function Draft({draftId, send}: DraftProps) {
     
-    const { draft_id } = useQueryParams();
     const { data: managerData } = useQuery({
-        queryKey: ["managers", draft_id],
+        queryKey: ["managers", draftId],
         queryFn: () =>
-            draftManagersRetrieve(draft_id!),
+            draftManagersRetrieve(draftId!),
         select: (data) => {
             return data;
         }
     })
 
     const { data: draftRoundData } = useQuery({
-        queryKey: ["draft_rounds", draft_id],
+        queryKey: ["draft_rounds", draftId],
         queryFn: () =>
-            draftSlotsRetrieve(draft_id!),
+            draftSlotsRetrieve(draftId!),
         select: (data) => {
             return data;
         }
     })
     const { data: picksData } = useQuery({
-        queryKey: ["picks", draft_id],
+        queryKey: ["picks", draftId],
         queryFn: () =>
-            draftPicksRetrieve(draft_id!),
+            draftPicksRetrieve(draftId!),
         select: (data) => {
             return data;
         }
@@ -43,10 +40,9 @@ export default function Draft() {
 
   return (
     <>
-        <Link to="/draft/react_draft_entrypoint/">Draft Dashboard</Link>
         <div className="draftboard-grid">
             <div className="">
-                <AvailablePlayers />
+                <AvailablePlayers selectedDraftId={draftId} send={send} />
             </div>
             <div>
                 <DraftBoard

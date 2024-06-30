@@ -8,20 +8,7 @@ const BG_COLORS = [
 const FG_COLORS = [
     "white", "white", "white", "white", "white", "white", "black", "white", "white", "white", "white"
 ]
-const POSITION_BG_COLORS = {
-    "RB": "blue",
-    "WR": "green",
-    "QB": "red",
-    "TE": "orange",
-    "DEF": "brown",
-}
-const POSITION_FG_COLORS = {
-    "RB": "white",
-    "WR": "white",
-    "QB": "white",
-    "TE": "white",
-    "DEF": "white",
-}
+
 type DraftBoardProps = {
     managers: DraftManagersOutput,
     draft_rounds: DraftSlotsRetrieveOutput,

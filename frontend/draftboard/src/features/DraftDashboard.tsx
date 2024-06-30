@@ -1,18 +1,15 @@
 import React, {HTMLProps, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { draftListRetrieve } from "../lib/data";
-import { createActor, ActorRefFrom } from "xstate";
 
 import DraftList from "../features/DraftList";
 import Draft from "../features/Draft";
-import { appStateMachine } from "../state_machines/appStateMachine";
 import { useDraftAppState } from "../hooks/useDraftAppState";
 
 export const DraftDashboard = () => {
 
     const { 
-        selectedDraft,
-        setSelectedDraft,
+        selectedDraftId,
         currentState,
         draftAppRef,
         contextSend
@@ -36,8 +33,7 @@ export const DraftDashboard = () => {
       <div>Current State: {currentState}</div>
       {isDrafting ? (
         <>
-          <div>Drafting</div>
-
+        {selectedDraftId && <Draft draftId={selectedDraftId} send={contextSend} />}
         </>
       ) : (
         <DraftList draft_list={draftListData?.data} send={contextSend} />
