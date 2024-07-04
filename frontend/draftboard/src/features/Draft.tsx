@@ -1,7 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { draftManagersRetrieve, draftSlotsRetrieve, draftPicksRetrieve } from "../lib/data";
-
+import { draftManagersRetrieve, draftSlotsRetrieve, draftPicksRetrieve, draftAvailablePlayersRetrieve } from "../lib/data";
 import { DraftBoard } from "../features/DraftBoard";
 import { AvailablePlayers } from "../features/AvailablePlayers";
 
@@ -29,27 +28,40 @@ export default function Draft({draftId, send}: DraftProps) {
             return data;
         }
     })
-    const { data: picksData } = useQuery({
-        queryKey: ["picks", draftId],
+    // const { data: picksData } = useQuery({
+    //     queryKey: ["picks", draftId],
+    //     queryFn: () =>
+    //         draftPicksRetrieve(draftId!),
+    //     select: (data) => {
+    //         return data;
+    //     }
+    // })
+
+    const { data: playersData } = useQuery({
+        queryKey: ["available_players", draftId],
         queryFn: () =>
-            draftPicksRetrieve(draftId!),
+            draftAvailablePlayersRetrieve(draftId),
         select: (data) => {
-            return data;
+            return data.data;
         }
     })
 
   return (
     <>
         <div className="draftboard-grid">
-            <div className="">
-                <AvailablePlayers selectedDraftId={draftId} send={send} />
-            </div>
-            <div>
-                <DraftBoard
-                    managers={managerData?.data!}
-                    draft_rounds={draftRoundData?.data!} 
-                />
-            </div>
+            {playersData && managerData && draftRoundData && (
+                <>
+                <div className="">
+                    <AvailablePlayers playersData={playersData} managers={managerData} />
+                </div>
+                <div>
+                    <DraftBoard
+                        managers={managerData?.data!}
+                        draft_rounds={draftRoundData?.data!} 
+                    />
+                </div>
+                </>
+            )}
         </div>
     </>
   )

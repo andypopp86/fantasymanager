@@ -212,6 +212,7 @@ class DraftPicksOutputSerializer(BaseSerializer):
         player_id = serializers.IntegerField()
         name = serializers.CharField()
         position = serializers.CharField()
+        projected_price = serializers.DecimalField(max_digits=8, decimal_places=2)
 
     player = PlayerOutputSerializer(read_only=True)
 

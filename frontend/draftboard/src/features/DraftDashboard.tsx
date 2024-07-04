@@ -1,4 +1,4 @@
-import React, {HTMLProps, useEffect, useRef } from "react";
+import React, {useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { draftListRetrieve } from "../lib/data";
 
@@ -30,14 +30,15 @@ export const DraftDashboard = () => {
 
   return (
     <>
-      <div>Current State: {currentState}</div>
-      {isDrafting ? (
-        <>
-        {selectedDraftId && <Draft draftId={selectedDraftId} send={contextSend} />}
-        </>
-      ) : (
-        <DraftList draft_list={draftListData?.data} send={contextSend} />
-      )}
+        <div>Current State: {currentState}</div>
+        {isDrafting ? (
+            <>
+            <button className={"btn"} onClick={() => contextSend({type: "draft.back"})}>Back</button>
+            {selectedDraftId && <Draft draftId={selectedDraftId} send={contextSend} />}
+            </>
+        ) : (
+            <DraftList draft_list={draftListData?.data} send={contextSend} />
+        )}
     </>
   );
   

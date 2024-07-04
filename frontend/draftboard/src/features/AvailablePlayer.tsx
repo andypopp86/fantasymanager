@@ -1,4 +1,5 @@
 import React from "react";
+import { useRef } from "react";
 
 const POSITION_BG_COLORS = {
     "RB": "blue",
@@ -15,19 +16,19 @@ const POSITION_FG_COLORS = {
     "DEF": "white",
 }
 
-export default function AvailablePlayer ({player, send}) {
 
-  return (
-    <tr key={player.player.player_id} style={
-        {background: POSITION_BG_COLORS[player.player.position], color: POSITION_FG_COLORS[player.player.position]}
-        } onClick={() => {
-            send({
-                type: "draft.player",
-                id: player.player.player_id,
-            })
-        }}>
-        <td>{player.player.name}</td>
-        <td>{player.player.position}</td>
-    </tr>
-  )
+export default function AvailablePlayer({player, setOpenDialog, setNominatedPlayer }) {
+    function nominatePlayer (player) {
+        setNominatedPlayer(player);
+        setOpenDialog(true);
+    }
+    return (
+        <tr key={player.player.player_id} style={
+            {background: POSITION_BG_COLORS[player.player.position], color: POSITION_FG_COLORS[player.player.position]}
+            } onClick={() => nominatePlayer(player.player)}>
+            <td>{player.player.name}</td>
+            <td>{player.player.position}</td>
+            <td>{player.player.projected_price}</td>
+        </tr>
+    )
 }

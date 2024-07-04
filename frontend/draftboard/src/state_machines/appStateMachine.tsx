@@ -1,7 +1,7 @@
 import { createMachine, assign, createActor } from 'xstate';
 
 const selectPlayer = (context, event) => {
-    console.log('Hello', context, event);
+    return
 }
 export const appStateMachine = createMachine({
   context: {
@@ -10,19 +10,20 @@ export const appStateMachine = createMachine({
   initial: 'selecting',
   states: {
     selecting: {
-      on: {
-        'draft.selected': {
-            actions: assign({ draftId: (context, event) => context.event.draft_id }), 
-            target: 'drafting' 
+        on: {
+            'draft.selected': {
+                actions: assign({ draftId: (context, event) => context.event.draft_id }), 
+                target: 'drafting' 
+            },
         },
-      },
     },
     drafting: {
-      on: {
-        'draft.player': {
-            actions: (context, event) => selectPlayer(context, event),
+        on: {
+            "draft.back": "selecting",
+            'draft.player': {
+                actions: (context, event) => selectPlayer(context, event),
+            },
         },
-      },
     },
   },
 });
