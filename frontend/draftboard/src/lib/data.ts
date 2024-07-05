@@ -5,6 +5,8 @@ import type { DraftRetrieveOutput,
     DraftRetrieveParams,
     DraftManagersOutput,
     DraftSlotsRetrieveOutput,
+    DraftSubmitPickOutput,
+    DraftSubmitPickParams,
     AvailablePlayersRetrieveOutput,
 } from "./draft.schemas";
 
@@ -84,5 +86,22 @@ export const draftRetrieve = <
     return axios.default.get(`/api/drafts/draft/${draft_id}/draft_board/detail`, {
         ...options,
         params: { ...params, ...options?.params }
+    })
+  }
+
+
+
+  export const draftPickSubmit = <
+  TData = AxiosResponse<DraftSubmitPickOutput>,
+  >(
+    draft_id: number,
+    manager_id: number,
+    player_id: number,
+    params: DraftSubmitPickParams,
+    options?: AxiosRequestConfig,
+  ): Promise<TData> => {
+    return axios.default.post(`/api/drafts/draft/${draft_id}/submit_pick/${manager_id}/${player_id}/`, {
+        params,
+        options,
     })
   }

@@ -3,7 +3,7 @@ import AvailablePlayer from "./AvailablePlayer.tsx";
 import { useState, useRef } from "react";
 import SubmitPick from "./SubmitPick.tsx";
 
-export const AvailablePlayers = ({playersData, managers}) => {
+export const AvailablePlayers = ({draftId, playersData, managers}) => {
     const [availablePlayers, setAvailablePlayers] = useState(playersData);
     const [nominatedPlayer, setNominatedPlayer] = useState(playersData[0].player);
     const [openDialog, setOpenDialog] = useState(false);
@@ -21,12 +21,12 @@ export const AvailablePlayers = ({playersData, managers}) => {
                 </thead>
                 <tbody>
                     {availablePlayers?.map((player) => (
-                        <AvailablePlayer key={player.player.player_id} player={player} setOpenDialog={setOpenDialog} setNominatedPlayer={setNominatedPlayer} />
+                        <AvailablePlayer key={player.player.id} player={player} setOpenDialog={setOpenDialog} setNominatedPlayer={setNominatedPlayer} />
                     ))}
                 </tbody>
             </table>
             {openDialog && (
-            <SubmitPick managers={managers.data} player={nominatedPlayer} openDialog={openDialog} setOpenDialog={setOpenDialog} />
+            <SubmitPick draftId={draftId} managers={managers.data} player={nominatedPlayer} openDialog={openDialog} setOpenDialog={setOpenDialog} />
             )}
         </div>
     )

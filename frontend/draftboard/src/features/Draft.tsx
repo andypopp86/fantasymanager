@@ -52,7 +52,7 @@ export default function Draft({draftId, send}: DraftProps) {
             {playersData && managerData && draftRoundData && (
                 <>
                 <div className="">
-                    <AvailablePlayers playersData={playersData} managers={managerData} />
+                    <AvailablePlayers draftId={draftId} playersData={playersData} managers={managerData} />
                 </div>
                 <div>
                     <DraftBoard

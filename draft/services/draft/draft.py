@@ -3,6 +3,7 @@ from django.http import Http404
 from core.services.base import BaseService
 from django.db.models import F, Case, When, DecimalField
 from django.db.models.functions import  Coalesce
+from django.utils import timezone
 
 from draft import models as d 
 from draft.utils import (
@@ -27,7 +28,26 @@ class DraftBoardReadService(BaseService):
         if not draft:
             raise Http404
         return draft.draft_rounds()
-        
+
+
+class DraftWriteService(BaseService):
+    def submit_pick(self, draft_id, manager_id, player_id, price):
+        draft = d.Draft.objects.filter(id=draft_id).first()
+        if not draft:
+            raise Http404
+        manager = d.Manager.objects.filter(id=manager_id).first()
+        defaults = {'manager': manager, 'price': price}
+        pick, created = d.DraftPick.objects.get_or_create(draft_id=draft_id, player_id=player_id, defaults=defaults)
+        pick.drafted = True
+        drafter = draft.managers.get(name=draft.drafter)
+        new_projected_team = get_new_projected_team(drafter, pick.player)
+        pick.manager = manager
+        pick.price = price
+        pick.position_slot = get_pick_position_slot(pick.player.position, new_projected_team)
+        pick.last_update_time = timezone.now()
+        pick.save()
+        return pick
+
 
 class DraftReadService(BaseService):
 
@@ -277,3 +297,20 @@ def refresh_player_budget(new_projected_team, draft_id, manager_id):
                 budget_player.position = slot
                 budget_player.status = 'budgeted'
                 budget_player.save(update_fields=['price', 'position', 'status'])
+
+
+def get_pick_position_slot(position, current_projected_team):
+    player_assigned_slot = None
+    for team_slot, player in current_projected_team.items():
+        if position in ('QB') and not player and (team_slot.startswith('QB') or team_slot.startswith('BENCH')):
+            player_assigned_slot = str(team_slot)
+            break
+        elif position in ('RB', 'WR', 'TE') and not player and \
+            (team_slot.startswith('RB') or team_slot.startswith('FLEX') or team_slot.startswith('BENCH')):
+            player_assigned_slot = str(team_slot)
+            break
+        elif position in ('DEF') and not player and \
+            (team_slot.startswith('RB') or team_slot.startswith('BENCH')):
+            player_assigned_slot = str(team_slot)
+            break
+    return player_assigned_slot

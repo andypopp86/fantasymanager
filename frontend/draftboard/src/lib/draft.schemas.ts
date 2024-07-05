@@ -47,7 +47,12 @@ export interface DraftRetrieveParams {
     draft_id: number;
 }
 
+export interface DraftSubmitPickParams {
+    price: number;
+}
+
 export type Manager = {
+    id: number,
     name: string,
     budget: number,
     drafter: boolean,
@@ -84,4 +89,8 @@ export type DraftRound = {
 
 export interface DraftSlotsRetrieveOutput {
     draft_rounds: DraftRound[]
+}
+
+export interface DraftSubmitPickOutput {
+    data: DraftSlot
 }

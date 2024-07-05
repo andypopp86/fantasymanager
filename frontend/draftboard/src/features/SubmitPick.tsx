@@ -1,26 +1,34 @@
 import React, { useState, useRef, useEffect } from 'react';
 
+import { draftPickSubmit } from '../lib/data';
+
 type SubmitPickProps = {
+    draftId: number,
     managers: any,
     player: any,
     openDialog: boolean,
     setOpenDialog: any,
 }
-export default function SubmitPick({ managers, player, setOpenDialog, openDialog }: SubmitPickProps) {
+export default function SubmitPick({ draftId, managers, player, setOpenDialog, openDialog }: SubmitPickProps) {
     const dialogRef = useRef<HTMLDialogElement>(null);
-    const [price, setPrice] = useState('');
-    const [manager, setManager] = useState('');
-
+    const [price, setPrice] = useState(1);
+    const [managerId, setManagerId] = useState(managers[0].id);
     const handlePriceChange = (e) => {
         setPrice(e.target.value);
     };
 
     const handleManagerChange = (e) => {
-        setManager(e.target.value);
+        setManagerId(e.target.value);
     };
+
+    const submitDraftPick = (player) => {
+        draftPickSubmit(draftId, managerId, player.id, {price: price});
+        setOpenDialog(false);
+    }
 
     useEffect(() => {
         const openModal = () => {
+            setManagerId(managers[0].id);
             dialogRef.current?.showModal();
         };
         const closeModal = () => {
@@ -40,7 +48,7 @@ export default function SubmitPick({ managers, player, setOpenDialog, openDialog
             <h2 className="text-lg font-semibold">{player.name}</h2>
             <button
                 className="text-gray-500 hover:text-gray-700 focus:outline-none"
-                onClick={() => dialogRef.current?.close()}
+                onClick={() => setOpenDialog(false)}
             >
                 <svg
                 className="h-6 w-6 fill-current"
@@ -67,7 +75,7 @@ export default function SubmitPick({ managers, player, setOpenDialog, openDialog
             <label className="block text-sm font-medium text-gray-700 mb-1">Manager</label>
             <select
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:border-blue-500"
-                value={manager}
+                value={managerId}
                 onChange={handleManagerChange}
             >
                 {managers.map((manager) => (
@@ -78,7 +86,7 @@ export default function SubmitPick({ managers, player, setOpenDialog, openDialog
             </select>
             </div>
             <div className="flex justify-end">
-            <button className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md mr-2">
+            <button className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md mr-2" onClick={() => submitDraftPick(player)}>
                 Save
             </button>
             <button className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-md" onClick={() => setOpenDialog(false)}>

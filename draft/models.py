@@ -306,7 +306,7 @@ class DraftPick(models.Model):
     def save(self, *args, **kwargs):
         self.last_update_time=timezone.now()
         if self.drafted and (not self.manager or not self.price):
-            raise Exception('Must provide manager and price if player is drafted')
+            raise Exception(f'Must provide manager ({self.manager}) and price ({self.price}) if player is drafted')
         super(DraftPick, self).save(*args, **kwargs)
 
     def manager_short_name(self):

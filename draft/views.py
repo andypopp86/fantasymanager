@@ -11,7 +11,7 @@ from django.db.models.expressions import Window
 from django.db.models.functions import RowNumber
 
 
-from draft import models as d 
+from draft import models as d
 from draft.services.draft.draft import (
     init_managers, init_adp_rounds,
     get_draft_board_objects, populate_draft_board, get_draft_object_lists, get_draft_context,
@@ -24,6 +24,7 @@ from draft.services.draft.draft import (
     picks_data_add_skepticism_rank,
     picks_data_add_offensive_support_rank,
     refresh_player_budget,
+    get_pick_position_slot,
 )
 
 def get_draft_board_data(request, draft_id):
@@ -174,19 +175,7 @@ def draft_player(request, draft_id, player_id):
     manager = d.Manager.objects.get(id=manager_id)
     drafter = draft.managers.filter(drafter=True).first()
     current_projected_team = get_new_projected_team(drafter)
-    player_assigned_slot = None
-    for team_slot, player in current_projected_team.items():
-        if position in ('QB') and not player and (team_slot.startswith('QB') or team_slot.startswith('BENCH')):
-            player_assigned_slot = str(team_slot)
-            break
-        elif position in ('RB', 'WR', 'TE') and not player and \
-            (team_slot.startswith('RB') or team_slot.startswith('FLEX') or team_slot.startswith('BENCH')):
-            player_assigned_slot = str(team_slot)
-            break
-        elif position in ('DEF') and not player and \
-            (team_slot.startswith('RB') or team_slot.startswith('BENCH')):
-            player_assigned_slot = str(team_slot)
-            break
+    player_assigned_slot = get_pick_position_slot(position, current_projected_team)
 
     # team_slots, open_position_slots, filled_slot = manager.current_team
     # next_slot = get_next_open_slot(position, team_slots)

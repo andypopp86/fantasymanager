@@ -4,8 +4,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.pagination import PageNumberPagination
 
-from core.api.serializers.base import BaseSerializer
-from draft.services.draft.draft import DraftReadService, DraftManagersReadService, DraftBoardReadService
+from drf_spectacular.utils import extend_schema
+
+from core.api.serializers.base import BaseSerializer, BaseInputSerializer
+from draft.services.draft.draft import DraftReadService, DraftManagersReadService, DraftBoardReadService, DraftWriteService
 
 class LargeResultsSetPagination(PageNumberPagination):
     page_size = 1000
@@ -76,6 +78,7 @@ class DraftOutputSerializer(BaseSerializer):
 
 class ManagerOutputSerializer(BaseSerializer):
     draft = DraftOutputSerializer()
+    id = serializers.IntegerField()
     name = serializers.CharField()
     budget = serializers.FloatField()
     drafter = serializers.BooleanField()
@@ -179,6 +182,7 @@ class DraftManagersAPI(APIView):
     drafter = serializers.CharField()
 
     class DraftManagersOutputSerializer(BaseSerializer):
+        id = serializers.IntegerField()
         name = serializers.CharField()
         budget = serializers.FloatField()
         drafter = serializers.BooleanField()
@@ -198,6 +202,7 @@ class DraftManagersAPI(APIView):
 
 
 class DraftPicksOutputSerializer(BaseSerializer):
+    id = serializers.IntegerField()
     price = serializers.IntegerField()
     last_update_time = serializers.DateTimeField()
     drafted = serializers.BooleanField()
@@ -209,7 +214,7 @@ class DraftPicksOutputSerializer(BaseSerializer):
     manager = ManagerOutputSerializer(read_only=True)
 
     class PlayerOutputSerializer(BaseSerializer):
-        player_id = serializers.IntegerField()
+        id = serializers.IntegerField()
         name = serializers.CharField()
         position = serializers.CharField()
         projected_price = serializers.DecimalField(max_digits=8, decimal_places=2)
@@ -272,3 +277,24 @@ class DraftBoardAPI(APIView):
     #     return Response(output_data, status=status.HTTP_200_OK)
 
 
+class DraftSubmitPickAPI(APIView):
+
+    class DraftPickCreateSerializer(BaseInputSerializer):
+        price = serializers.IntegerField()
+
+    @extend_schema(
+        parameters=None,
+        request=DraftPickCreateSerializer,
+        responses=None
+    )
+    def post(self, request, draft_id, manager_id, player_id):
+        input_data = self.DraftPickCreateSerializer(data=request.data["params"]).get_input_data()
+        DraftWriteService(
+            user=request.user
+        ).submit_pick(
+            draft_id=draft_id,
+            manager_id=manager_id,
+            player_id=player_id,
+            price=input_data["price"]
+        )
+        return Response(status=status.HTTP_200_OK)
