@@ -1,18 +1,16 @@
-import { createMachine, assign, createActor } from 'xstate';
+import { createMachine, assign } from 'xstate';
 
-const selectPlayer = (context, event) => {
-    return
-}
+
 export const appStateMachine = createMachine({
   context: {
-    draftId: '',
+    draft: '',
   },
   initial: 'selecting',
   states: {
     selecting: {
         on: {
             'draft.selected': {
-                actions: assign({ draftId: (context, event) => context.event.draft_id }), 
+                actions: assign({ draft: ({context, event}) => event.draft }), 
                 target: 'drafting' 
             },
         },
@@ -20,9 +18,6 @@ export const appStateMachine = createMachine({
     drafting: {
         on: {
             "draft.back": "selecting",
-            'draft.player': {
-                actions: (context, event) => selectPlayer(context, event),
-            },
         },
     },
   },

@@ -1,8 +1,8 @@
 import React from "react";
 
 export default function DraftList({ draft_list, send }) {
-    const sendDraftSelected = (draft_id) => {
-        send({ type: "draft.selected", draft_id: draft_id })
+    const sendDraftSelected = (draft) => {
+        send({ type: "draft.selected", draft: draft })
     }
 
     return (
@@ -21,7 +21,7 @@ export default function DraftList({ draft_list, send }) {
                             <tr key={draft.id}>
                                 <td>{draft.year}</td>
                                 <td>
-                                    <button onClick={() => sendDraftSelected(draft.id)}>{draft.draft_name}</button>
+                                    <button onClick={() => sendDraftSelected(draft)}>{draft.draft_name}</button>
                                 </td>
                             </tr>
                         ))}

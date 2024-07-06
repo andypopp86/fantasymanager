@@ -1,68 +1,76 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { draftManagersRetrieve, draftSlotsRetrieve, draftPicksRetrieve, draftAvailablePlayersRetrieve } from "../lib/data";
+import { draftManagersRetrieve, draftSlotsRetrieve, draftPicksRetrieve, draftAvailablePlayersRetrieve, draftManagerPicksRetrieve } from "../lib/data";
 import { DraftBoard } from "../features/DraftBoard";
 import { AvailablePlayers } from "../features/AvailablePlayers";
+import { useDraftState } from "../hooks/useDraftState";
 
 type DraftProps = {
-    draftId: string
+    draftDetails: any
     send: any
 };
 
-export default function Draft({draftId, send}: DraftProps) {
-    
-    const { data: managerData } = useQuery({
-        queryKey: ["managers", draftId],
-        queryFn: () =>
-            draftManagersRetrieve(draftId!),
-        select: (data) => {
-            return data;
-        }
-    })
-
-    const { data: draftRoundData } = useQuery({
-        queryKey: ["draft_rounds", draftId],
-        queryFn: () =>
-            draftSlotsRetrieve(draftId!),
-        select: (data) => {
-            return data;
-        }
-    })
-    // const { data: picksData } = useQuery({
-    //     queryKey: ["picks", draftId],
-    //     queryFn: () =>
-    //         draftPicksRetrieve(draftId!),
-    //     select: (data) => {
-    //         return data;
-    //     }
-    // })
+export default function Draft({draftDetails, send}: DraftProps) {
 
     const { data: playersData } = useQuery({
-        queryKey: ["available_players", draftId],
+        queryKey: ["available_players", draftDetails.id],
         queryFn: () =>
-            draftAvailablePlayersRetrieve(draftId),
+            draftAvailablePlayersRetrieve(draftDetails.id),
         select: (data) => {
             return data.data;
         }
     })
 
+    const { data: managerPicks } = useQuery({
+        queryKey: ["manager_picks", draftDetails.id],
+        queryFn: () =>
+            draftManagerPicksRetrieve(draftDetails.id),
+        select: (data) => {
+            return data.data;
+        }
+    })
+
+    const { draftStateRef, currentState, draftContext } = useDraftState();
+    const { send: draftSend } = draftStateRef;
+
+    useEffect(() => {
+        if (!draftDetails.id || !playersData || !managerPicks) return;
+        draftSend({
+            type: 'draft_loaded',
+            draftId: draftDetails.id,
+            managers: managerPicks,
+            undraftedPlayers: playersData,
+        });
+    }
+    , [playersData, draftDetails.id, managerPicks, draftSend]);
+
+
+
   return (
     <>
+    <div className="grid grid-cols-12 gap-4">
+      <div className="col-span-2 sm:col-span-2 md:col-span-2 lg:col-span-2 xl:col-span-2">
+        <p className="bg-blue-200">Draft State: {currentState}</p>
+      </div>
+      <div className="col-span-10 sm:col-span-10 md:col-span-10 lg:col-span-10 xl:col-span-10">
+        <p className="bg-green-200 text-center text-lg font-bold">{draftDetails.draft_name}</p>
+      </div>
+    </div>
+    {draftContext && draftContext.draftId && (
         <div className="draftboard-grid">
-            {playersData && managerData && draftRoundData && (
+            {playersData && managerPicks && (
                 <>
                 <div className="">
-                    <AvailablePlayers draftId={draftId} playersData={playersData} managers={managerData} />
+                    <AvailablePlayers draftContext={draftContext} draftSend={draftSend} />
                 </div>
                 <div>
-                    <DraftBoard
-                        managers={managerData?.data!}
-                        draft_rounds={draftRoundData?.data!} 
-                    />
+                    <DraftBoard draftContext={draftContext} />
                 </div>
                 </>
             )}
         </div>
+        
+    )}
     </>
   )
 }

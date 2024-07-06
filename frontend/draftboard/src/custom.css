@@ -1,10 +1,33 @@
 .draftboard-grid {
     display: grid;
     grid-template-areas:
-        "header header header"
-        "sidebar main main";
-    grid-template-columns: 200px 1fr 1fr;
+        "header header"
+        "sidebar main";
+    grid-template-columns: 200px 1fr;
     grid-template-rows: 100px 1fr;
     gap: 10px;
     height: 100vh;
+}
+
+.draft-pick {
+    height: 3.5rem;
+    width: 100%;
+    border: 1px solid black;
+    justify-content: center;
+    align-items: center;
+}
+
+.draft-pick span {
+    height: 100%;
+}
+.draft-pick span:first-child {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.draft-pick span:last-child {
+    width: 2rem;
+    display: flex;
+    align-items: center;
 }

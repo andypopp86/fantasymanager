@@ -188,11 +188,6 @@ class Draft(models.Model):
             manager_player_ct += 1
 
         return rounds
-            
-
-          
-
-
 
 
 class Manager(models.Model):

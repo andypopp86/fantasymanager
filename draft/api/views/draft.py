@@ -237,6 +237,25 @@ class DraftPicksAPI(APIView):
         output_data = [DraftPicksOutputSerializer.serialize(pick) for pick in picks]
         return Response(output_data, status=status.HTTP_200_OK)
     
+class DraftPickOutputSerializer(BaseSerializer):
+    name = serializers.CharField()
+    price = serializers.IntegerField()
+    position = serializers.CharField()
+
+class ManagerOutputSerializer(BaseSerializer):
+    manager_name = serializers.CharField()
+    manager_position = serializers.IntegerField()
+    draft_picks = DraftPickOutputSerializer(
+        many=True,
+        read_only=True
+    )
+
+class ManagerDraftedPlayersAPI(APIView):
+    def get(self, request, draft_id):
+        manager_picks = DraftReadService(
+            user=request.user
+        ).get_manager_picks(draft_id=draft_id)
+        return Response(manager_picks, status=status.HTTP_200_OK)
 
 class DraftBoardAPI(APIView):
 
@@ -244,10 +263,6 @@ class DraftBoardAPI(APIView):
     manager_position = serializers.IntegerField()
     round = serializers.IntegerField()
 
-    class DraftPickOutputSerializer(BaseSerializer):
-        name = serializers.CharField()
-        price = serializers.IntegerField()
-        position = serializers.CharField()
 
     picks = DraftPickOutputSerializer(
         many=True,
@@ -258,23 +273,9 @@ class DraftBoardAPI(APIView):
         draft_board = DraftBoardReadService(
             user=request.user
         ).get(draft_id=draft_id)
-        # output_data = [[self.DraftPickOutputSerializer.serialize(pick["pick"]) for pick in draft_round] for draft_round in draft_board]
         output_data = [[pick for pick in draft_round] for draft_round in draft_board]
         return Response(output_data, status=status.HTTP_200_OK)
     
-    # def get(self, request, draft_id):
-    #     draft_board = DraftBoardReadService(
-    #         user=request.user
-    #     ).get(draft_id=draft_id)
-    #     output_data = []
-    #     for draft_round in draft_board:
-    #         round_picks = []
-    #         for pick in draft_round:
-    #             serialized_pick = self.DraftPickOutputSerializer.serialize(pick)
-    #             round_picks.append(serialized_pick)
-    #         output_data.append(round_picks)
-    #     output_data = [[self.DraftPickOutputSerializer.serialize(pick) for pick in draft_round] for draft_round in draft_board]
-    #     return Response(output_data, status=status.HTTP_200_OK)
 
 
 class DraftSubmitPickAPI(APIView):

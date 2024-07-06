@@ -3,16 +3,17 @@ import React, { useState, useRef, useEffect } from 'react';
 import { draftPickSubmit } from '../lib/data';
 
 type SubmitPickProps = {
-    draftId: number,
-    managers: any,
+    draftContext: any,
     player: any,
     openDialog: boolean,
     setOpenDialog: any,
+    draftSend: any
 }
-export default function SubmitPick({ draftId, managers, player, setOpenDialog, openDialog }: SubmitPickProps) {
+export default function SubmitPick({ draftContext, player, setOpenDialog, openDialog, draftSend }: SubmitPickProps) {
     const dialogRef = useRef<HTMLDialogElement>(null);
+    const defaultManagerId = draftContext.managers[0].manager_id;
+    const [managerId, setManagerId] = useState(defaultManagerId);
     const [price, setPrice] = useState(1);
-    const [managerId, setManagerId] = useState(managers[0].id);
     const handlePriceChange = (e) => {
         setPrice(e.target.value);
     };
@@ -22,13 +23,15 @@ export default function SubmitPick({ draftId, managers, player, setOpenDialog, o
     };
 
     const submitDraftPick = (player) => {
-        draftPickSubmit(draftId, managerId, player.id, {price: price});
+        draftSend({type: 'draft_player', player: player, price: price, manager_id: managerId});
+        draftPickSubmit(draftContext.draftId, managerId, player.id, {price: price});
         setOpenDialog(false);
     }
 
     useEffect(() => {
         const openModal = () => {
-            setManagerId(managers[0].id);
+            setManagerId(defaultManagerId);
+            draftSend({type: 'nominate_player', player: player});
             dialogRef.current?.showModal();
         };
         const closeModal = () => {
@@ -78,9 +81,9 @@ export default function SubmitPick({ draftId, managers, player, setOpenDialog, o
                 value={managerId}
                 onChange={handleManagerChange}
             >
-                {managers.map((manager) => (
-                    <option key={manager.id} value={manager.id}>
-                    {manager.name}
+                {draftContext.managers.map((manager) => (
+                    <option key={manager.manager_id} value={manager.manager_id}>
+                    {manager.manager_name}
                     </option>
                 ))}
             </select>

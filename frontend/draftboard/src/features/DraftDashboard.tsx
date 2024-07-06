@@ -9,12 +9,12 @@ import { useDraftAppState } from "../hooks/useDraftAppState";
 export const DraftDashboard = () => {
 
     const { 
-        selectedDraftId,
+        selectedDraft,
         currentState,
         draftAppRef,
-        contextSend
      } = useDraftAppState();
-
+    
+     const { send: appSend } = draftAppRef;
     
     const { data: draftListData } = useQuery({
         queryKey: ["draft_list"],
@@ -30,14 +30,14 @@ export const DraftDashboard = () => {
 
   return (
     <>
-        <div>Current State: {currentState}</div>
+        <div>App State: {currentState}</div>
         {isDrafting ? (
             <>
-            <button className={"btn"} onClick={() => contextSend({type: "draft.back"})}>Back</button>
-            {selectedDraftId && <Draft draftId={selectedDraftId} send={contextSend} />}
+            <button className={"btn"} onClick={() => appSend({type: "draft.back"})}>Back</button>
+            {selectedDraft && <Draft draftDetails={selectedDraft} send={appSend} />}
             </>
         ) : (
-            <DraftList draft_list={draftListData?.data} send={contextSend} />
+            <DraftList draft_list={draftListData?.data} send={appSend} />
         )}
     </>
   );

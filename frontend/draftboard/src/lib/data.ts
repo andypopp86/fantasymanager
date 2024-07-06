@@ -89,6 +89,19 @@ export const draftRetrieve = <
     })
   }
 
+  export const draftManagerPicksRetrieve = <
+  TData = AxiosResponse<DraftSlotsRetrieveOutput>,
+  >(
+    draft_id: string,
+    params?:DraftRetrieveParams,
+    options?: AxiosRequestConfig,
+  ): Promise<TData> => {
+    return axios.default.get(`/api/drafts/draft/${draft_id}/manager_picks`, {
+        ...options,
+        params: { ...params, ...options?.params }
+    })
+  }
+
 
 
   export const draftPickSubmit = <

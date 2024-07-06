@@ -8,6 +8,7 @@ draft_urlpatterns = [
     path("<int:draft_id>/draft_board/detail/", api_views.DraftBoardAPI.as_view(), name="draft_board"),
     path("<int:draft_id>/picks/", api_views.DraftPicksAPI.as_view(), name="draft_picks"),
     path("<int:draft_id>/available_players/", api_views.DraftAvailablePlayersAPI.as_view(), name="draft_available_players"),
+    path("<int:draft_id>/manager_picks/", api_views.ManagerDraftedPlayersAPI.as_view(), name="manager_picks"),
     # /api/drafts/draft/${draft_id}/submit_pick/${manager_id}/${player_id}`
     path("<int:draft_id>/submit_pick/<int:manager_id>/<int:player_id>/", api_views.DraftSubmitPickAPI.as_view(), name="draft_submit_pick"),
 

@@ -1,13 +1,17 @@
 import { appStateMachine } from '../state_machines/appStateMachine';
-import { useActor, useSelector } from '@xstate/react';
+import { useActorRef, useSelector } from '@xstate/react';
 
 export const useDraftAppState = () => {
-    const [, contextSend, draftAppRef] = useActor(appStateMachine);
-    const {currentState, selectedDraftId} = useSelector(draftAppRef, (state) => { return {currentState: state.value, selectedDraftId: state.context.draftId} });
+    const draftAppRef = useActorRef(appStateMachine);
+    const {currentState, selectedDraft} = useSelector(draftAppRef, (state) => {
+        return {
+            currentState: state.value,
+            selectedDraft: state.context.draft
+        } });
+
     return {
         currentState,
         draftAppRef,
-        contextSend,
-        selectedDraftId
+        selectedDraft
     };
 }

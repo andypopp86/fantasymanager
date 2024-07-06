@@ -46,6 +46,8 @@ class DraftWriteService(BaseService):
         pick.position_slot = get_pick_position_slot(pick.player.position, new_projected_team)
         pick.last_update_time = timezone.now()
         pick.save()
+        manager.budget -= price
+        manager.save(update_fields=['budget'])
         return pick
 
 
@@ -70,6 +72,30 @@ class DraftReadService(BaseService):
     
     def get_available_players(self, draft_id):
         return d.DraftPick.objects.filter(draft_id=draft_id, drafted=False).order_by("-player__projected_price")
+    
+    def get_manager_picks(self, draft_id):
+        picks = d.DraftPick.objects.filter(draft_id=draft_id, drafted=True).order_by('manager__position').distinct()
+        managers = d.Manager.objects.filter(draft_id=draft_id).order_by('position')
+        manager_dict = {}
+        for man in managers:
+            if man.id not in manager_dict:
+                manager_dict[man.id] = {'manager_id':man.id, 'manager_name': man.name, 'manager_position': man.position, 'manager_budget': man.budget,
+                                        'draft_picks': [{"name":"-", "price":0, "position": ""} for x in range(1, man.draft.rounds+1)]}
+        man_pick_ct = 0
+        cur_man_id = None
+        for pick in picks:
+            if cur_man_id != pick.manager.id:
+                man_pick_ct = 0
+                cur_man_id = pick.manager.id
+            manager_dict[cur_man_id]['draft_picks'][man_pick_ct]["name"] = pick.player.name
+            manager_dict[cur_man_id]['draft_picks'][man_pick_ct]["price"] = pick.price
+            manager_dict[cur_man_id]['draft_picks'][man_pick_ct]["position"] = pick.player.position
+            man_pick_ct += 1
+
+        manager_list = []
+        for man_id, manager_dict in manager_dict.items():
+            manager_list.append(manager_dict)
+        return manager_list
     
 
 def init_managers(managers, draft_dict):

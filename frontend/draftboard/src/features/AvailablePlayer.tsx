@@ -1,20 +1,7 @@
 import React from "react";
-import { useRef } from "react";
+import { POSITION_BG_COLORS, POSITION_FG_COLORS } from "../utils/colors";
 
-const POSITION_BG_COLORS = {
-    "RB": "blue",
-    "WR": "green",
-    "QB": "red",
-    "TE": "orange",
-    "DEF": "brown",
-}
-const POSITION_FG_COLORS = {
-    "RB": "white",
-    "WR": "white",
-    "QB": "white",
-    "TE": "white",
-    "DEF": "white",
-}
+
 
 
 export default function AvailablePlayer({player, setOpenDialog, setNominatedPlayer }) {
