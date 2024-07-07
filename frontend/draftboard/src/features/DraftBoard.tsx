@@ -1,14 +1,27 @@
 import React from "react";
 import { MANAGER_BG_COLORS, MANAGER_FG_COLORS, POSITION_BG_COLORS, POSITION_FG_COLORS } from "../utils/colors";
 
-import { DraftManagersOutput, DraftSlotsRetrieveOutput } from "../lib/draft.schemas";
+import { draftPickUnsubmit } from "../lib/data";
 
 
 
 type DraftBoardProps = {
     draftContext: any,
+    draftSend: any
 }
-export const DraftBoard = ({draftContext}: DraftBoardProps) => {
+export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
+    const unsubmitPick = async (draftId: number, managerId: number, pick: any) => {
+        if (!draftId || !managerId || !pick) {
+            return;
+        }
+        const result = await draftPickUnsubmit(draftId, managerId, pick.player_id);
+        draftSend({
+            type: 'undraft_player',
+            draftId: draftId,
+            managerId: managerId,
+            pick: pick
+        });
+    }
     return (
         <>
             <div>Draft Board</div>
@@ -25,7 +38,7 @@ export const DraftBoard = ({draftContext}: DraftBoardProps) => {
                         <li key={pickIndex} className="flex justify-between border border-gray-300 draft-pick" style={{
                             backgroundColor: POSITION_BG_COLORS[pick.position],
                             color: POSITION_FG_COLORS[pick.position]
-                        }}>
+                        }} onClick={() => unsubmitPick(draftContext.draftId, manager.manager_id, pick)}>
                         <span className={"border border-gray-300 draft-pick-name"}>{pick.name}</span>
                         <span className={"border border-gray-300 draft-pick-price"}>${pick.price}</span>
                         </li>

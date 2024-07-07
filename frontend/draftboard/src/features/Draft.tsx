@@ -64,7 +64,7 @@ export default function Draft({draftDetails, send}: DraftProps) {
                     <AvailablePlayers draftContext={draftContext} draftSend={draftSend} />
                 </div>
                 <div>
-                    <DraftBoard draftContext={draftContext} />
+                    <DraftBoard draftContext={draftContext} draftSend={draftSend}/>
                 </div>
                 </>
             )}

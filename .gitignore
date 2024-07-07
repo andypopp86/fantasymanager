@@ -1,12 +1,15 @@
-.env
-*.csv
+.vscode/
+node_modules/
 /static_root
 /auto_configs
 /__pycache__
-
 */__pycache__/*
-/data/players.json
+
+.env
+*.csv
 *.pyc
+*.txt
+
 data/*
 env/*
 pyvenv.cfg
@@ -14,8 +17,6 @@ static/admin/*
 static/debug_toolbar/*
 static/favicon.ico
 
-.vscode/
-node_modules/
-scratch.txt
-todo.txt
-TODO2.txt
+/data/players.json
+scratch.py
+frontend/draftboard/.gitignore

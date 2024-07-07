@@ -49,6 +49,20 @@ class DraftWriteService(BaseService):
         manager.budget -= price
         manager.save(update_fields=['budget'])
         return pick
+    
+    def unsubmit_pick(self, draft_id, manager_id, player_id):
+        pick = d.DraftPick.objects.filter(draft_id=draft_id, manager_id=manager_id, player_id=player_id).first()
+        if not pick:
+            raise Http404
+        manager = d.Manager.objects.filter(id=manager_id).first()
+        manager.budget += pick.price
+        manager.save(update_fields=['budget'])
+        pick.drafted = False
+        pick.manager = None
+        pick.price = 0
+        pick.position_slot = None
+        pick.save()
+        return pick
 
 
 class DraftReadService(BaseService):
@@ -80,7 +94,14 @@ class DraftReadService(BaseService):
         for man in managers:
             if man.id not in manager_dict:
                 manager_dict[man.id] = {'manager_id':man.id, 'manager_name': man.name, 'manager_position': man.position, 'manager_budget': man.budget,
-                                        'draft_picks': [{"name":"-", "price":0, "position": ""} for x in range(1, man.draft.rounds+1)]}
+                                        'draft_picks': [
+                                            {"name":"-",
+                                            "price":0,
+                                            "position": "",
+                                            "player_id": "",
+                                            "pick_id": "",
+                                            "projected_price": 0,
+                                            } for x in range(1, man.draft.rounds+1)]}
         man_pick_ct = 0
         cur_man_id = None
         for pick in picks:
@@ -90,6 +111,10 @@ class DraftReadService(BaseService):
             manager_dict[cur_man_id]['draft_picks'][man_pick_ct]["name"] = pick.player.name
             manager_dict[cur_man_id]['draft_picks'][man_pick_ct]["price"] = pick.price
             manager_dict[cur_man_id]['draft_picks'][man_pick_ct]["position"] = pick.player.position
+            manager_dict[cur_man_id]['draft_picks'][man_pick_ct]["player_id"] = pick.player.id
+            manager_dict[cur_man_id]['draft_picks'][man_pick_ct]["pick_id"] = pick.id
+            manager_dict[cur_man_id]['draft_picks'][man_pick_ct]["projected_price"] = pick.player.projected_price
+
             man_pick_ct += 1
 
         manager_list = []

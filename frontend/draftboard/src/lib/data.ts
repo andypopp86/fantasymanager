@@ -118,3 +118,16 @@ export const draftRetrieve = <
         options,
     })
   }
+
+  export const draftPickUnsubmit = <
+  TData = AxiosResponse<DraftSubmitPickOutput>,
+  >(
+    draft_id: number,
+    manager_id: number,
+    player_id: number,
+    options?: AxiosRequestConfig,
+  ): Promise<TData> => {
+    return axios.default.post(`/api/drafts/draft/${draft_id}/unsubmit_pick/${manager_id}/${player_id}/`, {
+        options,
+    })
+  }

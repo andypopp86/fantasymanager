@@ -299,3 +299,14 @@ class DraftSubmitPickAPI(APIView):
             price=input_data["price"]
         )
         return Response(status=status.HTTP_200_OK)
+
+class DraftUnsubmitPickAPI(APIView):
+    def post(self, request, draft_id, manager_id, player_id):
+        DraftWriteService(
+            user=request.user
+        ).unsubmit_pick(
+            draft_id=draft_id,
+            manager_id=manager_id,
+            player_id=player_id,
+        )
+        return Response(status=status.HTTP_200_OK)
