@@ -7,7 +7,7 @@ from draft import views as d
 app_name = 'Rule'
 
 urlpatterns = [
-	path(r'', d.list, name='list'),
+	path(r'list/', d.list, name='list'),
 	path(r'create/', d.create_draft, name='create'),
 	path(r'start/', d.start_draft, name='start'),
 	path(r'board/<int:draft_id>/', d.draft_board, name='board'),

@@ -3,4 +3,4 @@ from django.http import HttpResponseRedirect
 
 
 def home(request):
-    return HttpResponseRedirect(reverse('rules:list'))
+    return HttpResponseRedirect(reverse('draft:react_draft_entrypoint'))

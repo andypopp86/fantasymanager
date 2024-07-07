@@ -4,7 +4,8 @@ import html
 from decimal import Decimal
 
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
-from django.shortcuts import render, reverse
+from django.shortcuts import render
+from django.urls import reverse
 from django.db.models import F
 from django.utils import timezone
 from django.db.models.expressions import Window
