@@ -40,6 +40,12 @@ export const draftStateMachine = createMachine({
                 }),
                 target: 'waiting',
             },
+            'unwatch_player': {
+                actions: assign({
+                    watchedPlayers: ({ context, event }) => context.watchedPlayers.filter((player) => player.id !== event.player.id),
+                }),
+                target: 'waiting',
+            },
         },
     },
     player_nominated: {
@@ -54,7 +60,7 @@ export const draftStateMachine = createMachine({
             },
             'watch_player': {
                 actions: assign({
-                    watchedPlayers: ({ event }) => [...watchedPlayers, event.player],
+                    watchedPlayers: ({ context, event }) => [...context.watchedPlayers, event.player],
                 }),
                 target: 'waiting',
             },

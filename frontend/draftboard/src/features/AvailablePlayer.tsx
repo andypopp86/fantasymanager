@@ -10,7 +10,7 @@ export default function AvailablePlayer({player, setOpenDialog, setNominatedPlay
         setOpenDialog(true);
     }
     return (
-        <tr key={player.player.player_id} style={
+        <tr key={player.player.player_id} className="font-small" style={
             {background: POSITION_BG_COLORS[player.player.position], color: POSITION_FG_COLORS[player.player.position]}
             } onClick={() => nominatePlayer(player.player)}>
             <td>{player.player.name}</td>

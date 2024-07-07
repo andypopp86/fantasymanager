@@ -3,11 +3,17 @@
     grid-template-areas:
         "header header"
         "sidebar main";
-    grid-template-columns: 200px 1fr;
+    grid-template-columns: 400px 1fr;
     grid-template-rows: 100px 1fr;
     gap: 10px;
     height: 100vh;
+    width: 100%;
 }
+
+.draft-sidebar { grid-area : sidebar; }
+.draft-main { grid-area : main; }
+
+.font-small { font-size: 0.75rem; }
 
 .draft-pick {
     height: 3.5rem;

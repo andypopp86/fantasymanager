@@ -36,6 +36,11 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
         setOpenDialog(false);
     }
 
+    const watchDraftPick = (player) => {
+        draftSend({type: 'watch_player', player: player});
+        setOpenDialog(false);
+    }
+
     useEffect(() => {
         const openModal = () => {
             setManagerId(defaultManagerId);
@@ -97,6 +102,9 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
             </select>
             </div>
             <div className="flex justify-end">
+            <button className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md mr-2" onClick={() => watchDraftPick(player)}>
+                Watch
+            </button>
             <button className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md mr-2" onClick={() => submitDraftPick(player)}>
                 Save
             </button>

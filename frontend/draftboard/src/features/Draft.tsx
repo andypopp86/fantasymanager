@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { draftManagersRetrieve, draftSlotsRetrieve, draftPicksRetrieve, draftAvailablePlayersRetrieve, draftManagerPicksRetrieve } from "../lib/data";
 import { DraftBoard } from "../features/DraftBoard";
 import { AvailablePlayers } from "../features/AvailablePlayers";
+import WatchedPlayers from "../features/WatchedPlayers";
 import { useDraftState } from "../hooks/useDraftState";
 
 type DraftProps = {
@@ -60,12 +61,13 @@ export default function Draft({draftDetails, send}: DraftProps) {
         <div className="draftboard-grid">
             {playersData && managerPicks && (
                 <>
-                <div className="">
-                    <AvailablePlayers draftContext={draftContext} draftSend={draftSend} />
-                </div>
-                <div>
-                    <DraftBoard draftContext={draftContext} draftSend={draftSend}/>
-                </div>
+                    <div className="draft-sidebar flex gap-2">
+                        <AvailablePlayers draftContext={draftContext} draftSend={draftSend} />
+                        <WatchedPlayers draftContext={draftContext} draftSend={draftSend} />
+                    </div>
+                    <div className="draft-main">
+                        <DraftBoard draftContext={draftContext} draftSend={draftSend}/>
+                    </div>
                 </>
             )}
         </div>
