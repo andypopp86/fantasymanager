@@ -34,7 +34,7 @@ export const draftStateMachine = createMachine({
             },
             'undraft_player': {
                 actions: assign({
-                    draftedPlayers: ({ context, event }) => context.draftedPlayers.filter((player) => player.id !== event.pick.player_id),
+                    // draftedPlayers: ({ context, event }) => context.draftedPlayers.filter((player) => player.id !== event.pick.player_id),
                     undraftedPlayers: ({ context, event }) => [recreatePlayer(event.pick), ...context.undraftedPlayers],
                     managers: ({ context, event }) => updateManagers(context.managers, event.managerId, event.pick, "undraft"),
                 }),
@@ -46,9 +46,9 @@ export const draftStateMachine = createMachine({
         on: {
             'draft_player': {
                 actions: assign({
-                    draftedPlayers: ({ context, event }) => [...context.draftedPlayers, event.player],
-                    undraftedPlayers: ({ context, event }) => context.undraftedPlayers.filter((player) => player.id !== event.player.id),
-                    managers: ({ context, event }) => updateManagers(context.managers, event.managerId, event.player, "draft"),
+                    // draftedPlayers: ({ context, event }) => [...context.draftedPlayers, event.player],
+                    undraftedPlayers: ({ context, event }) => context.undraftedPlayers.filter((uplayer) => uplayer.player.id !== event.pick.player_id),
+                    managers: ({ context, event }) => updateManagers(context.managers, event.managerId, event.pick, "draft"),
                 }),
                 target: 'waiting',
             },
@@ -74,9 +74,16 @@ const updateManagers = (managers: any[], manager_id: number, pick: any, action: 
                 manager_budget: manager.manager_budget - price,
             };
             if (action === "draft") {
+                let slotFound = false;
                 const managerWithPickAdded = {
                     ...managerWithUpdatedPrice,
-                    draft_picks: [...manager.draft_picks, pick],
+                    draft_picks: manager.draft_picks.map((existing_pick) => {
+                        if (existing_pick.player_id === '' && !slotFound) {
+                            slotFound = true;
+                            return pick;
+                        }
+                        return existing_pick;
+                    }),
                 };
                 return managerWithPickAdded;
             } else if (action === "undraft") {

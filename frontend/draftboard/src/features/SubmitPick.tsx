@@ -15,15 +15,23 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
     const [managerId, setManagerId] = useState(defaultManagerId);
     const [price, setPrice] = useState(1);
     const handlePriceChange = (e) => {
-        setPrice(e.target.value);
+        setPrice(parseInt(e.target.value) || 1);
     };
 
     const handleManagerChange = (e) => {
-        setManagerId(e.target.value);
+        setManagerId(parseInt(e.target.value));
     };
 
     const submitDraftPick = (player) => {
-        draftSend({type: 'draft_player', player: player, price: price, manager_id: managerId});
+        const pick = {
+            "name": player.name,
+            "price": price,
+            "position": player.position,
+            "player_id": player.id,
+            "pick_id": null,
+            "projected_price": player.projected_price,
+        }
+        draftSend({type: 'draft_player', pick: pick, price: price, managerId: managerId});
         draftPickSubmit(draftContext.draftId, managerId, player.id, {price: price});
         setOpenDialog(false);
     }
