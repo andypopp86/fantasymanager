@@ -198,7 +198,13 @@ const clearBudgetedPositionSlot = (context, positionSlot) => {
 }
 
 const recalculteBudgetIfNecessary = (context, event) => {
+    if (event.managerId === context.drafterId) {
+        return context.budgetSpent;
+    }
     const budgetedPositionSlot = findBudgetedPositionSlotByPlayerId(context, event.pick.player_id);
+    if (!budgetedPositionSlot) {
+        return context.budgetSpent;
+    }
     if (budgetedPositionSlot) {
         context.budgetedPlayers = clearBudgetedPositionSlot(context, budgetedPositionSlot);
         context.budgetSpent = calculateBudgetSpent(context.budgetedPlayers);
