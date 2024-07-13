@@ -3,8 +3,8 @@
     grid-template-areas:
         "header header"
         "sidebar main";
-    grid-template-columns: 400px 1fr;
-    grid-template-rows: 100px 1fr;
+    grid-template-columns: 1fr 2fr;
+    grid-template-rows: 1fr;
     gap: 10px;
     height: 100vh;
     width: 100%;
@@ -36,4 +36,8 @@
     width: 2rem;
     display: flex;
     align-items: center;
+}
+
+.drag-over {
+    background-color: lightblue;
 }

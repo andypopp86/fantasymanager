@@ -1,7 +1,6 @@
 import React from "react";
-import { MANAGER_BG_COLORS, MANAGER_FG_COLORS, POSITION_BG_COLORS, POSITION_FG_COLORS } from "../utils/colors";
-
-import { draftPickUnsubmit } from "../lib/data";
+import { MANAGER_BG_COLORS, MANAGER_FG_COLORS } from "../utils/colors";
+import { DraftBoardSlot } from "./DraftBoardSlot";
 
 
 
@@ -10,17 +9,13 @@ type DraftBoardProps = {
     draftSend: any
 }
 export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
-    const unsubmitPick = async (draftId: number, managerId: number, pick: any) => {
-        if (!draftId || !managerId || !pick) {
-            return;
-        }
-        const result = await draftPickUnsubmit(draftId, managerId, pick.player_id);
-        draftSend({
-            type: 'undraft_player',
-            draftId: draftId,
-            managerId: managerId,
-            pick: pick
-        });
+    const handleDrop = (e) => {
+        return;
+        // could maybe do a draft send here but would need to separate the price
+        // draftSend({
+        //     type: 'draft_player',
+        //     player: draftContext.draggedPlayer,
+        // });
     }
     return (
         <>
@@ -35,13 +30,14 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
                 <div className="mt-1">
                     <ul className="mt-1">
                     {manager.draft_picks.map((pick, pickIndex) => (
-                        <li key={pickIndex} className="flex justify-between border border-gray-300 font-small" style={{
-                            backgroundColor: POSITION_BG_COLORS[pick.position],
-                            color: POSITION_FG_COLORS[pick.position]
-                        }} onClick={() => unsubmitPick(draftContext.draftId, manager.manager_id, pick)}>
-                        <span className={"border border-gray-300 draft-pick-name"}>{pick.name}</span>
-                        <span className={"border border-gray-300 draft-pick-price"}>${pick.price}</span>
-                        </li>
+                        <DraftBoardSlot
+                            pickIndex={pickIndex}
+                            pick={pick}
+                            manager={manager}
+                            draftContext={draftContext}
+                            draftSend={draftSend}
+                            handleDrop={handleDrop}
+                        />
                     ))}
                     </ul>
                 </div>

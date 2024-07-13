@@ -257,6 +257,13 @@ class ManagerDraftedPlayersAPI(APIView):
         ).get_manager_picks(draft_id=draft_id)
         return Response(manager_picks, status=status.HTTP_200_OK)
 
+class DraftBudgetedPicksAPI(APIView):
+    def get(self, request, draft_id):
+        budgeted_picks = DraftReadService(
+            user=request.user
+        ).get_budgeted_picks(draft_id=draft_id)
+        return Response(budgeted_picks, status=status.HTTP_200_OK)
+
 class DraftBoardAPI(APIView):
 
     manager = serializers.CharField()

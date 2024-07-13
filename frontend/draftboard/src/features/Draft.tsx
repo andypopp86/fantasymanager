@@ -1,10 +1,11 @@
 import React, { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { draftManagersRetrieve, draftSlotsRetrieve, draftPicksRetrieve, draftAvailablePlayersRetrieve, draftManagerPicksRetrieve } from "../lib/data";
+import { draftAvailablePlayersRetrieve, draftManagerPicksRetrieve, draftBudgetedPicksRetrieve } from "../lib/data";
 import { DraftBoard } from "../features/DraftBoard";
 import { AvailablePlayers } from "../features/AvailablePlayers";
 import WatchedPlayers from "../features/WatchedPlayers";
 import { useDraftState } from "../hooks/useDraftState";
+import { BudgetedPicks } from "./BudgetedPicks";
 
 type DraftProps = {
     draftDetails: any
@@ -31,16 +32,26 @@ export default function Draft({draftDetails, send}: DraftProps) {
         }
     })
 
+    const { data: budgetedPicks } = useQuery({
+        queryKey: ["budgeted_picks", draftDetails.id],
+        queryFn: () =>
+            draftBudgetedPicksRetrieve(draftDetails.id),
+        select: (data) => {
+            return data.data;
+        }
+    })
+
     const { draftStateRef, currentState, draftContext } = useDraftState();
     const { send: draftSend } = draftStateRef;
 
     useEffect(() => {
-        if (!draftDetails.id || !playersData || !managerPicks) return;
+        if (!draftDetails.id || !playersData || !managerPicks || !budgetedPicks) return;
         draftSend({
             type: 'draft_loaded',
             draftId: draftDetails.id,
             managers: managerPicks,
             undraftedPlayers: playersData,
+            budgetedPicks: budgetedPicks
         });
     }
     , [playersData, draftDetails.id, managerPicks, draftSend]);
@@ -64,6 +75,7 @@ export default function Draft({draftDetails, send}: DraftProps) {
                     <div className="draft-sidebar flex gap-2">
                         <AvailablePlayers draftContext={draftContext} draftSend={draftSend} />
                         <WatchedPlayers draftContext={draftContext} draftSend={draftSend} />
+                        <BudgetedPicks draftContext={draftContext} draftSend={draftSend} />
                     </div>
                     <div className="draft-main">
                         <DraftBoard draftContext={draftContext} draftSend={draftSend}/>

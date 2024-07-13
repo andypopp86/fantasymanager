@@ -9,6 +9,9 @@ export const draftStateMachine = createMachine({
     undraftedPlayers: [] as any[],
     draftedPlayers: [] as any[],
     watchedPlayers: [] as any[],
+    budgetedPlayers : [] as any[],
+    draggedPlayer: {} as any,
+    budgetSlotTargeted: {} as any,
   },
   initial: 'loadingDraft',
   states: {
@@ -19,6 +22,8 @@ export const draftStateMachine = createMachine({
                     draftId: ({ event }) => event.draftId,
                     managers: ({ event }) => event.managers,
                     undraftedPlayers: ({ event }) => event.undraftedPlayers,
+                    budgetedPlayers: ({ event }) => event.budgetedPicks,
+                    // TODO: implement draftedPlayers (low priority)
                 }),
                 target: 'waiting',
             },
@@ -46,6 +51,24 @@ export const draftStateMachine = createMachine({
                 }),
                 target: 'waiting',
             },
+            'drag_player': {
+                actions: assign({
+                    draggedPlayer: ({ event }) => event.player,
+                }),
+                target: 'waiting',
+            },
+            'budget_player': {
+                actions: assign({
+                    budgetedPlayers: ({ context, event }) => updateBudgetedPlayers(context, event),
+                }),
+                target: 'waiting',
+            },
+            'budget_slot_targeted':  {
+                actions: assign({
+                    budgetSlotTargeted: ({ event }) => event.positionSlot,
+                }),
+                target: 'waiting',
+            }
         },
     },
     player_nominated: {
@@ -119,4 +142,12 @@ const recreatePlayer = (pick: any) => {
         price: null,
     }
     return recreatedPlayer;
+}
+
+const updateBudgetedPlayers = (context: any, event: any) => {
+    context.budgetedPlayers[event.positionSlot]["id"] = event.budgetPlayerToSend.id;
+    context.budgetedPlayers[event.positionSlot]["player_id"] = event.budgetPlayerToSend.player_id;
+    context.budgetedPlayers[event.positionSlot]["player_name"] = event.budgetPlayerToSend.player_name;
+    context.budgetedPlayers[event.positionSlot]["projected_price"] = event.budgetPlayerToSend.projected_price;
+    return context.budgetedPlayers;
 }

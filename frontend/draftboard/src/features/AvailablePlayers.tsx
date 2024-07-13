@@ -6,6 +6,12 @@ import SubmitPick from "./SubmitPick.tsx";
 export const AvailablePlayers = ({draftContext, draftSend}) => {
     const [nominatedPlayer, setNominatedPlayer] = useState(draftContext.undraftedPlayers![0].player || null);
     const [openDialog, setOpenDialog] = useState(false);
+    const handleDragStart = (e, id) => {
+        draftSend({
+            type: 'drag_player',
+            player: draftContext.undraftedPlayers.find((player) => player.player.id === id),
+        });
+    }
     return (
         <div>
             <div style={{fontSize: "24px", fontWeight: "bold"}}>Available Players</div>
@@ -24,6 +30,8 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
                             player={player}
                             setOpenDialog={setOpenDialog}
                             setNominatedPlayer={setNominatedPlayer}
+                            handleDragStart={handleDragStart}
+                            id={player.player.id}
                         />
                     ))}
                 </tbody>

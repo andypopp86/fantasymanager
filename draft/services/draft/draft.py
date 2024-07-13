@@ -87,6 +87,24 @@ class DraftReadService(BaseService):
     def get_available_players(self, draft_id):
         return d.DraftPick.objects.filter(draft_id=draft_id, drafted=False).order_by("-player__projected_price")
     
+    def get_budgeted_picks(self, draft_id):
+        from draft.models import POSITIONS, ALLOWED_POSITIONS
+        budget_map = {pos_name: {
+            "id": "", "order": pos_idx, "player_id": "", "player_name": "", "projected_price": 0, "budget_position": "", "status": "",
+            "allowed_positions": ALLOWED_POSITIONS.get(pos_name, [])
+            } for pos_idx, pos_name in POSITIONS}
+        picks = d.BudgetPlayer.objects.filter(draft_id=draft_id).order_by("manager__name", "-price")
+        for pick in picks:
+            if pick.position in budget_map:
+                budget_map[pick.position]["id"] = pick.id
+                budget_map[pick.position]["player_id"] = pick.player.id
+                budget_map[pick.position]["player_name"] = pick.player.name
+                budget_map[pick.position]["projected_price"] = pick.player.projected_price
+                budget_map[pick.position]["budget_position"] = pick.position
+                budget_map[pick.position]["status"] = pick.status
+        ordered_budget_map = {k: v for k, v in sorted(budget_map.items(), key=lambda item: item[1]['order'])}
+        return ordered_budget_map
+    
     def get_manager_picks(self, draft_id):
         picks = d.DraftPick.objects.filter(draft_id=draft_id, drafted=True).order_by('manager__position').distinct()
         managers = d.Manager.objects.filter(draft_id=draft_id).order_by('position')
