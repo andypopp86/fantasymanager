@@ -1,5 +1,5 @@
-import { createMachine, assign, createActor } from 'xstate';
-
+import { createMachine, assign } from 'xstate';
+import { findBudgetedPositionSlotByPlayerId } from '../utils/draftHelpers';
 
 export const draftStateMachine = createMachine({
   context: {
@@ -96,7 +96,7 @@ export const draftStateMachine = createMachine({
                     // draftedPlayers: ({ context, event }) => [...context.draftedPlayers, event.player],
                     undraftedPlayers: ({ context, event }) => context.undraftedPlayers.filter((uplayer) => uplayer.player.id !== event.pick.player_id),
                     managers: ({ context, event }) => updateManagers(context.managers, event.managerId, event.pick, "draft"),
-                    budgetSpent: ({ context, event }) => recalculteBudgetIfNecessary(context, event),
+                    budgetSpent: ({ context, event }) => recalculateBudgetIfNecessary(context, event),
                 }),
                 target: 'waiting',
             },
@@ -179,15 +179,7 @@ const calculateBudgetSpent = (budgetedPicks) => {
     return budgetSpent
 }
 
-const findBudgetedPositionSlotByPlayerId = (context, playerId) => {
-    let positionSlot = null;
-    Object.entries(context.budgetedPlayers).forEach(([slot, pick]) => {
-        if (pick.player_id === playerId) {
-            positionSlot = slot;
-        }
-    });
-    return positionSlot;
-}
+
 
 const clearBudgetedPositionSlot = (context, positionSlot) => {
     context.budgetedPlayers[positionSlot]["id"] = null;
@@ -197,11 +189,13 @@ const clearBudgetedPositionSlot = (context, positionSlot) => {
     return context.budgetedPlayers;
 }
 
-const recalculteBudgetIfNecessary = (context, event) => {
+
+// this should probably be broken up into budget $$ and budget players functions
+const recalculateBudgetIfNecessary = (context, event) => {
     if (event.managerId === context.drafterId) {
         return context.budgetSpent;
     }
-    const budgetedPositionSlot = findBudgetedPositionSlotByPlayerId(context, event.pick.player_id);
+    const budgetedPositionSlot = findBudgetedPositionSlotByPlayerId(context.budgetedPlayers, event.pick.player_id);
     if (!budgetedPositionSlot) {
         return context.budgetSpent;
     }

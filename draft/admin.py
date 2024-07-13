@@ -109,9 +109,13 @@ class HistoricalPlayerStatsAdmin(admin.ModelAdmin):
     fields = ('year', 'player', 'fantasy_points','rank', 'pass_yards','pass_tds','rush_att','rush_yards','rush_tds','receptions','rec_yards','rec_tds')
 
 class BudgetPlayerAdmin(admin.ModelAdmin):
-    list_display = ('draft', 'player', 'manager', 'price', 'get_position_display', 'get_status_display')
+    list_display = ('draft', 'player', 'manager', 'price', 'position', 'status_display')
     list_filter = ('draft', 'manager', 'status')
     readonly_fields = ('draft', 'player', 'manager', 'price' )
+
+    @admin.display(description='Status')
+    def status_display(self, obj):
+        return obj.get_status_display()
 
 class NFLTeamAdmin(admin.ModelAdmin):
     list_display = ('code', 'name', 'year', 'playoff_weather_score', 'early_season_schedule', 'playoff_schedule', 'defensive_ranking', 'pass_ranking', 'run_ranking')

@@ -7,6 +7,24 @@ from django.db.models import Case, Value, When, F
 
 logger = logging.getLogger(__name__)
 
+BUDGET_POSITIONS = (
+    ('QB1', 'QB1'),
+    ('RB1', 'RB1'),
+    ('RB2', 'RB2'),
+    ('WR1', 'WR1'),
+    ('WR2', 'WR2'),
+    ('FLEX1', 'FLEX1'),
+    ('FLEX2', 'FLEX2'),
+    ('TE1', 'TE1'),
+    ('DEF1', 'DEF1'),
+    ('BENCH1', 'BENCH1'),
+    ('BENCH2', 'BENCH2'),
+    ('BENCH3', 'BENCH3'),
+    ('BENCH4', 'BENCH4'),
+    ('BENCH5', 'BENCH5'),
+    ('BENCH6', 'BENCH6'),
+    ('BENCH7', 'BENCH7'),
+)
 POSITIONS = (
     (0, 'QB1'),
     (1, 'RB1'),
@@ -404,7 +422,7 @@ class BudgetPlayer(models.Model):
     player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='budgeted_players')
     manager = models.ForeignKey(Manager, on_delete=models.CASCADE, related_name="budgeted_players", null=True, blank=True)
     price = models.IntegerField(null=True, blank=True)
-    position = models.CharField(max_length=50, choices=POSITIONS, null=True, blank=True)
+    position = models.CharField(max_length=50, choices=BUDGET_POSITIONS, null=True, blank=True)
     status = models.CharField(max_length=50, choices=BUDGET_STATUSES, default='none')
 
     def __str__(self):

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-import { draftPickSubmit } from '../lib/data';
+import { draftPickSubmit, draftUnbudgetPick } from '../lib/data';
+import { findBudgetedPositionSlotByPlayerId } from '../utils/draftHelpers';
 
 type SubmitPickProps = {
     draftContext: any,
@@ -35,9 +36,15 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
             "pick_id": null,
             "projected_price": player.projected_price,
         }
+        const budgetSlot = findBudgetedPositionSlotByPlayerId(draftContext.budgetedPlayers, pick.player_id)
+        if (budgetSlot && managerId !== draftContext.drafterId) {
+            draftUnbudgetPick(draftContext.draftId, draftContext.drafterId, pick.player_id);
+        }
+        
         draftSend({type: 'draft_player', pick: pick, price: price, managerId: managerId});
         draftPickSubmit(draftContext.draftId, managerId, player.id, {price: price});
         setOpenDialog(false);
+
     }
 
     const watchDraftPick = (player) => {
