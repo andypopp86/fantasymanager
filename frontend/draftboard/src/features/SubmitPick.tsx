@@ -15,14 +15,18 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
     const [managerId, setManagerId] = useState(defaultManagerId);
     const [price, setPrice] = useState(1);
     const handlePriceChange = (e) => {
-        setPrice(parseInt(e.target.value) || 1);
-    };
+        setPrice(e.target.value);
+    };        
 
     const handleManagerChange = (e) => {
         setManagerId(parseInt(e.target.value));
     };
 
     const submitDraftPick = (player) => {
+        if (price < 1) {
+            alert("Price must be greater than 0")
+            return;
+        }
         const pick = {
             "name": player.name,
             "price": price,

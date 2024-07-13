@@ -2,8 +2,6 @@ import React from "react";
 import { MANAGER_BG_COLORS, MANAGER_FG_COLORS } from "../utils/colors";
 import { DraftBoardSlot } from "./DraftBoardSlot";
 
-
-
 type DraftBoardProps = {
     draftContext: any,
     draftSend: any
@@ -31,7 +29,8 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
                     <ul className="mt-1">
                     {manager.draft_picks.map((pick, pickIndex) => (
                         <DraftBoardSlot
-                            pickIndex={pickIndex}
+                            row={pickIndex}
+                            column={index}
                             pick={pick}
                             manager={manager}
                             draftContext={draftContext}

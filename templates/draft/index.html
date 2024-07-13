@@ -4,6 +4,10 @@
 
 <html lang="en">
     <head>
+        {% csrf_token %}
+        <script>
+            window.csrfToken = "{{ csrf_token }}";
+        </script>
         <title>Draft</title>
         {% vite_react_refresh app="draftboard" %}
         {% vite_hmr_client app="draftboard" %}

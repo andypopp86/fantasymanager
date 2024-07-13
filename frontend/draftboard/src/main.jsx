@@ -7,6 +7,6 @@ import "./custom.css"
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-      <DraftApp />
+      <DraftApp csrfToken={window.csrfToken} />
   </React.StrictMode>,
 )

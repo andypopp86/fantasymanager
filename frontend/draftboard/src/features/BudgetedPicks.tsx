@@ -1,7 +1,6 @@
 import React from "react";
 import BudgetedPick from "./BudgetedPick.tsx";
-import { useState } from "react";
-import SubmitPick from "./SubmitPick.tsx";
+import { draftBudgetPick } from "../lib/data";
 
 export const BudgetedPicks = ({draftContext, draftSend}) => {
     const handleDrop = (e) => {
@@ -22,6 +21,13 @@ export const BudgetedPicks = ({draftContext, draftSend}) => {
                 positionSlot: targetSlot,
                 budgetPlayerToSend: budgetPlayerToSend
             });
+            const managerId = draftContext.drafterId;
+            draftBudgetPick(draftContext.draftId, managerId, draftContext.draggedPlayer.player.id, 
+                {
+                    projected_price: draftContext.draggedPlayer.player.projected_price,
+                    budget_position: targetSlot
+                },
+            );
         }
     }
     return (
@@ -36,6 +42,12 @@ export const BudgetedPicks = ({draftContext, draftSend}) => {
                     </tr>
                 </thead>
                 <tbody>
+                <tr key={'budget_total'} className="font-small" style={
+                    {background: "blue", color: 'white'}} 
+                    >
+                    <td colSpan={2}>Total:</td>
+                    <td>{draftContext.budgetSpent}</td>
+                </tr>
                     {Object.entries(draftContext.budgetedPlayers).map(([positionSlot, pick]) => (
                         <BudgetedPick
                             key={positionSlot}
@@ -43,6 +55,7 @@ export const BudgetedPicks = ({draftContext, draftSend}) => {
                             pick={pick}
                             draftSend={draftSend}
                             handleDrop={handleDrop}
+                            draftContext={draftContext}
                         />
                     ))}
                 </tbody>

@@ -39,11 +39,8 @@ class DraftWriteService(BaseService):
         defaults = {'manager': manager, 'price': price}
         pick, created = d.DraftPick.objects.get_or_create(draft_id=draft_id, player_id=player_id, defaults=defaults)
         pick.drafted = True
-        drafter = draft.managers.get(name=draft.drafter)
-        new_projected_team = get_new_projected_team(drafter, pick.player)
         pick.manager = manager
         pick.price = price
-        pick.position_slot = get_pick_position_slot(pick.player.position, new_projected_team)
         pick.last_update_time = timezone.now()
         pick.save()
         manager.budget -= price
@@ -61,6 +58,23 @@ class DraftWriteService(BaseService):
         pick.manager = None
         pick.price = 0
         pick.position_slot = None
+        pick.save()
+        return pick
+
+    def budget_pick(self, draft_id, manager_id, player_id, budget_position, projected_price):
+        pick, _ = d.BudgetPlayer.objects.get_or_create(draft_id=draft_id, manager_id=manager_id, player_id=player_id)
+        pick.price = int(float(projected_price))
+        pick.position = budget_position
+        pick.status = 'budgeted'
+        pick.save()
+        return pick
+
+    def unbudget_pick(self, draft_id, manager_id, player_id):
+        pick, _ = d.BudgetPlayer.objects.get_or_create(draft_id=draft_id, manager_id=manager_id, player_id=player_id)
+        pick.manager = None
+        pick.price = 0
+        pick.position = None
+        pick.status = 'none'
         pick.save()
         return pick
 
@@ -93,7 +107,7 @@ class DraftReadService(BaseService):
             "id": "", "order": pos_idx, "player_id": "", "player_name": "", "projected_price": 0, "budget_position": "", "status": "",
             "allowed_positions": ALLOWED_POSITIONS.get(pos_name, [])
             } for pos_idx, pos_name in POSITIONS}
-        picks = d.BudgetPlayer.objects.filter(draft_id=draft_id).order_by("manager__name", "-price")
+        picks = d.BudgetPlayer.objects.filter(draft_id=draft_id, status="budgeted").order_by("manager__name", "-price")
         for pick in picks:
             if pick.position in budget_map:
                 budget_map[pick.position]["id"] = pick.id
@@ -112,6 +126,7 @@ class DraftReadService(BaseService):
         for man in managers:
             if man.id not in manager_dict:
                 manager_dict[man.id] = {'manager_id':man.id, 'manager_name': man.name, 'manager_position': man.position, 'manager_budget': man.budget,
+                                        'is_drafter': man.drafter,
                                         'draft_picks': [
                                             {"name":"-",
                                             "price":0,

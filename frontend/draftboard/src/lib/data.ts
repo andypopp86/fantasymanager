@@ -8,6 +8,7 @@ import type { DraftRetrieveOutput,
     DraftSubmitPickOutput,
     DraftSubmitPickParams,
     AvailablePlayersRetrieveOutput,
+    DraftBudgetPickParams,
 } from "./draft.schemas";
 
 export const draftListRetrieve = <
@@ -142,6 +143,34 @@ export const draftRetrieve = <
     options?: AxiosRequestConfig,
   ): Promise<TData> => {
     return axios.default.post(`/api/drafts/draft/${draft_id}/unsubmit_pick/${manager_id}/${player_id}/`, {
+        options,
+    })
+  }
+
+  export const draftBudgetPick = <
+  TData = AxiosResponse<DraftSubmitPickOutput>,
+  >(
+    draft_id: number,
+    manager_id: number,
+    player_id: number,
+    params: DraftBudgetPickParams,
+    options?: AxiosRequestConfig,
+  ): Promise<TData> => {
+    return axios.default.post(`/api/drafts/draft/${draft_id}/budget_pick/${manager_id}/${player_id}/`, {
+        params,
+        options,
+    })
+  }
+
+  export const draftUnbudgetPick = <
+  TData = AxiosResponse<DraftSubmitPickOutput>,
+  >(
+    draft_id: number,
+    manager_id: number,
+    player_id: number,
+    options?: AxiosRequestConfig,
+  ): Promise<TData> => {
+    return axios.default.post(`/api/drafts/draft/${draft_id}/unbudget_pick/${manager_id}/${player_id}/`, {
         options,
     })
   }

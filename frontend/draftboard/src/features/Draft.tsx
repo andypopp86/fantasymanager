@@ -43,7 +43,6 @@ export default function Draft({draftDetails, send}: DraftProps) {
 
     const { draftStateRef, currentState, draftContext } = useDraftState();
     const { send: draftSend } = draftStateRef;
-
     useEffect(() => {
         if (!draftDetails.id || !playersData || !managerPicks || !budgetedPicks) return;
         draftSend({
@@ -54,9 +53,9 @@ export default function Draft({draftDetails, send}: DraftProps) {
             budgetedPicks: budgetedPicks
         });
     }
-    , [playersData, draftDetails.id, managerPicks, draftSend]);
+    , [playersData, draftDetails.id, managerPicks, budgetedPicks, draftSend]);
 
-
+    
 
   return (
     <>

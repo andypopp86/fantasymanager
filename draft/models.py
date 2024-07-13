@@ -404,7 +404,7 @@ class BudgetPlayer(models.Model):
     player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='budgeted_players')
     manager = models.ForeignKey(Manager, on_delete=models.CASCADE, related_name="budgeted_players", null=True, blank=True)
     price = models.IntegerField(null=True, blank=True)
-    position = models.CharField(max_length=50, choices=POSITIONS)
+    position = models.CharField(max_length=50, choices=POSITIONS, null=True, blank=True)
     status = models.CharField(max_length=50, choices=BUDGET_STATUSES, default='none')
 
     def __str__(self):

@@ -51,6 +51,12 @@ export interface DraftSubmitPickParams {
     price: number;
 }
 
+
+export interface DraftBudgetPickParams {
+    budget_position: string;
+    projected_price: number;
+}
+
 export type Manager = {
     id: number,
     name: string,

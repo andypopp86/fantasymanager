@@ -5,7 +5,8 @@ import { useState } from "react";
 import { draftPickUnsubmit } from "../lib/data";
 
 type DraftBoardSlotProps = {
-    pickIndex: string;
+    row: number;
+    column: number;
     pick: any;
     manager: any;
     draftContext: any,
@@ -14,7 +15,8 @@ type DraftBoardSlotProps = {
 };
 
 export const DraftBoardSlot = ({
-    pickIndex,
+    row,
+    column,
     pick,
     manager,
     draftContext,
@@ -42,8 +44,9 @@ export const DraftBoardSlot = ({
             pick: pick
         });
     }
+    const uniqueKey = `${column}-${row}`;
     return (
-        <li key={pickIndex} className="flex justify-between border border-gray-300 font-small hover:bg-blue-700" style={{
+        <li key={uniqueKey} className="flex justify-between border border-gray-300 font-small hover:bg-blue-700" style={{
             color: POSITION_FG_COLORS[pick.position],
             backgroundColor: isDragOver ? "blue" : POSITION_BG_COLORS[pick.position],
         }} onClick={() => unsubmitPick(draftContext.draftId, manager.manager_id, pick)}

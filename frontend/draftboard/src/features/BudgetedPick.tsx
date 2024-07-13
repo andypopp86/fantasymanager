@@ -2,9 +2,18 @@ import React from "react";
 import { useState } from "react";
 import { POSITION_BG_COLORS, POSITION_FG_COLORS } from "../utils/colors";
 
-export default function BudgetedPick({ positionSlot, pick, handleDrop, draftSend }) {
-    const unbudgetPick = (pick) => {
-        console.log("unbudgeting pick", pick)
+import { draftUnbudgetPick } from "../lib/data";
+
+export default function BudgetedPick({ positionSlot, pick, handleDrop, draftSend, draftContext }) {
+    
+    const unbudgetPick = (draftId, drafterId, playerId) => {
+        if (pick.id) {
+            draftSend({
+                type: 'unbudget_player',
+                positionSlot: positionSlot,
+            });
+            draftUnbudgetPick(draftId, drafterId, playerId);
+        }
     }
     const [isDragOver, setIsDragOver] = useState(false);
     const handleDragOver = (e) => { 
@@ -23,7 +32,7 @@ export default function BudgetedPick({ positionSlot, pick, handleDrop, draftSend
             {
                 background: isDragOver ? "blue" : POSITION_BG_COLORS[positionSlot],
                 color: POSITION_FG_COLORS[positionSlot]}
-            } onClick={() => unbudgetPick(pick.player_id)} 
+            } onClick={() => unbudgetPick(draftContext.draftId, draftContext.drafterId, pick.player_id)} 
             onDrop={(e) => {handleDrop(e); setIsDragOver(false)}}
             onDragOver={(e) => handleDragOver(e)}
             onDragLeave={handleDragLeave}
