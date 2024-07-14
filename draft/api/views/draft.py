@@ -320,7 +320,6 @@ class DraftUnsubmitPickAPI(APIView):
     
 class DraftBudgetPickAPI(APIView):
     def post(self, request, draft_id, manager_id, player_id):
-        print(request.data["params"])
         DraftWriteService(
             user=request.user
         ).budget_pick(

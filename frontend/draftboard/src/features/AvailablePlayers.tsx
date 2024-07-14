@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import AvailablePlayer from "./AvailablePlayer.tsx";
 import { useState } from "react";
 import SubmitPick from "./SubmitPick.tsx";
@@ -62,6 +62,10 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
         setPriceFilterValue(0.00);
         setFilteredPlayers(draftContext.undraftedPlayers);
     }
+
+    useEffect(() => {
+        setFilteredPlayers(draftContext.undraftedPlayers);
+    }, [draftContext.undraftedPlayers]);
 
     return (
         <div>

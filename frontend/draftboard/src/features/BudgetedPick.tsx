@@ -39,7 +39,7 @@ export default function BudgetedPick({ positionSlot, pick, handleDrop, draftSend
             >
             <td>{pick.player_name}</td>
             <td>{positionSlot}</td>
-            <td>{pick.projected_price}</td>
+            <td>{pick.actual_price || pick.projected_price}</td>
         </tr>
     )
 }

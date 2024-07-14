@@ -190,7 +190,8 @@ const updateBudgetedPlayers = (context: any, event: any) => {
 const calculateBudgetSpent = (budgetedPicks) => {
     let budgetSpent = 0;
     Object.entries(budgetedPicks).forEach(([positionSlot, pick]) => {
-        budgetSpent += parseInt(pick.projected_price);
+        const actualOrProjected = pick.actual_price || pick.projected_price;
+        budgetSpent += parseInt(actualOrProjected);
     });
     return budgetSpent
 }

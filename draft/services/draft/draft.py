@@ -107,15 +107,19 @@ class DraftReadService(BaseService):
             "id": "", "order": pos_idx, "player_id": "", "player_name": "", "projected_price": 0, "budget_position": "", "status": "",
             "allowed_positions": ALLOWED_POSITIONS.get(pos_name, [])
             } for pos_idx, pos_name in POSITIONS}
-        picks = d.BudgetPlayer.objects.filter(draft_id=draft_id, status="budgeted").order_by("manager__name", "-price")
-        for pick in picks:
-            if pick.position in budget_map:
-                budget_map[pick.position]["id"] = pick.id
-                budget_map[pick.position]["player_id"] = pick.player.id
-                budget_map[pick.position]["player_name"] = pick.player.name
-                budget_map[pick.position]["projected_price"] = pick.player.projected_price
-                budget_map[pick.position]["budget_position"] = pick.position
-                budget_map[pick.position]["status"] = pick.status
+        budget_picks = d.BudgetPlayer.objects.filter(draft_id=draft_id, status="budgeted").order_by("manager__name", "-price")
+        pick_player_id_list = [pick.player_id for pick in budget_picks]
+        draft_picks = d.DraftPick.objects.filter(draft_id=draft_id, drafted=True, player_id__in=pick_player_id_list).order_by("manager__name", "-price")
+        actual_prices = {pick.player_id: pick.price for pick in draft_picks}
+        for bpick in budget_picks:
+            if bpick.position in budget_map:
+                budget_map[bpick.position]["id"] = bpick.id
+                budget_map[bpick.position]["player_id"] = bpick.player.id
+                budget_map[bpick.position]["player_name"] = bpick.player.name
+                budget_map[bpick.position]["projected_price"] = bpick.player.projected_price
+                budget_map[bpick.position]["actual_price"] = actual_prices.get(bpick.player.id, 0)
+                budget_map[bpick.position]["budget_position"] = bpick.position
+                budget_map[bpick.position]["status"] = bpick.status
         ordered_budget_map = {k: v for k, v in sorted(budget_map.items(), key=lambda item: item[1]['order'])}
         return ordered_budget_map
     
