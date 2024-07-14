@@ -43,3 +43,48 @@ export const getPlayerEligibleBudgetSlots = (player, slots) => {
         if (eligibleSlots.includes(player.position)) { return slot }
     })
 }
+
+export const checkForPositionLimitHit = (managers, draftDetails, position, managerId) => {
+    const manager = managers.find((manager) => manager.manager_id === managerId);
+    const managerDraftPicks = manager.draft_picks;
+    const playerPositionCount = managerDraftPicks.filter((pick) => pick.position === position).length;
+    const limitProperty = `limit_${position.toLowerCase()}`;
+    // get limit from draftDetails
+    const positionLimit = draftDetails[limitProperty];
+    if (playerPositionCount >= positionLimit) {
+        alert(`Manager ${manager.manager_name} has hit the ${position} position limit (${positionLimit})`);
+    }
+}
+
+export const managersWhoHitPositionLimit = (managers, draftDetails, position) => {
+    let managersHit = [];
+    managers.forEach((manager) => {
+        const managerDraftPicks = manager.draft_picks;
+        const playerPositionCount = managerDraftPicks.filter((pick) => pick.position === position).length;
+        const limitProperty = `limit_${position.toLowerCase()}`;
+        // get limit from draftDetails
+        const positionLimit = draftDetails[limitProperty];
+        if (playerPositionCount >= positionLimit) {
+            managersHit.push(manager.manager_name);
+        }
+    });
+    return managersHit;
+}
+
+export const getAllPositionLimitsHit = (managers, draftDetails) => {
+    let limitsHit = {};
+    managers.forEach((manager) => {
+        limitsHit[manager.manager_name] = [];
+        Object.entries(draftDetails).forEach(([key, value]) => {
+            if (key.includes('limit')) {
+                const position = key.split('_')[1].toUpperCase();
+                const managerDraftPicks = manager.draft_picks;
+                const playerPositionCount = managerDraftPicks.filter((pick) => pick.position === position).length;
+                if (playerPositionCount >= value) {
+                    limitsHit[manager.manager_name].push(position);
+                }
+            }
+        });
+    });
+    return limitsHit;
+}

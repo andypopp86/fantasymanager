@@ -1,5 +1,5 @@
 import { createMachine, assign } from 'xstate';
-import { findBudgetedPositionSlotByPlayerId } from '../utils/draftHelpers';
+import { findBudgetedPositionSlotByPlayerId, checkForPositionLimitHit } from '../utils/draftHelpers';
 
 export const draftStateMachine = createMachine({
   context: {
@@ -47,7 +47,7 @@ export const draftStateMachine = createMachine({
                 actions: assign({
                     // draftedPlayers: ({ context, event }) => context.draftedPlayers.filter((player) => player.id !== event.pick.player_id),
                     undraftedPlayers: ({ context, event }) => [recreatePlayer(event.pick), ...context.undraftedPlayers],
-                    managers: ({ context, event }) => updateManagers(context.managers, event.managerId, event.pick, "undraft"),
+                    managers: ({ context, event }) => updateManagers(context.draftDetails, context.managers, event.managerId, event.pick, "undraft"),
                 }),
                 target: 'waiting',
             },
@@ -97,7 +97,7 @@ export const draftStateMachine = createMachine({
                 actions: assign({
                     // draftedPlayers: ({ context, event }) => [...context.draftedPlayers, event.player],
                     undraftedPlayers: ({ context, event }) => context.undraftedPlayers.filter((uplayer) => uplayer.player.id !== event.pick.player_id),
-                    managers: ({ context, event }) => updateManagers(context.managers, event.managerId, event.pick, "draft"),
+                    managers: ({ context, event }) => updateManagers(context.draftDetails, context.managers, event.managerId, event.pick, "draft"),
                     budgetSpent: ({ context, event }) => recalculateBudgetIfNecessary(context, event),
                 }),
                 target: 'waiting',
@@ -127,9 +127,9 @@ export const draftStateMachine = createMachine({
 });
 
 
-const updateManagers = (managers: any[], manager_id: number, pick: any, action: string) => {
+const updateManagers = (draftDetails: any, managers: any[], manager_id: number, pick: any, action: string) => {
     const price = action === "draft" ? pick.price : -pick.price;
-    return managers.map((manager) => {
+    const updatedManagers = managers.map((manager) => {
         if (manager.manager_id === manager_id) {
             const managerWithUpdatedPrice = {
                 ...manager,
@@ -158,6 +158,8 @@ const updateManagers = (managers: any[], manager_id: number, pick: any, action: 
         }
         return manager;
     });
+    checkForPositionLimitHit(updatedManagers, draftDetails, pick.position, manager_id);
+    return updatedManagers;
 }
 
 const recreatePlayer = (pick: any) => {

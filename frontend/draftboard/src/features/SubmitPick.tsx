@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 
 import { draftBudgetPick, draftPickSubmit, draftUnbudgetPick } from '../lib/data';
-import { findBudgetedPositionSlotByPlayerId, getEmptyBudgetedPositionSlots, getPlayerEligibleBudgetSlots } from '../utils/draftHelpers';
+import { findBudgetedPositionSlotByPlayerId, getEmptyBudgetedPositionSlots, getPlayerEligibleBudgetSlots, managersWhoHitPositionLimit } from '../utils/draftHelpers';
 
 type SubmitPickProps = {
     draftContext: any,
@@ -18,9 +18,9 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
     const emptyBudgetSlots = getEmptyBudgetedPositionSlots(draftContext.budgetedPlayers);
     const playerEligibleSlots = getPlayerEligibleBudgetSlots(player, emptyBudgetSlots);
     const [slotId, setSlotId] = useState(playerEligibleSlots[0]);
+    const [managersNotAllowedToDraftThisPosition, setManagersNotAllowedToDraftThisPosition] = useState(managersWhoHitPositionLimit(draftContext.managers, draftContext.draftDetails, player.position));
 
     const [availableBudgetSlots, setAvailableBudgetSlots] = useState(playerEligibleSlots);
-
     const handlePriceChange = (e) => {
         setPrice(e.target.value);
     };        
@@ -172,6 +172,13 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
                 Cancel
             </button>
             </div>
+            {managersNotAllowedToDraftThisPosition.length > 0 && (
+                <div className="mt-4">
+                    <p className="text-red-500">
+                        {managersNotAllowedToDraftThisPosition.join(', ')} {managersNotAllowedToDraftThisPosition.length > 1 ? "have" : "has"} hit the {player.position} limit
+                    </p>
+                </div>
+            )}
         </div>
         </div>
         </dialog>
