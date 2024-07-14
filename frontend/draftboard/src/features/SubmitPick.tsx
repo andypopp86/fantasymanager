@@ -16,7 +16,7 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
     const [managerId, setManagerId] = useState(defaultManagerId);
     const [price, setPrice] = useState(1);
     const emptyBudgetSlots = getEmptyBudgetedPositionSlots(draftContext.budgetedPlayers);
-    const playerEligibleSlots = getPlayerEligibleBudgetSlots(player, emptyBudgetSlots);
+    const playerEligibleSlots = getPlayerEligibleBudgetSlots(draftContext.budgetedPlayers, player, emptyBudgetSlots);
     const [slotId, setSlotId] = useState(playerEligibleSlots[0]);
     const [managersNotAllowedToDraftThisPosition, setManagersNotAllowedToDraftThisPosition] = useState(managersWhoHitPositionLimit(draftContext.managers, draftContext.draftDetails, player.position));
 

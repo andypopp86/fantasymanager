@@ -37,11 +37,22 @@ export const getEmptyBudgetedPositionSlots = (budgetedPlayers) => {
     return emptySlots;
 }
 
-export const getPlayerEligibleBudgetSlots = (player, slots) => {
-    return slots.filter((slot) => {
+export const getPlayerEligibleBudgetSlots = (budgetedPlayers, player, slots) => {
+    let openEligibleSlots = slots.filter((slot) => {
         const eligibleSlots = positionEligibleSlots[slot]
         if (eligibleSlots.includes(player.position)) { return slot }
     })
+    if (openEligibleSlots.length > 0) {
+        return openEligibleSlots;
+    } else {
+        const anyEligibleSlot = [];
+        Object.entries(budgetedPlayers).forEach(([slot, pick]) => {
+            if (pick.allowed_positions.includes(player.position)) {
+                anyEligibleSlot.push(slot);
+            }
+        });
+        return anyEligibleSlot;
+    }
 }
 
 export const checkForPositionLimitHit = (managers, draftDetails, position, managerId) => {
