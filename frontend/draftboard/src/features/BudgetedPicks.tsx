@@ -46,7 +46,7 @@ export const BudgetedPicks = ({draftContext, draftSend}) => {
                     {background: "blue", color: 'white'}} 
                     >
                     <td colSpan={2}>Total:</td>
-                    <td>{draftContext.budgetSpent}</td>
+                    <td>{draftContext.draftDetails.starting_budget - draftContext.budgetSpent}</td>
                 </tr>
                     {Object.entries(draftContext.budgetedPlayers).map(([positionSlot, pick]) => (
                         <BudgetedPick

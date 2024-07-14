@@ -5,6 +5,7 @@ export const draftStateMachine = createMachine({
   context: {
     draftId: 0 as number,
     drafterId: 0 as number,
+    draftDetails: {} as any,
     nominatedPlayer: {} as any,
     managers: [] as any[],
     undraftedPlayers: [] as any[],
@@ -21,7 +22,8 @@ export const draftStateMachine = createMachine({
         on: {
             'draft_loaded': {
                 actions: assign({
-                    draftId: ({ event }) => event.draftId,
+                    draftId: ({ event }) => event.draftDetails.id,
+                    draftDetails: ({ event }) => event.draftDetails,
                     drafterId: ({ event }) => event.managers.find((manager) => manager.is_drafter).manager_id,
                     managers: ({ event }) => event.managers,
                     undraftedPlayers: ({ event }) => event.undraftedPlayers,
@@ -105,6 +107,18 @@ export const draftStateMachine = createMachine({
                     watchedPlayers: ({ context, event }) => [...context.watchedPlayers, event.player],
                 }),
                 target: 'waiting',
+            },
+            'cancel_nomination': {
+                actions: assign({
+                    nominatedPlayer: ({ context }) => {},
+                }),
+                target: 'waiting',
+            },
+            'budget_player': {
+                actions: assign({
+                    budgetedPlayers: ({ context, event }) => updateBudgetedPlayers(context, event),
+                    budgetSpent: ({ context, event }) => context.budgetSpent + parseInt(event.budgetPlayerToSend.projected_price)
+                }),
             },
 
         },

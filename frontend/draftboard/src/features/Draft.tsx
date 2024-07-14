@@ -47,7 +47,7 @@ export default function Draft({draftDetails, send}: DraftProps) {
         if (!draftDetails.id || !playersData || !managerPicks || !budgetedPicks) return;
         draftSend({
             type: 'draft_loaded',
-            draftId: draftDetails.id,
+            draftDetails: draftDetails,
             managers: managerPicks,
             undraftedPlayers: playersData,
             budgetedPicks: budgetedPicks
