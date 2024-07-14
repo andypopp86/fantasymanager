@@ -62,7 +62,7 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
                 "id": pick.pick_id,
                 "player_id": pick.player_id,
                 "player_name": pick.name,
-                "projected_price": pick.projected_price,
+                "projected_price": price // price was actually paid in place of projected_price
             }
             draftSend({
                 type: 'budget_player',
