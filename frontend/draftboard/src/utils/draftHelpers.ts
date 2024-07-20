@@ -51,6 +51,7 @@ export const getPlayerEligibleBudgetSlots = (budgetedPlayers, draftedPlayers, pl
     } else {
         const anyEligibleSlot = [];
         Object.entries(draftedPlayers).forEach(([slot, pick]) => {
+            console.log(pick);
             if (pick.allowed_positions.includes(player.position) && !pick.player_id) {
                 anyEligibleSlot.push(slot);
             }
@@ -62,7 +63,9 @@ export const getPlayerEligibleBudgetSlots = (budgetedPlayers, draftedPlayers, pl
 export const checkForPositionLimitHit = (managers, draftDetails, position, managerId) => {
     const manager = managers.find((manager) => manager.manager_id === managerId);
     const managerDraftPicks = manager.draft_picks;
-    const playerPositionCount = managerDraftPicks.filter((pick) => pick.position === position).length;
+    // managerDraftPicks is an object.  translate filter to Object.entries
+    const playerPositionCount = Object.entries(managerDraftPicks).filter(([slot, pick]) => pick.position === position).length;
+    // const playerPositionCount = managerDraftPicks.filter((pick) => pick.position === position).length;
     const limitProperty = `limit_${position.toLowerCase()}`;
     // get limit from draftDetails
     const positionLimit = draftDetails[limitProperty];

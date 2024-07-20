@@ -53,6 +53,7 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
             "price": price,
             "position": player.position,
             "player_id": player.id,
+            "slot": slotId,
             "projected_price": player.projected_price,
         }
         const budgetPick = {
@@ -82,6 +83,14 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
             }
             draftSend(budgetPlayerSendEvent);
         }
+        const draftData = {
+            type: 'draft_player',
+            budgetPlayerToSend: budgetPick,
+            pick: pick,
+            price: price,
+            managerId: managerId
+        }
+        console.log(draftData);
         draftSend({type: 'draft_player', budgetPlayerToSend: budgetPick, pick: pick, price: price, managerId: managerId});
         draftPickSubmit(draftContext.draftId, managerId, player.id, {price: price, position_slot: slotId});
         setOpenDialog(false);

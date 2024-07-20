@@ -43,7 +43,7 @@ export const DraftBoardSlot = ({
             type: 'undraft_player',
             positionSlot: positionSlot,
             player_id: pick.player_id,
-            player_name: pick.player_name,
+            player_name: pick.name,
             price: 0,
             draftId: draftId,
             managerId: managerId,
@@ -54,14 +54,14 @@ export const DraftBoardSlot = ({
     return (
         <>
         {positionSlot.length > 0 && column != undefined  && (
-            <li key={uniqueKey} className="flex justify-between border border-gray-300 font-small hover:bg-blue-700" style={{
+            <li key={uniqueKey} className="flex w-full justify-between border border-gray-300 font-small hover:bg-blue-700" style={{
                 color: POSITION_FG_COLORS[pick.position],
                 backgroundColor: isDragOver ? "blue" : POSITION_BG_COLORS[pick.position],
             }} onClick={() => unsubmitPick(draftContext.draftId, manager.manager_id, pick)}
             onDragOver={handleDragOver} onDrop={(e) => handleDrop(e)} onDragLeave={handleDragLeave}
             >
-                <span className={"border border-gray-300 draft-pick-name"}>{pick.name}</span>
-                <span className={"border border-gray-300 draft-pick-price"}>${pick.price}</span>
+                <span className={"border border-gray-300 draft-pick-name w-80"}>{pick.name}</span>
+                <span className={"border border-gray-300 draft-pick-price w-20"}>{pick.price}</span>
             </li>
 
         )}

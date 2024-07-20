@@ -138,23 +138,54 @@ const updateManagers = (draftDetails: any, managers: any[], manager_id: number, 
                 ...manager,
                 manager_budget: manager.manager_budget - price,
             };
+            console.log("managerWithUpdatedPrice", managerWithUpdatedPrice);
             if (action === "draft") {
-                let slotFound = false;
-                const managerWithPickAdded = {
+                const draftedSlot = pick.slot;
+                const managerWithPickUpdated = {
                     ...managerWithUpdatedPrice,
-                    draft_picks: Object.entries(manager.draft_picks).map(([slot, existing_pick]) => {
-                        if (existing_pick.player_id === '' && !slotFound) {
-                            slotFound = true;
-                            return pick;
+                    draft_picks: Object.keys(manager.draft_picks).reduce((result, existingSlot) => {
+                        const existing_pick = manager.draft_picks[existingSlot];
+                        const slotFound = existingSlot === draftedSlot;
+                
+                        if (slotFound) {
+                            result[existingSlot] = {
+                                name: pick.name,
+                                price: pick.price,
+                                position: pick.position,
+                                player_id: pick.player_id,
+                                pick_id: pick.pick_id,
+                                projected_price: pick.projected_price,
+                            };
+                        } else {
+                            result[existingSlot] = existing_pick;
                         }
-                        return existing_pick;
-                    }),
+                
+                        return result;
+                    }, {}),
                 };
-                return managerWithPickAdded;
+                return managerWithPickUpdated;
             } else if (action === "undraft") {
-                const managerWithPickRemoved ={
+                const managerWithPickRemoved = {
                     ...managerWithUpdatedPrice,
-                    draft_picks: Object.entries(manager.draft_picks).filter(([slot, existing_pick]) => existing_pick.player_id !== pick.player_id),
+                    draft_picks: Object.keys(manager.draft_picks).reduce((result, slot) => {
+                        const existing_pick = manager.draft_picks[slot];
+                
+                        if (existing_pick.player_id === pick.player_id) {
+                            result[slot] = {
+                                name: '-',
+                                price: 0,
+                                position: '',
+                                player_id: '',
+                                pick_id: '',
+                                projected_price: 0,
+                                actual_price: 0,
+                            };
+                        } else {
+                            result[slot] = existing_pick;
+                        }
+                
+                        return result;
+                    }, {}),
                 };
                 return managerWithPickRemoved;
             }
@@ -183,10 +214,17 @@ const recreatePlayer = (pick: any) => {
 }
 
 const updateBudgetedPlayers = (context: any, positionSlot: string, player_id: number, player_name: string, price: number) => {
-    context.budgetedPlayers[positionSlot]["player_id"] = player_id;
-    context.budgetedPlayers[positionSlot]["player_name"] = player_name;
-    context.budgetedPlayers[positionSlot]["projected_price"] = price;
-    return context.budgetedPlayers;
+    console.log("updateBudgetedPlayers", context, positionSlot, player_id, player_name, price);
+    // context.budgetedPlayers[positionSlot]["player_id"] = player_id;
+    // context.budgetedPlayers[positionSlot]["player_name"] = player_name;
+    // context.budgetedPlayers[positionSlot]["projected_price"] = price;
+    // create a copy of budgetedPlayers with the updated player
+    const updatedBudgetedPlayers = Object.assign({}, context.budgetedPlayers);
+    updatedBudgetedPlayers[positionSlot]["player_id"] = player_id;
+    updatedBudgetedPlayers[positionSlot]["player_name"] = player_name;
+    updatedBudgetedPlayers[positionSlot]["projected_price"] = price;
+    return updatedBudgetedPlayers;
+    // return context.budgetedPlayers;
 }
 
 const calculateBudgetSpent = (budgetedPicks) => {
