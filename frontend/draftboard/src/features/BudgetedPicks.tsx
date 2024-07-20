@@ -52,11 +52,11 @@ export const BudgetedPicks = ({draftContext, draftSend}) => {
                     <td colSpan={2}>Total:</td>
                     <td>{draftContext.budgetSpent}</td>
                 </tr>
-                    {Object.entries(draftContext.budgetedPlayers).map(([positionSlot, pick]) => (
+                    {Object.entries(draftContext.budgetedPlayers).map(([positionSlot, pickSlot]) => (
                         <BudgetedPick
                             key={positionSlot}
                             positionSlot={positionSlot}
-                            pick={pick}
+                            pickSlot={pickSlot}
                             draftSend={draftSend}
                             handleDrop={handleDrop}
                             draftContext={draftContext}

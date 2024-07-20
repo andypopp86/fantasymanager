@@ -105,7 +105,19 @@ class DraftReadService(BaseService):
     def get_budgeted_picks(self, draft_id):
         from draft.models import POSITIONS, ALLOWED_POSITIONS
         budget_map = {pos_name: {
-            "id": "", "order": pos_idx, "player_id": "", "player_name": "", "projected_price": 0, "budget_position": "", "status": "",
+            "id": "",
+            "order": pos_idx,
+            "pick": {
+                "name": "",
+                "position": "",
+                "player_id": "",
+                "player_name": "",
+                "pick_id": "",
+                "projected_price": 0,
+                "price": 0,
+                "budget_position": "",
+                "status": "",
+            },
             "allowed_positions": ALLOWED_POSITIONS.get(pos_name, [])
             } for pos_idx, pos_name in POSITIONS}
         budget_picks = d.BudgetPlayer.objects.filter(draft_id=draft_id, status="budgeted").order_by("manager__name", "-price")
@@ -114,13 +126,13 @@ class DraftReadService(BaseService):
         actual_prices = {pick.player_id: pick.price for pick in draft_picks}
         for bpick in budget_picks:
             if bpick.position in budget_map:
-                budget_map[bpick.position]["id"] = bpick.id
-                budget_map[bpick.position]["player_id"] = bpick.player.id
-                budget_map[bpick.position]["player_name"] = bpick.player.name
-                budget_map[bpick.position]["projected_price"] = bpick.player.projected_price
-                budget_map[bpick.position]["actual_price"] = actual_prices.get(bpick.player.id, 0)
-                budget_map[bpick.position]["budget_position"] = bpick.position
-                budget_map[bpick.position]["status"] = bpick.status
+                budget_map[bpick.position]["pick"]["id"] = bpick.id
+                budget_map[bpick.position]["pick"]["player_id"] = bpick.player.id
+                budget_map[bpick.position]["pick"]["player_name"] = bpick.player.name
+                budget_map[bpick.position]["pick"]["projected_price"] = bpick.player.projected_price
+                budget_map[bpick.position]["pick"]["actual_price"] = actual_prices.get(bpick.player.id, 0)
+                budget_map[bpick.position]["pick"]["budget_position"] = bpick.position
+                budget_map[bpick.position]["pick"]["status"] = bpick.status
         ordered_budget_map = {k: v for k, v in sorted(budget_map.items(), key=lambda item: item[1]['order'])}
         return ordered_budget_map
     
@@ -133,13 +145,17 @@ class DraftReadService(BaseService):
                 manager_dict[man.id] = {'manager_id':man.id, 'manager_name': man.name, 'manager_position': man.position, 'manager_budget': man.budget,
                                         'is_drafter': man.drafter,
                                         'draft_picks': { pos_code:
-                                            {"name":"-",
-                                            "price":0,
-                                            "position": "",
-                                            "player_id": "",
-                                            "pick_id": "",
-                                            "projected_price": 0,
-                                            "position_slot": "",
+                                            {
+                                            "pick": {
+                                                "name":"-",
+                                                "position": "",
+                                                "player_id": "",
+                                                "pick_id": "",
+                                                "projected_price": 0,
+                                                "price":0,
+                                            },
+                                            # "order": pos_idx,                                    
+                                            "position_slot": pos_code,
                                             "allowed_positions": d.ALLOWED_POSITIONS.get(pos_code, [])
                                             } for pos_code, _ in d.BUDGET_POSITIONS}}
         man_pick_ct = 0
@@ -148,12 +164,12 @@ class DraftReadService(BaseService):
             if cur_man_id != pick.manager.id:
                 man_pick_ct = 0
                 cur_man_id = pick.manager.id
-            manager_dict[cur_man_id]['draft_picks'][pick.position_slot]["name"] = pick.player.name
-            manager_dict[cur_man_id]['draft_picks'][pick.position_slot]["price"] = pick.price
-            manager_dict[cur_man_id]['draft_picks'][pick.position_slot]["position"] = pick.player.position
-            manager_dict[cur_man_id]['draft_picks'][pick.position_slot]["player_id"] = pick.player.id
-            manager_dict[cur_man_id]['draft_picks'][pick.position_slot]["pick_id"] = pick.id
-            manager_dict[cur_man_id]['draft_picks'][pick.position_slot]["projected_price"] = pick.player.projected_price
+            manager_dict[cur_man_id]['draft_picks'][pick.position_slot]["pick"]["name"] = pick.player.name
+            manager_dict[cur_man_id]['draft_picks'][pick.position_slot]["pick"]["price"] = pick.price
+            manager_dict[cur_man_id]['draft_picks'][pick.position_slot]["pick"]["position"] = pick.player.position
+            manager_dict[cur_man_id]['draft_picks'][pick.position_slot]["pick"]["player_id"] = pick.player.id
+            manager_dict[cur_man_id]['draft_picks'][pick.position_slot]["pick"]["pick_id"] = pick.id
+            manager_dict[cur_man_id]['draft_picks'][pick.position_slot]["pick"]["projected_price"] = pick.player.projected_price
             manager_dict[cur_man_id]['draft_picks'][pick.position_slot]["position_slot"] = pick.position_slot
 
             man_pick_ct += 1

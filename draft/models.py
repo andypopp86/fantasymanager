@@ -13,9 +13,9 @@ BUDGET_POSITIONS = (
     ('RB2', 'RB2'),
     ('WR1', 'WR1'),
     ('WR2', 'WR2'),
+    ('TE1', 'TE1'),
     ('FLEX1', 'FLEX1'),
     ('FLEX2', 'FLEX2'),
-    ('TE1', 'TE1'),
     ('DEF1', 'DEF1'),
     ('BENCH1', 'BENCH1'),
     ('BENCH2', 'BENCH2'),
@@ -62,10 +62,10 @@ POSITIONS_MAP = {
     'BENCH7': 15,
 }
 QB_POSITIONS = ('QB',)
-RB_POSITIONS = ('RB')
-WR_POSITIONS = ('WR')
-TE_POSITIONS = ('TE')
-DEF_POSITIONS = ('DEF')
+RB_POSITIONS = ('RB',)
+WR_POSITIONS = ('WR',)
+TE_POSITIONS = ('TE',)
+DEF_POSITIONS = ('DEF',)
 BENCH_POSITIONS = ('QB', 'RB', 'WR', 'TE', 'DEF')
 FLEX_POSITIONS = ('RB', 'WR', 'TE')
 

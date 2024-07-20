@@ -19,8 +19,8 @@ export const positionEligibleSlots = {
 
 export const findBudgetedPositionSlotByPlayerId = (budgetedPlayers, playerId) => {
     let positionSlot = null;
-    Object.entries(budgetedPlayers).forEach(([slot, pick]) => {
-        if (pick.player_id === playerId) {
+    Object.entries(budgetedPlayers).forEach(([slot, pickSlot]) => {
+        if (pickSlot.pick.player_id === playerId) {
             positionSlot = slot;
         }
     });
@@ -29,8 +29,8 @@ export const findBudgetedPositionSlotByPlayerId = (budgetedPlayers, playerId) =>
 
 export const getEmptyBudgetedPositionSlots = (budgetedPlayers) => {
     let emptySlots = [];
-    Object.entries(budgetedPlayers).forEach(([slot, pick]) => {
-        if (!pick.player_id) {
+    Object.entries(budgetedPlayers).forEach(([slot, pickSlot]) => {
+        if (!pickSlot.pick.player_id) {
             emptySlots.push(slot);
         }
     });
@@ -50,9 +50,8 @@ export const getPlayerEligibleBudgetSlots = (budgetedPlayers, draftedPlayers, pl
         return openEligibleSlots;
     } else {
         const anyEligibleSlot = [];
-        Object.entries(draftedPlayers).forEach(([slot, pick]) => {
-            console.log(pick);
-            if (pick.allowed_positions.includes(player.position) && !pick.player_id) {
+        Object.entries(draftedPlayers).forEach(([slot, pickSlot]) => {
+            if (pickSlot.allowed_positions.includes(player.position) && !pickSlot.pick.player_id) {
                 anyEligibleSlot.push(slot);
             }
         });
@@ -64,7 +63,7 @@ export const checkForPositionLimitHit = (managers, draftDetails, position, manag
     const manager = managers.find((manager) => manager.manager_id === managerId);
     const managerDraftPicks = manager.draft_picks;
     // managerDraftPicks is an object.  translate filter to Object.entries
-    const playerPositionCount = Object.entries(managerDraftPicks).filter(([slot, pick]) => pick.position === position).length;
+    const playerPositionCount = Object.entries(managerDraftPicks).filter(([slot, pickSlot]) => pickSlot.pick.position === position).length;
     // const playerPositionCount = managerDraftPicks.filter((pick) => pick.position === position).length;
     const limitProperty = `limit_${position.toLowerCase()}`;
     // get limit from draftDetails
@@ -108,7 +107,7 @@ export const getAllPositionLimitsHit = (managers, draftDetails) => {
 }
 
 export const recalculateBudget = (startingBudget, budgetedPlayers) => {
-    return startingBudget - Object.entries(budgetedPlayers).reduce((acc, [positionSlot, pick]) => {
-        return acc + pick.actual_price;
+    return startingBudget - Object.entries(budgetedPlayers).reduce((acc, [positionSlot, pickSlot]) => {
+        return acc + pickSlot.pick.actual_price;
     }, 0);
 }

@@ -30,12 +30,12 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
                     </div>
                 <div className="mt-1">
                     <ul className="mt-1">
-                    {manager.draft_picks && Object.entries(manager.draft_picks).map(([positionSlot, pick]) => (
+                    {manager.draft_picks && Object.entries(manager.draft_picks).map(([positionSlot, pickSlot]) => (
                         <DraftBoardSlot
                             key={positionSlot}
                             positionSlot={positionSlot}
                             column={index}
-                            pick={pick}
+                            pickSlot={pickSlot}
                             manager={manager}
                             draftContext={draftContext}
                             draftSend={draftSend}

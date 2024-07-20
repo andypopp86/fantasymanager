@@ -46,29 +46,31 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
             alert("Price must be greater than 0")
             return;
         }
-        const pick = {
-            "id": null,
-            "pick_id": null,
-            "name": player.name,
-            "price": price,
-            "position": player.position,
-            "player_id": player.id,
-            "slot": slotId,
-            "projected_price": player.projected_price,
+        const pickSlot = {
+            "pick": {
+                "id": null,
+                "pick_id": null,
+                "name": player.name,
+                "price": price,
+                "position": player.position,
+                "player_id": player.id,
+                "slot": slotId,
+                "projected_price": player.projected_price,
+            }
         }
         const budgetPick = {
-            "id": pick.pick_id,
-            "player_id": pick.player_id,
-            "player_name": pick.name,
+            "id": pickSlot.pick.pick_id,
+            "player_id": pickSlot.pick.player_id,
+            "player_name": pickSlot.pick.name,
             "projected_price": price // price was actually paid in place of projected_price
         }
         if (managerId !== draftContext.drafterId) {
-            draftUnbudgetPick(draftContext.draftId, draftContext.drafterId, pick.player_id);
-            const budgetSlot = findBudgetedPositionSlotByPlayerId(draftContext.budgetedPlayers, pick.player_id)
+            draftUnbudgetPick(draftContext.draftId, draftContext.drafterId, pickSlot.pick.player_id);
+            const budgetSlot = findBudgetedPositionSlotByPlayerId(draftContext.budgetedPlayers, pickSlot.pick.player_id)
         }
 
         if (managerId === draftContext.drafterId) {
-            draftBudgetPick(draftContext.draftId, managerId, pick.player_id,
+            draftBudgetPick(draftContext.draftId, managerId, pickSlot.pick.player_id,
                 {
                     projected_price: price,
                     budget_position: slotId
@@ -77,21 +79,13 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
             const budgetPlayerSendEvent = {
                 type: 'budget_player',
                 positionSlot: slotId,
-                player_id: pick.player_id,
-                player_name: pick.name,
+                player_id: pickSlot.pick.player_id,
+                player_name: pickSlot.pick.name,
                 price: price,
             }
             draftSend(budgetPlayerSendEvent);
         }
-        const draftData = {
-            type: 'draft_player',
-            budgetPlayerToSend: budgetPick,
-            pick: pick,
-            price: price,
-            managerId: managerId
-        }
-        console.log(draftData);
-        draftSend({type: 'draft_player', budgetPlayerToSend: budgetPick, pick: pick, price: price, managerId: managerId});
+        draftSend({type: 'draft_player', budgetPlayerToSend: budgetPick, pickSlot: pickSlot, price: price, managerId: managerId});
         draftPickSubmit(draftContext.draftId, managerId, player.id, {price: price, position_slot: slotId});
         setOpenDialog(false);
 

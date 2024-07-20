@@ -45,7 +45,6 @@ export default function Draft({draftDetails, send}: DraftProps) {
     const { send: draftSend } = draftStateRef;
     useEffect(() => {
         if (!draftDetails.id || !playersData || !managerPicks || !budgetedPicks) return;
-        console.log(managerPicks)
         draftSend({
             type: 'draft_loaded',
             draftDetails: draftDetails,
