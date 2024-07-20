@@ -31,7 +31,7 @@ class DraftBoardReadService(BaseService):
 
 
 class DraftWriteService(BaseService):
-    def submit_pick(self, draft_id, manager_id, player_id, price):
+    def submit_pick(self, draft_id, manager_id, player_id, price, position_slot):
         draft = d.Draft.objects.filter(id=draft_id).first()
         if not draft:
             raise Http404
@@ -41,6 +41,7 @@ class DraftWriteService(BaseService):
         pick.drafted = True
         pick.manager = manager
         pick.price = price
+        pick.position_slot = position_slot
         pick.last_update_time = timezone.now()
         pick.save()
         manager.budget -= price
@@ -124,33 +125,36 @@ class DraftReadService(BaseService):
         return ordered_budget_map
     
     def get_manager_picks(self, draft_id):
-        picks = d.DraftPick.objects.filter(draft_id=draft_id, drafted=True).order_by('manager__position').distinct()
+        picks = d.DraftPick.objects.filter(draft_id=draft_id, drafted=True, position_slot__isnull=False).order_by('manager__position').distinct()
         managers = d.Manager.objects.filter(draft_id=draft_id).order_by('position')
         manager_dict = {}
         for man in managers:
             if man.id not in manager_dict:
                 manager_dict[man.id] = {'manager_id':man.id, 'manager_name': man.name, 'manager_position': man.position, 'manager_budget': man.budget,
                                         'is_drafter': man.drafter,
-                                        'draft_picks': [
+                                        'draft_picks': { pos_code:
                                             {"name":"-",
                                             "price":0,
                                             "position": "",
                                             "player_id": "",
                                             "pick_id": "",
                                             "projected_price": 0,
-                                            } for x in range(1, man.draft.rounds+1)]}
+                                            "position_slot": "",
+                                            "allowed_positions": d.ALLOWED_POSITIONS.get(pos_code, [])
+                                            } for pos_code, _ in d.BUDGET_POSITIONS}}
         man_pick_ct = 0
         cur_man_id = None
         for pick in picks:
             if cur_man_id != pick.manager.id:
                 man_pick_ct = 0
                 cur_man_id = pick.manager.id
-            manager_dict[cur_man_id]['draft_picks'][man_pick_ct]["name"] = pick.player.name
-            manager_dict[cur_man_id]['draft_picks'][man_pick_ct]["price"] = pick.price
-            manager_dict[cur_man_id]['draft_picks'][man_pick_ct]["position"] = pick.player.position
-            manager_dict[cur_man_id]['draft_picks'][man_pick_ct]["player_id"] = pick.player.id
-            manager_dict[cur_man_id]['draft_picks'][man_pick_ct]["pick_id"] = pick.id
-            manager_dict[cur_man_id]['draft_picks'][man_pick_ct]["projected_price"] = pick.player.projected_price
+            manager_dict[cur_man_id]['draft_picks'][pick.position_slot]["name"] = pick.player.name
+            manager_dict[cur_man_id]['draft_picks'][pick.position_slot]["price"] = pick.price
+            manager_dict[cur_man_id]['draft_picks'][pick.position_slot]["position"] = pick.player.position
+            manager_dict[cur_man_id]['draft_picks'][pick.position_slot]["player_id"] = pick.player.id
+            manager_dict[cur_man_id]['draft_picks'][pick.position_slot]["pick_id"] = pick.id
+            manager_dict[cur_man_id]['draft_picks'][pick.position_slot]["projected_price"] = pick.player.projected_price
+            manager_dict[cur_man_id]['draft_picks'][pick.position_slot]["position_slot"] = pick.position_slot
 
             man_pick_ct += 1
 

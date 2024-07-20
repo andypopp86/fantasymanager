@@ -15,19 +15,27 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
     const defaultManagerId = draftContext.managers[0].manager_id;
     const [managerId, setManagerId] = useState(defaultManagerId);
     const [price, setPrice] = useState(1);
-    const emptyBudgetSlots = getEmptyBudgetedPositionSlots(draftContext.budgetedPlayers);
-    const playerEligibleSlots = getPlayerEligibleBudgetSlots(draftContext.budgetedPlayers, player, emptyBudgetSlots);
-    const [slotId, setSlotId] = useState(playerEligibleSlots[0]);
+    const [slotId, setSlotId] = useState("QB1");
     const [managersNotAllowedToDraftThisPosition, setManagersNotAllowedToDraftThisPosition] = useState(managersWhoHitPositionLimit(draftContext.managers, draftContext.draftDetails, player.position));
 
-    const [availableBudgetSlots, setAvailableBudgetSlots] = useState(playerEligibleSlots);
+    const [availableBudgetSlots, setAvailableBudgetSlots] = useState(["QB1"]);
     const handlePriceChange = (e) => {
         setPrice(e.target.value);
-    };        
+    };
 
     const handleManagerChange = (e) => {
-        setManagerId(parseInt(e.target.value));
+        const draftingManagerId = parseInt(e.target.value);
+        setManagerId(draftingManagerId);
+        refreshPositionSlots(draftingManagerId, draftContext.managers, draftContext.budgetedPlayers, player);
     };
+
+    const refreshPositionSlots = (draftingManagerId, managers, budgetedPlayers, player) => {
+        const manager = managers.find((manager) => manager.manager_id === draftingManagerId);
+        const emptyBudgetSlots = manager.is_drafter ? getEmptyBudgetedPositionSlots(budgetedPlayers) : [];
+        const playerEligibleSlots = getPlayerEligibleBudgetSlots(budgetedPlayers, manager.draft_picks, player, emptyBudgetSlots);
+        setAvailableBudgetSlots(playerEligibleSlots);
+        setSlotId(playerEligibleSlots[0]);
+    }
 
     const handleSlotChange = (e) => {
         setSlotId(e.target.value);
@@ -39,39 +47,43 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
             return;
         }
         const pick = {
+            "id": null,
+            "pick_id": null,
             "name": player.name,
             "price": price,
             "position": player.position,
             "player_id": player.id,
-            "pick_id": null,
             "projected_price": player.projected_price,
         }
-        const budgetSlot = findBudgetedPositionSlotByPlayerId(draftContext.budgetedPlayers, pick.player_id)
-        if (budgetSlot && managerId !== draftContext.drafterId) {
+        const budgetPick = {
+            "id": pick.pick_id,
+            "player_id": pick.player_id,
+            "player_name": pick.name,
+            "projected_price": price // price was actually paid in place of projected_price
+        }
+        if (managerId !== draftContext.drafterId) {
             draftUnbudgetPick(draftContext.draftId, draftContext.drafterId, pick.player_id);
+            const budgetSlot = findBudgetedPositionSlotByPlayerId(draftContext.budgetedPlayers, pick.player_id)
         }
 
-        if (!budgetSlot && managerId === draftContext.drafterId) {
+        if (managerId === draftContext.drafterId) {
             draftBudgetPick(draftContext.draftId, managerId, pick.player_id,
                 {
                     projected_price: price,
                     budget_position: slotId
                 }
             );
-            const budgetPick = {
-                "id": pick.pick_id,
-                "player_id": pick.player_id,
-                "player_name": pick.name,
-                "projected_price": price // price was actually paid in place of projected_price
-            }
-            draftSend({
+            const budgetPlayerSendEvent = {
                 type: 'budget_player',
                 positionSlot: slotId,
-                budgetPlayerToSend: budgetPick
-            });
+                player_id: pick.player_id,
+                player_name: pick.name,
+                price: price,
+            }
+            draftSend(budgetPlayerSendEvent);
         }
-        draftSend({type: 'draft_player', pick: pick, price: price, managerId: managerId});
-        draftPickSubmit(draftContext.draftId, managerId, player.id, {price: price});
+        draftSend({type: 'draft_player', budgetPlayerToSend: budgetPick, pick: pick, price: price, managerId: managerId});
+        draftPickSubmit(draftContext.draftId, managerId, player.id, {price: price, position_slot: slotId});
         setOpenDialog(false);
 
     }
@@ -86,6 +98,7 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
             setManagerId(defaultManagerId);
             draftSend({type: 'nominate_player', player: player});
             dialogRef.current?.showModal();
+            refreshPositionSlots(defaultManagerId, draftContext.managers, draftContext.budgetedPlayers, player);
         };
         const closeModal = () => {
             dialogRef.current?.close();

@@ -1,8 +1,16 @@
 import React from "react";
+import { useState, useEffect } from "react";
 import BudgetedPick from "./BudgetedPick.tsx";
 import { draftBudgetPick } from "../lib/data";
+import { recalculateBudget } from "../utils/draftHelpers";
 
 export const BudgetedPicks = ({draftContext, draftSend}) => {
+    const [remainingBudget, setRemainingBudget] = useState(draftContext.draftDetails.starting_budget - draftContext.budgetSpent);
+    // curious whether this is necessary. Seemingly fixed the issue by breaking up the state setters into budgetedPlayers and budgetSpent
+    useEffect(() => {
+        setRemainingBudget(recalculateBudget(draftContext.draftDetails.starting_budget, draftContext.budgetedPlayers));
+    }, [draftContext]);
+
     const handleDrop = (e) => {
         const targetSlot = draftContext.budgetSlotTargeted
         const budgetSlots = draftContext.budgetedPlayers
@@ -10,16 +18,12 @@ export const BudgetedPicks = ({draftContext, draftSend}) => {
         const actualSlot = budgetSlots[targetSlot]
         const allowedPositions = actualSlot.allowed_positions
         if (allowedPositions.includes(budgetedPlayerPos) && !actualSlot.player_id) {
-            const budgetPlayerToSend = {
-                "id": draftContext.draggedPlayer.id,
-                "player_id": draftContext.draggedPlayer.player.id,
-                "player_name": draftContext.draggedPlayer.player.name,
-                "projected_price": draftContext.draggedPlayer.player.projected_price,
-            }
             draftSend({
                 type: 'budget_player',
                 positionSlot: targetSlot,
-                budgetPlayerToSend: budgetPlayerToSend
+                player_id: draftContext.draggedPlayer.player.id,
+                player_name: draftContext.draggedPlayer.player.name,
+                price: draftContext.draggedPlayer.player.projected_price,
             });
             const managerId = draftContext.drafterId;
             draftBudgetPick(draftContext.draftId, managerId, draftContext.draggedPlayer.player.id, 
@@ -46,7 +50,7 @@ export const BudgetedPicks = ({draftContext, draftSend}) => {
                     {background: "blue", color: 'white'}} 
                     >
                     <td colSpan={2}>Total:</td>
-                    <td>{draftContext.draftDetails.starting_budget - draftContext.budgetSpent}</td>
+                    <td>{draftContext.budgetSpent}</td>
                 </tr>
                     {Object.entries(draftContext.budgetedPlayers).map(([positionSlot, pick]) => (
                         <BudgetedPick

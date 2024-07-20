@@ -289,6 +289,7 @@ class DraftSubmitPickAPI(APIView):
 
     class DraftPickCreateSerializer(BaseInputSerializer):
         price = serializers.IntegerField()
+        position_slot = serializers.CharField()
 
     @extend_schema(
         parameters=None,
@@ -303,7 +304,8 @@ class DraftSubmitPickAPI(APIView):
             draft_id=draft_id,
             manager_id=manager_id,
             player_id=player_id,
-            price=input_data["price"]
+            price=input_data["price"],
+            position_slot=input_data["position_slot"],
         )
         return Response(status=status.HTTP_200_OK)
 

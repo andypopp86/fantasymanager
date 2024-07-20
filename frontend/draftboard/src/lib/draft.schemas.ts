@@ -49,6 +49,7 @@ export interface DraftRetrieveParams {
 
 export interface DraftSubmitPickParams {
     price: number;
+    position_slot: string;
 }
 
 

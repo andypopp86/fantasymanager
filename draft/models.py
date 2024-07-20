@@ -331,7 +331,7 @@ class DraftPick(models.Model):
     price = models.IntegerField(null=True, blank=True)
     created = models.DateTimeField(auto_now_add=True)
     drafted = models.BooleanField(default=False)
-    position_slot = models.CharField(max_length=50, choices=POSITIONS, null=True, blank=True)
+    position_slot = models.CharField(max_length=50, choices=BUDGET_POSITIONS, null=True, blank=True)
     last_update_time = models.DateTimeField(auto_now=True, null=True, blank=True)
 
     class Meta:

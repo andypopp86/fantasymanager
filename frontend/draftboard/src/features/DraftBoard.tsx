@@ -11,7 +11,7 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
         return;
         // could maybe do a draft send here but would need to separate the price
         // draftSend({
-        //     type: 'draft_player',
+        //     type: '',
         //     player: draftContext.draggedPlayer,
         // });
     }
@@ -27,9 +27,9 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
                     </div>
                 <div className="mt-1">
                     <ul className="mt-1">
-                    {manager.draft_picks.map((pick, pickIndex) => (
+                    {Object.entries(manager.draft_picks).map(([positionSlot, pick]) => (
                         <DraftBoardSlot
-                            row={pickIndex}
+                            positionSlot={positionSlot}
                             column={index}
                             pick={pick}
                             manager={manager}

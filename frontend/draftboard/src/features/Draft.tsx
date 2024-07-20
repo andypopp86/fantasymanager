@@ -55,8 +55,6 @@ export default function Draft({draftDetails, send}: DraftProps) {
     }
     , [playersData, draftDetails.id, managerPicks, budgetedPicks, draftSend]);
 
-    
-
   return (
     <>
     <div className="grid grid-cols-12 gap-4">

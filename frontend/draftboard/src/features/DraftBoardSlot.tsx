@@ -3,9 +3,10 @@ import { POSITION_BG_COLORS, POSITION_FG_COLORS } from "../utils/colors";
 import { useState } from "react";
 
 import { draftPickUnsubmit } from "../lib/data";
+import { findBudgetedPositionSlotByPlayerId } from "../utils/draftHelpers";
 
 type DraftBoardSlotProps = {
-    row: number;
+    positionSlot: string;
     column: number;
     pick: any;
     manager: any;
@@ -15,7 +16,7 @@ type DraftBoardSlotProps = {
 };
 
 export const DraftBoardSlot = ({
-    row,
+    positionSlot,
     column,
     pick,
     manager,
@@ -36,15 +37,20 @@ export const DraftBoardSlot = ({
         if (!draftId || !managerId || !pick) {
             return;
         }
+        const positionSlot = findBudgetedPositionSlotByPlayerId(draftContext.budgetedPlayers, pick.player_id);
         await draftPickUnsubmit(draftId, managerId, pick.player_id);
         draftSend({
             type: 'undraft_player',
+            positionSlot: positionSlot,
+            player_id: pick.player_id,
+            player_name: pick.player_name,
+            price: 0,
             draftId: draftId,
             managerId: managerId,
             pick: pick
         });
     }
-    const uniqueKey = `${column}-${row}`;
+    const uniqueKey = `${positionSlot}-${column}`;
     return (
         <li key={uniqueKey} className="flex justify-between border border-gray-300 font-small hover:bg-blue-700" style={{
             color: POSITION_FG_COLORS[pick.position],

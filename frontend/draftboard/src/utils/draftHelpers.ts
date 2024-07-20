@@ -37,7 +37,11 @@ export const getEmptyBudgetedPositionSlots = (budgetedPlayers) => {
     return emptySlots;
 }
 
-export const getPlayerEligibleBudgetSlots = (budgetedPlayers, player, slots) => {
+export const getPlayerEligibleBudgetSlots = (budgetedPlayers, draftedPlayers, player, slots) => {
+    let existingBudgetedSlot = findBudgetedPositionSlotByPlayerId(budgetedPlayers, player.id);
+    if (existingBudgetedSlot) {
+        return [existingBudgetedSlot];
+    }
     let openEligibleSlots = slots.filter((slot) => {
         const eligibleSlots = positionEligibleSlots[slot]
         if (eligibleSlots.includes(player.position)) { return slot }
@@ -46,8 +50,8 @@ export const getPlayerEligibleBudgetSlots = (budgetedPlayers, player, slots) => 
         return openEligibleSlots;
     } else {
         const anyEligibleSlot = [];
-        Object.entries(budgetedPlayers).forEach(([slot, pick]) => {
-            if (pick.allowed_positions.includes(player.position)) {
+        Object.entries(draftedPlayers).forEach(([slot, pick]) => {
+            if (pick.allowed_positions.includes(player.position) && !pick.player_id) {
                 anyEligibleSlot.push(slot);
             }
         });
@@ -71,7 +75,7 @@ export const managersWhoHitPositionLimit = (managers, draftDetails, position) =>
     let managersHit = [];
     managers.forEach((manager) => {
         const managerDraftPicks = manager.draft_picks;
-        const playerPositionCount = managerDraftPicks.filter((pick) => pick.position === position).length;
+        const playerPositionCount = Object.entries(managerDraftPicks).filter(([slot, pick]) => pick.position === position).length;
         const limitProperty = `limit_${position.toLowerCase()}`;
         // get limit from draftDetails
         const positionLimit = draftDetails[limitProperty];
@@ -98,4 +102,10 @@ export const getAllPositionLimitsHit = (managers, draftDetails) => {
         });
     });
     return limitsHit;
+}
+
+export const recalculateBudget = (startingBudget, budgetedPlayers) => {
+    return startingBudget - Object.entries(budgetedPlayers).reduce((acc, [positionSlot, pick]) => {
+        return acc + pick.actual_price;
+    }, 0);
 }
