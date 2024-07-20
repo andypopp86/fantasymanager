@@ -33,11 +33,12 @@ export const DraftBoardSlot = ({
         setIsDragOver(false);
     }
 
-    const unsubmitPick = async (draftId: number, managerId: number, pick: any) => {
-        if (!draftId || !managerId || !pick) {
+    const unsubmitPick = async (draftId: number, manager: any, pick: any) => {
+        if (!draftId || !manager.manager_id || !pick) {
             return;
         }
-        const positionSlot = findBudgetedPositionSlotByPlayerId(draftContext.budgetedPlayers, pickSlot.pick.player_id);
+        const players = manager.is_drafter ? draftContext.budgetedPlayers : manager.draft_picks;
+        const positionSlot = findBudgetedPositionSlotByPlayerId(players, pickSlot.pick.player_id);
         draftSend({
             type: 'undraft_player',
             positionSlot: positionSlot,
@@ -45,10 +46,10 @@ export const DraftBoardSlot = ({
             player_name: pickSlot.pick.name,
             price: 0,
             draftId: draftId,
-            managerId: managerId,
+            managerId: manager.manager_id,
             pickSlot: pickSlot
         });
-        await draftPickUnsubmit(draftId, managerId, pickSlot.pick.player_id);
+        await draftPickUnsubmit(draftId, manager.manager_id, pickSlot.pick.player_id);
     }
     const uniqueKey = `${positionSlot}-${column}`;
     return (
@@ -57,7 +58,7 @@ export const DraftBoardSlot = ({
             <li key={uniqueKey} className="flex w-full justify-between border border-gray-300 font-small hover:bg-blue-700" style={{
                 color: POSITION_FG_COLORS[pickSlot.pick.position],
                 backgroundColor: isDragOver ? "blue" : POSITION_BG_COLORS[pickSlot.pick.position],
-            }} onClick={() => unsubmitPick(draftContext.draftId, manager.manager_id, pickSlot.pick)}
+            }} onClick={() => unsubmitPick(draftContext.draftId, manager, pickSlot.pick)}
             onDragOver={handleDragOver} onDrop={(e) => handleDrop(e)} onDragLeave={handleDragLeave}
             >
                 <span className={"border border-gray-300 draft-pick-name w-80"}>{pickSlot.pick.name}</span>
