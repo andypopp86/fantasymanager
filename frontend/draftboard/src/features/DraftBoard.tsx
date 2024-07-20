@@ -17,6 +17,9 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
     }
     return (
         <>
+            {draftContext.managers.length === 0 && <div>Loading...</div>}
+            {draftContext.managers.length > 0 && 
+            <>
             <div>Draft Board</div>
             <div className="grid grid-cols-10 gap-1">
             {draftContext.managers.map((manager, index) => (
@@ -27,8 +30,9 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
                     </div>
                 <div className="mt-1">
                     <ul className="mt-1">
-                    {Object.entries(manager.draft_picks).map(([positionSlot, pick]) => (
+                    {manager.draft_picks && Object.entries(manager.draft_picks).map(([positionSlot, pick]) => (
                         <DraftBoardSlot
+                            key={positionSlot}
                             positionSlot={positionSlot}
                             column={index}
                             pick={pick}
@@ -43,6 +47,8 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
                 </div>
             ))}
             </div>
+            </>
+            }
         </>
     )
 }

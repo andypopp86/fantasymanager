@@ -52,14 +52,19 @@ export const DraftBoardSlot = ({
     }
     const uniqueKey = `${positionSlot}-${column}`;
     return (
-        <li key={uniqueKey} className="flex justify-between border border-gray-300 font-small hover:bg-blue-700" style={{
-            color: POSITION_FG_COLORS[pick.position],
-            backgroundColor: isDragOver ? "blue" : POSITION_BG_COLORS[pick.position],
-        }} onClick={() => unsubmitPick(draftContext.draftId, manager.manager_id, pick)}
-        onDragOver={handleDragOver} onDrop={(e) => handleDrop(e)} onDragLeave={handleDragLeave}
-        >
-        <span className={"border border-gray-300 draft-pick-name"}>{pick.name}</span>
-        <span className={"border border-gray-300 draft-pick-price"}>${pick.price}</span>
-        </li>
+        <>
+        {positionSlot.length > 0 && column != undefined  && (
+            <li key={uniqueKey} className="flex justify-between border border-gray-300 font-small hover:bg-blue-700" style={{
+                color: POSITION_FG_COLORS[pick.position],
+                backgroundColor: isDragOver ? "blue" : POSITION_BG_COLORS[pick.position],
+            }} onClick={() => unsubmitPick(draftContext.draftId, manager.manager_id, pick)}
+            onDragOver={handleDragOver} onDrop={(e) => handleDrop(e)} onDragLeave={handleDragLeave}
+            >
+                <span className={"border border-gray-300 draft-pick-name"}>{pick.name}</span>
+                <span className={"border border-gray-300 draft-pick-price"}>${pick.price}</span>
+            </li>
+
+        )}
+        </>
     )
 }
