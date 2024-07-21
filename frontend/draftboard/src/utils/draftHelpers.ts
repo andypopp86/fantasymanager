@@ -87,7 +87,7 @@ export const managersWhoHitPositionLimit = (managers, draftDetails, position) =>
     let managersHit = [];
     managers.forEach((manager) => {
         const managerDraftPicks = manager.draft_picks;
-        const playerPositionCount = Object.entries(managerDraftPicks).filter(([slot, pick]) => pick.position === position).length;
+        const playerPositionCount = Object.entries(managerDraftPicks).filter(([slot, pickSlot]) => pickSlot.pick.position === position).length;
         const limitProperty = `limit_${position.toLowerCase()}`;
         // get limit from draftDetails
         const positionLimit = draftDetails[limitProperty];
