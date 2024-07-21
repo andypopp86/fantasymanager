@@ -1,8 +1,17 @@
 import React from "react";
+import { draftDelete } from "../lib/data";
 
 export default function DraftList({ draft_list, send }) {
     const sendDraftSelected = (draft) => {
         send({ type: "draft.selected", draft: draft })
+    }
+    const deleteDraft = (draftId) => {
+        draftDelete(draftId).then((response) => {
+            console.log(response);
+            if (response.status === 200) {
+                send({ type: "draft.deleted", draftId: draftId })
+            }
+        })
     }
 
     return (
@@ -22,6 +31,14 @@ export default function DraftList({ draft_list, send }) {
                                 <td>{draft.year}</td>
                                 <td>
                                     <button onClick={() => sendDraftSelected(draft)}>{draft.draft_name}</button>
+                                </td>
+                                <td>
+                                    {
+                                    draft.locked ?
+                                        <span>Locked</span>
+                                        :
+                                        <button className="bg-red-400 text-white" onClick={() => deleteDraft(draft.id)}>X</button>
+                                    }
                                 </td>
                             </tr>
                         ))}

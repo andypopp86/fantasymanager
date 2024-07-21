@@ -58,6 +58,16 @@ class DraftWriteService(BaseService):
             draft_managers.append(manager)
         d.Manager.objects.bulk_create(draft_managers)
         return draft
+    
+    def delete_draft(self, draft_id):
+        draft = d.Draft.objects.filter(id=draft_id).first()
+        if not draft:
+            raise Http404
+        if not draft.locked:
+            draft.delete()
+        else:
+            raise Exception("Draft is locked")
+        return draft
 
     def submit_pick(self, draft_id, manager_id, player_id, price, position_slot):
         draft = d.Draft.objects.filter(id=draft_id).first()

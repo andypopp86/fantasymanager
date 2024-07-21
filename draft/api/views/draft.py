@@ -376,3 +376,10 @@ class DraftCreateAPI(APIView):
             limit_def=input_data["limit_def"],
         )
         return Response(status=status.HTTP_200_OK)
+    
+class DraftDeleteAPI(APIView):
+    def post(self, request, draft_id):
+        DraftWriteService(
+            user=request.user
+        ).delete_draft(draft_id=draft_id)
+        return Response(status=status.HTTP_200_OK)

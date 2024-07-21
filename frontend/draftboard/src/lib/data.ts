@@ -187,3 +187,14 @@ export const draftRetrieve = <
         options,
     })
   }
+
+    export const draftDelete = <
+    TData = AxiosResponse<DraftSubmitPickOutput>,
+    >(
+      draft_id: number,
+      options?: AxiosRequestConfig,
+    ): Promise<TData> => {
+      return axios.default.post(`/api/drafts/draft/delete/${draft_id}/`, {
+          options,
+      })
+    }

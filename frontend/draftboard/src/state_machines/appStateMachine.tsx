@@ -4,9 +4,18 @@ import { createMachine, assign } from 'xstate';
 export const appStateMachine = createMachine({
   context: {
     draft: '',
+    draft_list: [],
   },
-  initial: 'selecting',
+  initial: 'loading',
   states: {
+    loading: {
+        on: {
+            'drafts.loaded': {
+                actions: assign({ draft_list: ({context, event}) => event.draft_list }), 
+                target: 'selecting'
+            },
+        }
+    },
     selecting: {
         on: {
             'draft.selected': {
@@ -14,6 +23,12 @@ export const appStateMachine = createMachine({
                 target: 'drafting' 
             },
             'go_to_create_draft': 'creating',
+            'draft.deleted': {
+                actions: assign({ draft_list: ({context, event}) => context.draft_list.filter((draft) => 
+                    draft.id !== event.draft_id) }),
+                target: 'selecting',
+            
+            },
         },
     },
     creating: {

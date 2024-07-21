@@ -1,4 +1,4 @@
-import React, {useState } from "react";
+import React, {useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { draftListRetrieve } from "../lib/data";
 
@@ -13,6 +13,7 @@ export const DraftDashboard = () => {
         selectedDraft,
         currentState,
         draftAppRef,
+        appContext,
      } = useDraftAppState();
     
      const { send: appSend } = draftAppRef;
@@ -24,8 +25,15 @@ export const DraftDashboard = () => {
         select: (data) => {
             return data;
         }
-
     })
+
+    useEffect(() => {
+        if (draftListData?.data) {
+            appSend({type: "drafts.loaded", draft_list: draftListData?.data})
+        }
+    }, [draftListData, appSend])
+
+    console.log("app context ", currentState, appContext);
 
   const isDrafting = currentState === "drafting";
   const isCreating = currentState === "creating";
