@@ -58,6 +58,18 @@ export interface DraftBudgetPickParams {
     projected_price: number;
 }
 
+export interface DraftCreateParams {
+    draft_name: string;
+    managers: string;
+    starting_budget: number;
+    rounds: number;
+    limit_qb: number;
+    limit_rb: number;
+    limit_wr: number;
+    limit_te: number;
+    limit_def: number;
+}
+
 export type Manager = {
     id: number,
     name: string,

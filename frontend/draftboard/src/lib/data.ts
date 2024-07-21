@@ -9,6 +9,7 @@ import type { DraftRetrieveOutput,
     DraftSubmitPickParams,
     AvailablePlayersRetrieveOutput,
     DraftBudgetPickParams,
+    DraftCreateParams
 } from "./draft.schemas";
 
 export const draftListRetrieve = <
@@ -171,6 +172,18 @@ export const draftRetrieve = <
     options?: AxiosRequestConfig,
   ): Promise<TData> => {
     return axios.default.post(`/api/drafts/draft/${draft_id}/unbudget_pick/${manager_id}/${player_id}/`, {
+        options,
+    })
+  }
+
+  export const draftCreate = <
+  TData = AxiosResponse<DraftSubmitPickOutput>,
+  >(
+    params: DraftCreateParams,
+    options?: AxiosRequestConfig,
+  ): Promise<TData> => {
+    return axios.default.post(`/api/drafts/draft/create/`, {
+        params,
         options,
     })
   }

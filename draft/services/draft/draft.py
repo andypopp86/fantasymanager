@@ -31,6 +31,34 @@ class DraftBoardReadService(BaseService):
 
 
 class DraftWriteService(BaseService):
+    def create_draft(self, draft_name, managers, starting_budget, limit_qb, limit_rb, limit_wr, limit_te, limit_def):
+        year = timezone.now().year
+        draft = d.Draft(
+            year=year,
+            draft_name=draft_name,
+            starting_budget=starting_budget,
+            limit_qb=limit_qb,
+            limit_rb=limit_rb,
+            limit_wr=limit_wr,
+            limit_te=limit_te,
+            limit_def=limit_def
+        )
+        draft_managers = []
+        for idx, manager_name in enumerate(managers.split("\n")):
+            manager = d.Manager(
+                draft=draft,
+                name=manager_name.replace("*", "").strip(),
+                budget=starting_budget,
+                position=idx,
+                drafter=True if "*" in manager_name else False
+            )
+            if "*" in manager_name:
+                draft.drafter = manager_name.replace("*", "").strip()
+                draft.save()
+            draft_managers.append(manager)
+        d.Manager.objects.bulk_create(draft_managers)
+        return draft
+
     def submit_pick(self, draft_id, manager_id, player_id, price, position_slot):
         draft = d.Draft.objects.filter(id=draft_id).first()
         if not draft:

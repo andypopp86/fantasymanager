@@ -343,3 +343,36 @@ class DraftUnbudgetPickAPI(APIView):
             player_id=player_id,
         )
         return Response(status=status.HTTP_200_OK)
+    
+class DraftCreateAPI(APIView):
+    class DraftCreateSerializer(BaseInputSerializer):
+        draft_name = serializers.CharField()
+        managers = serializers.CharField()
+        starting_budget = serializers.IntegerField()
+        limit_qb = serializers.IntegerField()
+        limit_rb = serializers.IntegerField()
+        limit_wr = serializers.IntegerField()
+        limit_te = serializers.IntegerField()
+        limit_def = serializers.IntegerField()
+
+    @extend_schema(
+        parameters=None,
+        request=DraftCreateSerializer,
+        responses=None
+    )
+    def post(self, request):
+        input_data = self.DraftCreateSerializer(data=request.data["params"]).get_input_data()
+        DraftWriteService(
+            user=request.user
+        ).create_draft(
+            draft_name=input_data["draft_name"],
+            managers=input_data["managers"],
+            # drafter=input_data["drafter"],
+            starting_budget=input_data["starting_budget"],
+            limit_qb=input_data["limit_qb"],
+            limit_rb=input_data["limit_rb"],
+            limit_wr=input_data["limit_wr"],
+            limit_te=input_data["limit_te"],
+            limit_def=input_data["limit_def"],
+        )
+        return Response(status=status.HTTP_200_OK)
