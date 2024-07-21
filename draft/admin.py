@@ -74,7 +74,7 @@ class DraftPickAdmin(admin.ModelAdmin):
             )
         }),
     )
-    readonly_fields = ('created', 'position_slot')
+    readonly_fields = ('created',)
 
 class WatchPickAdmin(admin.ModelAdmin):
     list_display = ('draft', 'player', 'manager', 'watched')

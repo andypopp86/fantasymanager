@@ -298,7 +298,7 @@ class DraftSubmitPickAPI(APIView):
     )
     def post(self, request, draft_id, manager_id, player_id):
         input_data = self.DraftPickCreateSerializer(data=request.data["params"]).get_input_data()
-        DraftWriteService(
+        pick, err_msg = DraftWriteService(
             user=request.user
         ).submit_pick(
             draft_id=draft_id,
@@ -307,7 +307,9 @@ class DraftSubmitPickAPI(APIView):
             price=input_data["price"],
             position_slot=input_data["position_slot"],
         )
-        return Response(status=status.HTTP_200_OK)
+        response = Response(status=status.HTTP_200_OK)
+        response.data = {"error": err_msg}
+        return response
 
 class DraftUnsubmitPickAPI(APIView):
     def post(self, request, draft_id, manager_id, player_id):

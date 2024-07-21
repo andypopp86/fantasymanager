@@ -27,10 +27,18 @@ export default function BudgetedPick({ positionSlot, pickSlot, handleDrop, draft
     const handleDragLeave = () => {
         setIsDragOver(false);
     }
+    const drafter = draftContext.managers.find(manager => manager.manager_id === draftContext.drafterId);
+    const drafterPlayerIds = Object.values(drafter.draft_picks || {}).map(pick => pick.pick.player_id);
+    const playerHasBeenDraftedByManagerBGColor = (pickSlot, drafterPlayerIds) => {
+        if (pickSlot.pick.player_id === "") {
+            return "white";
+        }
+        return drafterPlayerIds.includes(pickSlot.pick.player_id) ? "yellow" : "white";
+    }
     return (
         <tr key={pickSlot.pick.player_id} className="font-small border border-gray" style={
             {
-                background: isDragOver ? "blue" : POSITION_BG_COLORS[positionSlot],
+                background: isDragOver ? "blue" : playerHasBeenDraftedByManagerBGColor(pickSlot, drafterPlayerIds),
                 color: POSITION_FG_COLORS[positionSlot]}
             } onClick={() => unbudgetPick(draftContext.draftId, draftContext.drafterId, pickSlot.pick.player_id)} 
             onDrop={(e) => {handleDrop(e); setIsDragOver(false)}}

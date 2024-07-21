@@ -78,6 +78,9 @@ class DraftWriteService(BaseService):
             raise Http404
         manager = d.Manager.objects.filter(id=manager_id).first()
         defaults = {'manager': manager, 'price': price}
+        existing_pick = d.DraftPick.objects.filter(draft_id=draft_id, position_slot=position_slot, manager=manager).first()
+        if existing_pick:
+            return None, f"Position {position_slot} already taken by {existing_pick.player.name}"
         pick, created = d.DraftPick.objects.get_or_create(draft_id=draft_id, player_id=player_id, defaults=defaults)
         pick.drafted = True
         pick.manager = manager
@@ -87,7 +90,7 @@ class DraftWriteService(BaseService):
         pick.save()
         manager.budget -= price
         manager.save(update_fields=['budget'])
-        return pick
+        return pick, None
     
     def unsubmit_pick(self, draft_id, manager_id, player_id):
         pick = d.DraftPick.objects.filter(draft_id=draft_id, manager_id=manager_id, player_id=player_id).first()

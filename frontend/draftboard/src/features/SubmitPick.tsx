@@ -33,7 +33,9 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
     const refreshPositionSlots = (draftingManagerId, managers, budgetedPlayers, player) => {
         const manager = managers.find((manager) => manager.manager_id === draftingManagerId);
         const emptyBudgetSlots = manager.is_drafter ? getEmptyBudgetedPositionSlots(budgetedPlayers) : [];
+        console.log("emptyBudgetSlots", emptyBudgetSlots)
         const playerEligibleSlots =  manager.is_drafter ? getPlayerEligibleBudgetSlots(budgetedPlayers, manager.draft_picks, player, emptyBudgetSlots) : getPlayerEligibleSlots(manager.draft_picks, player)
+        console.log("playerEligibleSlots", playerEligibleSlots)
         // setAvailableBudgetSlots(playerEligibleSlots);
         setSlotId(playerEligibleSlots[0]);
     }
@@ -86,8 +88,14 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
             }
             draftSend(budgetPlayerSendEvent);
         }
-        draftSend({type: 'draft_player', budgetPlayerToSend: budgetPick, pickSlot: pickSlot, price: price, managerId: managerId});
-        draftPickSubmit(draftContext.draftId, managerId, player.id, {price: price, position_slot: slotId});
+        draftPickSubmit(draftContext.draftId, managerId, player.id, {price: price, position_slot: slotId}).then((response) => {
+            const errMsg = response.data['error']
+            if (errMsg == null) {
+                draftSend({type: 'draft_player', budgetPlayerToSend: budgetPick, pickSlot: pickSlot, price: price, managerId: managerId});
+            } else {
+                alert(`Error submitting pick = ${response.data['error']}`)
+            }
+        });
         setOpenDialog(false);
 
     }
@@ -115,6 +123,10 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
         draftSend({type: 'cancel_nomination'});
     }
 
+    const isNominatedPlayerInBudget = (player, budgetedPlayers) => {
+        return Object.values(budgetedPlayers).some((pickSlot) => pickSlot.pick.player_id === player.id);
+    }
+
 
     return (
         <dialog
@@ -122,7 +134,7 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
         onClose={() => cancelNomination()}
         style={{position: "absolute", top: "0", left: "0", right: "0", bottom: "0", backgroundColor: "rgba(0,0,0,0.5)"}}>
         <div className="fixed inset-0 z-50 overflow-auto bg-black bg-opacity-50 flex items-center justify-center">
-        <div className="bg-white rounded-lg p-8 max-w-lg w-full">
+        <div className={`${isNominatedPlayerInBudget(player, draftContext.budgetedPlayers)? "bg-yellow-400" : "bg-white"} rounded-lg p-8 max-w-lg w-full`}>
             <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold">{player.name}</h2>
             <button
