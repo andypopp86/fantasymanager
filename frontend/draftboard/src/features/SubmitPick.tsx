@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 
 import { draftBudgetPick, draftPickSubmit, draftUnbudgetPick } from '../lib/data';
-import { findBudgetedPositionSlotByPlayerId, getEmptyBudgetedPositionSlots, getPlayerEligibleBudgetSlots, managersWhoHitPositionLimit } from '../utils/draftHelpers';
+import { findBudgetedPositionSlotByPlayerId, getEmptyBudgetedPositionSlots, getPlayerEligibleBudgetSlots, getPlayerEligibleSlots, managersWhoHitPositionLimit } from '../utils/draftHelpers';
 
 type SubmitPickProps = {
     draftContext: any,
@@ -18,7 +18,8 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
     const [slotId, setSlotId] = useState("QB1");
     const [managersNotAllowedToDraftThisPosition, setManagersNotAllowedToDraftThisPosition] = useState(managersWhoHitPositionLimit(draftContext.managers, draftContext.draftDetails, player.position));
 
-    const [availableBudgetSlots, setAvailableBudgetSlots] = useState(["QB1"]);
+    // const [availableBudgetSlots, setAvailableBudgetSlots] = useState(["QB1"]);
+    const availableBudgetSlots = ["QB1", "RB1", "RB2", "WR1", "WR2", "TE1", "FLEX1", "FLEX2", "DEF1", "BENCH1", "BENCH2", "BENCH3", "BENCH4", "BENCH5", "BENCH6", "BENCH7"];
     const handlePriceChange = (e) => {
         setPrice(e.target.value);
     };
@@ -32,8 +33,8 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
     const refreshPositionSlots = (draftingManagerId, managers, budgetedPlayers, player) => {
         const manager = managers.find((manager) => manager.manager_id === draftingManagerId);
         const emptyBudgetSlots = manager.is_drafter ? getEmptyBudgetedPositionSlots(budgetedPlayers) : [];
-        const playerEligibleSlots = getPlayerEligibleBudgetSlots(budgetedPlayers, manager.draft_picks, player, emptyBudgetSlots);
-        setAvailableBudgetSlots(playerEligibleSlots);
+        const playerEligibleSlots =  manager.is_drafter ? getPlayerEligibleBudgetSlots(budgetedPlayers, manager.draft_picks, player, emptyBudgetSlots) : getPlayerEligibleSlots(manager.draft_picks, player)
+        // setAvailableBudgetSlots(playerEligibleSlots);
         setSlotId(playerEligibleSlots[0]);
     }
 

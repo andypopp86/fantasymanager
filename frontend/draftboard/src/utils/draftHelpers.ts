@@ -59,6 +59,16 @@ export const getPlayerEligibleBudgetSlots = (budgetedPlayers, draftedPlayers, pl
     }
 }
 
+export const getPlayerEligibleSlots = (draftedPlayers, player) => {
+    let eligibleSlots = [];
+    Object.entries(draftedPlayers).forEach(([slot, pickSlot]) => {
+        if (pickSlot.allowed_positions.includes(player.position) && !pickSlot.pick.player_id) {
+            eligibleSlots.push(slot);
+        }
+    });
+    return eligibleSlots;
+}
+
 export const checkForPositionLimitHit = (managers, draftDetails, position, managerId) => {
     const manager = managers.find((manager) => manager.manager_id === managerId);
     const managerDraftPicks = manager.draft_picks;
