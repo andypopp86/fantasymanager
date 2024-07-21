@@ -362,7 +362,7 @@ class DraftCreateAPI(APIView):
     )
     def post(self, request):
         input_data = self.DraftCreateSerializer(data=request.data["params"]).get_input_data()
-        DraftWriteService(
+        draft = DraftWriteService(
             user=request.user
         ).create_draft(
             draft_name=input_data["draft_name"],
@@ -375,7 +375,11 @@ class DraftCreateAPI(APIView):
             limit_te=input_data["limit_te"],
             limit_def=input_data["limit_def"],
         )
-        return Response(status=status.HTTP_200_OK)
+        response = Response(status=status.HTTP_200_OK)
+        response.data = {"id": draft.id, "year": draft.year, "draft_name": draft.draft_name, "drafter": draft.drafter, "locked": False,
+                         "starting_budget": draft.starting_budget, "limit_qb": draft.limit_qb, "limit_rb": draft.limit_rb, "limit_wr": draft.limit_wr,
+                         "limit_te": draft.limit_te, "limit_def": draft.limit_def}
+        return response
     
 class DraftDeleteAPI(APIView):
     def post(self, request, draft_id):

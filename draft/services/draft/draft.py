@@ -57,6 +57,9 @@ class DraftWriteService(BaseService):
                 draft.save()
             draft_managers.append(manager)
         d.Manager.objects.bulk_create(draft_managers)
+        players = d.Player.objects.filter(year=draft.year)
+        draft_picks = [d.DraftPick(draft=draft, player=player) for player in players]
+        d.DraftPick.objects.bulk_create(draft_picks)
         return draft
     
     def delete_draft(self, draft_id):
@@ -130,7 +133,7 @@ class DraftReadService(BaseService):
         return draft
     
     def get_drafts(self):
-        drafts = d.Draft.objects.all()
+        drafts = d.Draft.objects.all().order_by("-year", "draft_name")
         return drafts
     
     def get_picks(self, draft_id):

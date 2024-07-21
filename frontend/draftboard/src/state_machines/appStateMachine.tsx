@@ -24,9 +24,7 @@ export const appStateMachine = createMachine({
             },
             'go_to_create_draft': 'creating',
             'draft.deleted': {
-                actions: assign({ draft_list: ({context, event}) => context.draft_list.filter((draft) => 
-                    draft.id !== event.draft_id) }),
-                target: 'selecting',
+                actions: assign({ draft_list: ({context, event}) => context.draft_list.filter((draft) => draft.id !== event.draftId)}),
             
             },
         },
@@ -34,7 +32,8 @@ export const appStateMachine = createMachine({
     creating: {
         on: {
             'draft.create': {
-                actions: assign({ draft: ({context, event}) => event.draft }), 
+                // actions: assign({ draft: ({context, event}) => event.draft }), 
+                actions: assign({ draft_list: ({context, event}) => [event.draft, ...context.draft_list ] }),
                 target: 'selecting' 
             },
             'draft.back': 'selecting',

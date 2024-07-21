@@ -33,8 +33,6 @@ export const DraftDashboard = () => {
         }
     }, [draftListData, appSend])
 
-    console.log("app context ", currentState, appContext);
-
   const isDrafting = currentState === "drafting";
   const isCreating = currentState === "creating";
 
@@ -58,7 +56,7 @@ export const DraftDashboard = () => {
             >
                 Create Draft
             </button>
-            <DraftList draft_list={draftListData?.data} send={appSend} />
+            <DraftList appContext={appContext} send={appSend} />
 
             </>
         )

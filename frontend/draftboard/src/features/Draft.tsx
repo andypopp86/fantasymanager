@@ -13,7 +13,6 @@ type DraftProps = {
 };
 
 export default function Draft({draftDetails, send}: DraftProps) {
-
     const { data: playersData } = useQuery({
         queryKey: ["available_players", draftDetails.id],
         queryFn: () =>
