@@ -30,7 +30,7 @@ export const findBudgetedPositionSlotByPlayerId = (budgetedPlayers, playerId) =>
 export const getEmptyBudgetedPositionSlots = (budgetedPlayers) => {
     let emptySlots = [];
     Object.entries(budgetedPlayers).forEach(([slot, pickSlot]) => {
-        if (!pickSlot.pick.player_id) {
+        if (pickSlot.pick.player_id === "") {
             emptySlots.push(slot);
         }
     });
@@ -49,13 +49,13 @@ export const getPlayerEligibleBudgetSlots = (budgetedPlayers, draftedPlayers, pl
     if (openEligibleSlots.length > 0) {
         return openEligibleSlots;
     } else {
-        const anyEligibleSlot = [];
+        const anyEligibleSlots = [];
         Object.entries(draftedPlayers).forEach(([slot, pickSlot]) => {
             if (pickSlot.allowed_positions.includes(player.position) && !pickSlot.pick.player_id) {
-                anyEligibleSlot.push(slot);
+                anyEligibleSlots.push(slot);
             }
         });
-        return anyEligibleSlot;
+        return anyEligibleSlots;
     }
 }
 
