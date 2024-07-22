@@ -33,9 +33,7 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
     const refreshPositionSlots = (draftingManagerId, managers, budgetedPlayers, player) => {
         const manager = managers.find((manager) => manager.manager_id === draftingManagerId);
         const emptyBudgetSlots = manager.is_drafter ? getEmptyBudgetedPositionSlots(budgetedPlayers) : [];
-        console.log("emptyBudgetSlots", emptyBudgetSlots)
         const playerEligibleSlots =  manager.is_drafter ? getPlayerEligibleBudgetSlots(budgetedPlayers, manager.draft_picks, player, emptyBudgetSlots) : getPlayerEligibleSlots(manager.draft_picks, player)
-        console.log("playerEligibleSlots", playerEligibleSlots)
         // setAvailableBudgetSlots(playerEligibleSlots);
         setSlotId(playerEligibleSlots[0]);
     }

@@ -219,13 +219,28 @@ class DraftPicksOutputSerializer(BaseSerializer):
         position = serializers.CharField()
         projected_price = serializers.DecimalField(max_digits=8, decimal_places=2)
 
+        class NFLTeamOutputSerializer(BaseSerializer):
+            code = serializers.CharField()
+            name = serializers.CharField()
+            short_name = serializers.CharField()
+            year = serializers.IntegerField()
+            early_season_qb = serializers.IntegerField()
+            early_season_wr = serializers.IntegerField()
+            early_season_rb = serializers.IntegerField()
+            early_season_te = serializers.IntegerField()
+            early_season_def = serializers.IntegerField()
+        
+        team = NFLTeamOutputSerializer(read_only=True)
+
     player = PlayerOutputSerializer(read_only=True)
+
 
 class DraftAvailablePlayersAPI(APIView):
     def get(self, request, draft_id):
         players = DraftReadService(
             user=request.user
         ).get_available_players(draft_id=draft_id)
+        # output_data = [self.AvailablePlayersOutputSerializer.serialize(player) for player in players]
         output_data = [DraftPicksOutputSerializer.serialize(player) for player in players]
         return Response(output_data, status=status.HTTP_200_OK)
 

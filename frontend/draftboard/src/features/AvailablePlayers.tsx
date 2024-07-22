@@ -103,14 +103,14 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
                     </tr>
                 </thead>
                 <tbody>
-                    {filteredPlayers?.map((player) => (
+                    {filteredPlayers?.map((pick) => (
                         <AvailablePlayer
-                            key={player.player.id}
-                            player={player}
+                            key={pick.player.id}
+                            pick={pick}
                             setOpenDialog={setOpenDialog}
                             setNominatedPlayer={setNominatedPlayer}
                             handleDragStart={handleDragStart}
-                            id={player.player.id}
+                            id={pick.player.id}
                         />
                     ))}
                 </tbody>
