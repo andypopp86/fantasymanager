@@ -27,7 +27,7 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
         return player.player.position.toLowerCase().includes(positionFilterValue.toLowerCase());
     }
     const checkPrice = (player) => {
-        return player.player.projected_price <= priceFilterValue;
+        return player.projected_price <= priceFilterValue;
     }
     const handleFilterChange = () => {
         const predicates = [];

@@ -170,7 +170,10 @@ class DraftReadService(BaseService):
             targets=F("player__player_stats__targets"),
             first_downs=F("player__player_stats__first_downs"),
             points=F("yards") * POINTS_PER_YARD + F("tds") * POINTS_PER_TD,
-            projected_price=F("player__projected_price")
+            projected_price=Case(
+                When(player__override_price__isnull=False, then=F("player__override_price")),
+                default=F("player__projected_price"),
+            )
         )
         picks = picks.order_by("-player__projected_price", "-player__favorite")
         return picks
@@ -202,7 +205,7 @@ class DraftReadService(BaseService):
                 budget_map[bpick.position]["pick"]["id"] = bpick.id
                 budget_map[bpick.position]["pick"]["player_id"] = bpick.player.player_id
                 budget_map[bpick.position]["pick"]["player_name"] = bpick.player.name
-                budget_map[bpick.position]["pick"]["projected_price"] = bpick.player.projected_price
+                budget_map[bpick.position]["pick"]["projected_price"] = bpick.player.override_price or bpick.player.projected_price
                 budget_map[bpick.position]["pick"]["actual_price"] = actual_prices.get(bpick.player.player_id, 0)
                 budget_map[bpick.position]["pick"]["budget_position"] = bpick.position
                 budget_map[bpick.position]["pick"]["status"] = bpick.status
