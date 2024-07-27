@@ -42,6 +42,11 @@ export const DraftDashboard = () => {
         {isDrafting ? (
             <>
             <button className={"btn"} onClick={() => appSend({type: "draft.back"})}>Back</button>
+            <a 
+                className={"btn bg-blue-500 text-white hover:bg-blue-700 active:bg-blue-900 rounded-md px-2 py-1"}
+                href={`/draft/${selectedDraft.year}/player_stats/${selectedDraft.id}`}
+                target="_blank"
+            >Player Stats</a>
             {selectedDraft && <Draft draftDetails={selectedDraft} send={appSend} />}
             </>
         ) : isCreating ? (

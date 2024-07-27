@@ -10,14 +10,22 @@
 {% endblock %}
 
 {% block extra_script %}
-    <script src="{% static 'js/draftboard.js' %}"></script>
-
+    <script>
+        function sortTable(n) {
+            var $target = $(n);
+            var sortField = $target.data('sort');
+            var year = $('.draft-container').data('year');
+            var draftid = $('.draft-container').data('draftid');
+            var newLocation = `/draft/${year}/player_stats/${draftid}/?sort_by=${sortField}`;
+            window.location.href = newLocation;
+        }
+    </script>
 {% endblock %}
 
 {% block content %}
 
 {% bootstrap_messages %}
-<div class='draft-container'>
+<div class='draft-container' data-draftid="{{ draft.id }}" data-year="{{ draft.year }}">
     {% csrf_token %}
     <div class="col-xs-12">
         <table class="table col-xs-12">
@@ -27,23 +35,29 @@
                     <th>Position</th>
                     <th>Type</th>
                     <th>Age</th>
+                    <th onclick="sortTable(this)" data-sort="points">Points<span> (S)</span></th>
+                    <th onclick="sortTable(this)" data-sort="projected_price">Projected Price<span> (S)</span></th>
+                    <th onclick="sortTable(this)" data-sort="points_per_dollar">Pts/$<span> (S)</span></th>
                     <th>Games</th>
-                    <th>Games Started</th>
-                    <th>Total Yards</th>
-                    <th>Rush Attempts</th>
-                    <th>Rush Yards</th>
-                    <th>Targets</th>
-                    <th>Receptions</th>
-                    <th>Receiving Yards</th>
-                    <th>TDs</th>
-                    <th>First Downs</th>
+                    <th onclick="sortTable(this)" data-sort="games_started">Games Started<span> (S)</span></th>
+                    <th onclick="sortTable(this)" data-sort="total_yards">Total Yards<span> (S)</span></th>
+                    <th onclick="sortTable(this)" data-sort="rush_attempts">Rush Attempts<span> (S)</span></th>
+                    <th onclick="sortTable(this)" data-sort="rush_yards">Rush Yards<span> (S)</span></th>
+                    <th onclick="sortTable(this)" data-sort="targets">Targets<span> (S)</span></th>
+                    <th onclick="sortTable(this)" data-sort="receptions">Receptions<span> (S)</span></th>
+                    <th onclick="sortTable(this)" data-sort="receiving_yards">Receiving Yards<span> (S)</span></th>
+                    <th onclick="sortTable(this)" data-sort="tds">TDs<span> (S)</span></th>
+                    <th onclick="sortTable(this)" data-sort="first_downs">First Downs<span> (S)</span></th>
                 </thead>
                 {% for stat in player_stats %}
                 <tr>
                     <td>{{ stat.player }}</td>
                     <td>{{ stat.player.position }}</td>
                     <td>{{ stat.type }}</td>
-                    <td>{{ stat.age }}</td>introduce_react
+                    <td>{{ stat.age }}</td>
+                    <td>{{ stat.points }}</td>
+                    <td>${{ stat.player.projected_price|floatformat:0 }}</td>
+                    <td>{{ stat.points_per_dollar|floatformat:1 }}</td>
                     <td>{{ stat.games }}</td>
                     <td>{{ stat.games_started }}</td>
                     <td>{{ stat.total_yards }}</td>

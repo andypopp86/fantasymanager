@@ -242,6 +242,7 @@ class DraftPicksOutputSerializer(BaseSerializer):
     targets = serializers.IntegerField()
     first_downs = serializers.IntegerField()
     points = serializers.DecimalField(max_digits=8, decimal_places=2)
+    projected_price = serializers.DecimalField(max_digits=8, decimal_places=2)
 
 
 class DraftAvailablePlayersAPI(APIView):

@@ -38,7 +38,7 @@ export const getEmptyBudgetedPositionSlots = (budgetedPlayers) => {
 }
 
 export const getPlayerEligibleBudgetSlots = (budgetedPlayers, draftedPlayers, player, slots) => {
-    let existingBudgetedSlot = findBudgetedPositionSlotByPlayerId(budgetedPlayers, player.id);
+    let existingBudgetedSlot = findBudgetedPositionSlotByPlayerId(budgetedPlayers, player.player_id);
     if (existingBudgetedSlot) {
         return [existingBudgetedSlot];
     }

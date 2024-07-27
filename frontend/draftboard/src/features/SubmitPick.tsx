@@ -47,6 +47,7 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
             alert("Price must be greater than 0")
             return;
         }
+
         const pickSlot = {
             "pick": {
                 "id": null,
@@ -54,7 +55,7 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
                 "name": player.name,
                 "price": price,
                 "position": player.position,
-                "player_id": player.id,
+                "player_id": player.player_id,
                 "slot": slotId,
                 "projected_price": player.projected_price,
             }
@@ -86,7 +87,7 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
             }
             draftSend(budgetPlayerSendEvent);
         }
-        draftPickSubmit(draftContext.draftId, managerId, player.id, {price: price, position_slot: slotId}).then((response) => {
+        draftPickSubmit(draftContext.draftId, managerId, player.player_id, {price: price, position_slot: slotId}).then((response) => {
             const errMsg = response.data['error']
             if (errMsg == null) {
                 draftSend({type: 'draft_player', budgetPlayerToSend: budgetPick, pickSlot: pickSlot, price: price, managerId: managerId});
@@ -120,9 +121,8 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
         setOpenDialog(false);
         draftSend({type: 'cancel_nomination'});
     }
-
     const isNominatedPlayerInBudget = (player, budgetedPlayers) => {
-        return Object.values(budgetedPlayers).some((pickSlot) => pickSlot.pick.player_id === player.id);
+        return Object.values(budgetedPlayers).some((pickSlot) => pickSlot.pick.player_id === player.player_id);
     }
 
 

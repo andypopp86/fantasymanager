@@ -55,7 +55,7 @@ export default function AvailablePlayer({pick, setOpenDialog, setNominatedPlayer
                 >
                 <td onClick={() => nominatePlayer(pick.player)}>{pick.player.name}</td>
                 <td onClick={() => nominatePlayer(pick.player)}>{pick.player.position}</td>
-                <td onClick={() => nominatePlayer(pick.player)}>{pick.player.projected_price}</td>
+                <td onClick={() => nominatePlayer(pick.player)}>{parseInt(pick.player.projected_price)}</td>
                 <td className={scheduleBG + " " + scheduleFG}
                     >{strengthOfSchedule}
                 </td>

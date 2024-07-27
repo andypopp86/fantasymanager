@@ -74,14 +74,17 @@ class DraftWriteService(BaseService):
 
     def submit_pick(self, draft_id, manager_id, player_id, price, position_slot):
         draft = d.Draft.objects.filter(id=draft_id).first()
+        player_id_int = int(player_id)
         if not draft:
             raise Http404
         manager = d.Manager.objects.filter(id=manager_id).first()
-        defaults = {'manager': manager, 'price': price}
         existing_pick = d.DraftPick.objects.filter(draft_id=draft_id, position_slot=position_slot, manager=manager).first()
         if existing_pick:
             return None, f"Position {position_slot} already taken by {existing_pick.player.name}"
-        pick, created = d.DraftPick.objects.get_or_create(draft_id=draft_id, player_id=player_id, defaults=defaults)
+        player = d.Player.objects.filter(year=draft.year, player_id=player_id_int).first()
+        pick = d.DraftPick.objects.filter(draft_id=draft_id, player=player).first()
+        if not pick:
+            pick = d.DraftPick(draft_id=draft_id, player_id=player_id_int)
         pick.drafted = True
         pick.manager = manager
         pick.price = price
@@ -166,7 +169,8 @@ class DraftReadService(BaseService):
             receptions=F("player__player_stats__receptions"),
             targets=F("player__player_stats__targets"),
             first_downs=F("player__player_stats__first_downs"),
-            points=F("yards") * POINTS_PER_YARD + F("tds") * POINTS_PER_TD
+            points=F("yards") * POINTS_PER_YARD + F("tds") * POINTS_PER_TD,
+            projected_price=F("player__projected_price")
         )
         picks = picks.order_by("-player__projected_price", "-player__favorite")
         return picks

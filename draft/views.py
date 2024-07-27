@@ -1,12 +1,10 @@
 import json
 import html
 
-from decimal import Decimal
-
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import render
 from django.urls import reverse
-from django.db.models import F
+from django.db.models import F, DecimalField, IntegerField, ExpressionWrapper
 from django.utils import timezone
 from django.db.models.expressions import Window
 from django.db.models.functions import RowNumber
@@ -605,12 +603,20 @@ def update_notes(request, draft_id):
 #     return next_slot
 
 
-def player_stats(request, year):
-    player_stats = d.PlayerStats.objects.filter(year=year)
+def player_stats(request, year, draft_id):
+    POINTS_PER_YARD = 0.1
+    POINTS_PER_TD = 6
+    draft = d.Draft.objects.get(id=draft_id)
+    sort_by = request.GET.get('sort_by', 'points_per_dollar')
+    field_sort = f'-{sort_by}'
+    player_stats = d.PlayerStats.objects.filter(year=year, player__drafted_players__draft__id=draft_id, player__drafted_players__drafted=False)
     player_stats = player_stats.annotate(total_yards=F('rush_yards') + F('receiving_yards'))
-    player_stats = player_stats.order_by('-total_yards')
+    player_stats = player_stats.annotate(points=F("total_yards") * POINTS_PER_YARD + F("tds") * POINTS_PER_TD)
+    player_stats = player_stats.annotate(points_per_dollar=ExpressionWrapper(F("points") / F("player__projected_price"), output_field=DecimalField(decimal_places=1)))
+    player_stats = player_stats.order_by(field_sort)
     var_dict = {
-        "player_stats": player_stats
+        "player_stats": player_stats,
+        "draft": draft,
     }
     return render(request, 'draft/player_stats.html', var_dict)
 

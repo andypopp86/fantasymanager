@@ -130,7 +130,7 @@ class Matchup(models.Model):
         ordering = ['-year', 'week']
 
 class Player(models.Model):
-    player_id = models.CharField(max_length=100)
+    player_id = models.IntegerField()
     name = models.CharField(max_length=100)
     position = models.CharField(max_length=100)
     adp_formatted = models.DecimalField(max_digits=8, decimal_places=2)

@@ -70,7 +70,7 @@ export default function Draft({draftDetails, send}: DraftProps) {
                 <>
                     <div className="draft-sidebar flex gap-2">
                         <AvailablePlayers draftContext={draftContext} draftSend={draftSend} />
-                        <WatchedPlayers draftContext={draftContext} draftSend={draftSend} />
+                        {/* <WatchedPlayers draftContext={draftContext} draftSend={draftSend} /> */}
                         <BudgetedPicks draftContext={draftContext} draftSend={draftSend} />
                     </div>
                     <div className="draft-main">

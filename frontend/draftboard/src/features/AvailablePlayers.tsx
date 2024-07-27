@@ -13,7 +13,8 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
             player: draggedPlayer,
         });
     }
-    const [statField, setStatField] = useState("points");
+    const [statField, setStatField] = useState("projected_price");
+    const [statAbbreviation, setStatAbbreviation] = useState("$");
     const [nameFilterValue, setNameFilterValue] = useState("");
     const [positionFilterValue, setPositionFilterValue] = useState("");
     const [priceFilterValue, setPriceFilterValue] = useState(undefined);
@@ -70,12 +71,23 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
     }, [draftContext.undraftedPlayers]);
 
     const handleStatChange = () => {
+        const ABBREV_NAMES = {
+            "projected_price": "$",
+            "points": "PTS",
+            "yards": "YDS",
+            "tds": "TD",
+            "first_downs": "1D",
+            "rush_attempts": "RUSH",
+            "receptions": "REC",
+            "targets": "TGT"
+        }
         const stat = document.getElementById("stat") as HTMLSelectElement;
         const statValue = stat.value;
         const sortedPlayers = filteredPlayers.sort((a, b) => {
             return parseFloat(b[statValue]) - parseFloat(a[statValue]);
         });
         setStatField(statValue);
+        setStatAbbreviation(ABBREV_NAMES[statValue]);
         setFilteredPlayers(sortedPlayers);
     }
 
@@ -109,6 +121,7 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
                     <tr>
                         <td>
                             <select name="stat" id="stat" onChange={() => handleStatChange()}>
+                                <option value="projected_price">Price</option>
                                 <option value="points">Points</option>
                                 <option value="yards">Yards</option>
                                 <option value="tds">TD</option>
@@ -128,7 +141,7 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
                         <th>Position</th>
                         <th>Price</th>
                         <th>Schd</th>
-                        <th>Stat</th>
+                        <th>{statAbbreviation}</th>
                     </tr>
                 </thead>
                 <tbody>

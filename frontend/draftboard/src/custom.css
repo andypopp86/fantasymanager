@@ -2,7 +2,7 @@
     display: grid;
     grid-template-areas:
         "sidebar main";
-    grid-template-columns: 1fr 2fr;
+    grid-template-columns: auto auto;
     grid-template-rows: 1fr;
     gap: 10px;
     height: 100vh;
