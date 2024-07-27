@@ -59,7 +59,7 @@ def load_fantasypros_txt(average_adp_prices, this_year):
             if pos == "PK":
                 continue
             try:
-                projected_price = round(average_adp_prices[player_ct],2)
+                projected_price = int(round(average_adp_prices[player_ct],0))
             except:
                 projected_price = 0.00
             nfl_team = d.NFLTeam.objects.filter(code=team, year=this_year).first()

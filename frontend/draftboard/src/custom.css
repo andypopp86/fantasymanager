@@ -48,3 +48,12 @@
 .drag-over {
     background-color: lightblue;
 }
+
+.component-subheader th {
+    font-size: 0.8rem;
+}
+
+.component-header {
+    font-size: 1rem;
+    font-weight: bold;
+}

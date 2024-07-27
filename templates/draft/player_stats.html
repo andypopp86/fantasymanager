@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% load bootstrap3 %}
+{% load static %}
+
+{% bootstrap_css %}
+{% bootstrap_javascript %}
+
+{% block extra_css %}
+    <link rel='stylesheet' href="{% static 'css/draftboard.css' %}">
+{% endblock %}
+
+{% block extra_script %}
+    <script src="{% static 'js/draftboard.js' %}"></script>
+
+{% endblock %}
+
+{% block content %}
+
+{% bootstrap_messages %}
+<div class='draft-container'>
+    {% csrf_token %}
+    <div class="col-xs-12">
+        <table class="table col-xs-12">
+            <tbody>
+                <thead>
+                    <th>Player</th>
+                    <th>Position</th>
+                    <th>Type</th>
+                    <th>Age</th>
+                    <th>Games</th>
+                    <th>Games Started</th>
+                    <th>Total Yards</th>
+                    <th>Rush Attempts</th>
+                    <th>Rush Yards</th>
+                    <th>Targets</th>
+                    <th>Receptions</th>
+                    <th>Receiving Yards</th>
+                    <th>TDs</th>
+                    <th>First Downs</th>
+                </thead>
+                {% for stat in player_stats %}
+                <tr>
+                    <td>{{ stat.player }}</td>
+                    <td>{{ stat.player.position }}</td>
+                    <td>{{ stat.type }}</td>
+                    <td>{{ stat.age }}</td>
+                    <td>{{ stat.games }}</td>
+                    <td>{{ stat.games_started }}</td>
+                    <td>{{ stat.total_yards }}</td>
+                    <td>{{ stat.rush_attempts }}</td>
+                    <td>{{ stat.rush_yards }}</td>
+                    <td>{{ stat.targets }}</td>
+                    <td>{{ stat.receptions }}</td>
+                    <td>{{ stat.receiving_yards }}</td>
+                    <td>{{ stat.tds }}</td>
+                    <td>{{ stat.first_downs }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+{% endblock %}

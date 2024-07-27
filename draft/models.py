@@ -427,3 +427,19 @@ class BudgetPlayer(models.Model):
 
     def __str__(self):
         return '%s - %s - %s' % (self.player.name, self.position, self.price)
+
+
+class PlayerStats(models.Model):
+    year = models.IntegerField()
+    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='player_stats')
+    type = models.CharField(max_length=100, choices=(("rushing", "Rushing"), ("receiving", "Receiving"), ("passing", "Passing")))
+    age = models.IntegerField(null=True)
+    games = models.IntegerField(null=True)
+    games_started = models.IntegerField(null=True)
+    rush_attempts = models.IntegerField(null=True)
+    rush_yards = models.IntegerField(null=True)
+    targets = models.IntegerField(null=True)
+    receptions = models.IntegerField(null=True)
+    receiving_yards = models.IntegerField(null=True)
+    tds = models.IntegerField(null=True)
+    first_downs = models.IntegerField(null=True)

@@ -9,7 +9,8 @@ import type { DraftRetrieveOutput,
     DraftSubmitPickParams,
     AvailablePlayersRetrieveOutput,
     DraftBudgetPickParams,
-    DraftCreateParams
+    DraftCreateParams,
+    FavoritePlayerParams
 } from "./draft.schemas";
 
 export const draftListRetrieve = <
@@ -196,5 +197,19 @@ export const draftRetrieve = <
     ): Promise<TData> => {
       return axios.default.post(`/api/drafts/draft/delete/${draft_id}/`, {
           options,
+      })
+    }
+
+    export const favoritePlayer = <
+    TData = AxiosResponse<DraftSubmitPickOutput>,
+    >(
+      draft_id: number,
+      player_id: number,
+      params: FavoritePlayerParams,
+      options?: AxiosRequestConfig,
+    ): Promise<TData> => {
+      return axios.default.post(`/api/drafts/draft/${draft_id}/favorite_player/${player_id}/`, {
+          options,
+          params,
       })
     }

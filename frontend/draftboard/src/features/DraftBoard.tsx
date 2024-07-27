@@ -21,7 +21,7 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
             {draftContext.managers.length === 0 && <div>Loading...</div>}
             {draftContext.managers.length > 0 && 
             <>
-            <div>Draft Board</div>
+            <div className="component-header">Draft Board</div>
             <div className="grid grid-cols-11 gap-1">
             <DraftPositions draftContext={draftContext} />
             {draftContext.managers.map((manager, index) => (

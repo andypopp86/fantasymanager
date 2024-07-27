@@ -28,4 +28,5 @@ urlpatterns = [
 	path(r'unfavorite_player/<int:draft_id>/<int:player_id>/', d.unfavorite_player, name='unfavorite_player'),
 	path(r'skepticism_rating/<int:draft_id>/<int:player_id>/', d.skepticism_rating, name='skepticism_rating'),
 	path(r'notes/<int:draft_id>/', d.update_notes, name='update_notes'),
+    path("<int:year>/player_stats/", d.player_stats, name="player_stats"),
 ]

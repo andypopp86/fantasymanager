@@ -107,7 +107,9 @@ class DraftWriteService(BaseService):
         return pick
 
     def budget_pick(self, draft_id, manager_id, player_id, budget_position, projected_price):
-        pick, _ = d.BudgetPlayer.objects.get_or_create(draft_id=draft_id, manager_id=manager_id, player_id=player_id)
+        draft = d.Draft.objects.filter(id=draft_id).first()
+        player = d.Player.objects.filter(year=draft.year, player_id=player_id).first()
+        pick, _ = d.BudgetPlayer.objects.get_or_create(draft_id=draft_id, manager_id=manager_id, player=player)
         pick.price = int(float(projected_price))
         pick.position = budget_position
         pick.status = 'budgeted'
@@ -115,13 +117,22 @@ class DraftWriteService(BaseService):
         return pick
 
     def unbudget_pick(self, draft_id, manager_id, player_id):
-        pick, _ = d.BudgetPlayer.objects.get_or_create(draft_id=draft_id, manager_id=manager_id, player_id=player_id)
+        draft = d.Draft.objects.filter(id=draft_id).first()
+        player = d.Player.objects.filter(year=draft.year, player_id=player_id).first()
+        pick, _ = d.BudgetPlayer.objects.get_or_create(draft_id=draft_id, manager_id=manager_id, player=player)
         pick.manager = None
         pick.price = 0
         pick.position = None
         pick.status = 'none'
         pick.save()
         return pick
+    
+    def favorite_player(self, draft_id, player_id, favorite):
+        draft = d.Draft.objects.filter(id=draft_id).first()
+        player = d.Player.objects.filter(year=draft.year, player_id=player_id).first()
+        player.favorite = bool(favorite)
+        player.save()
+        return player
 
 
 class DraftReadService(BaseService):
@@ -144,7 +155,21 @@ class DraftReadService(BaseService):
         return picks
     
     def get_available_players(self, draft_id):
-        return d.DraftPick.objects.filter(draft_id=draft_id, drafted=False).order_by("-player__projected_price")
+        picks = d.DraftPick.objects.filter(draft_id=draft_id, drafted=False)
+        # picks = picks.select_related("player__player_stats")
+        POINTS_PER_YARD = 0.1
+        POINTS_PER_TD = 6
+        picks = picks.annotate(
+            yards=F("player__player_stats__rush_yards") + F("player__player_stats__receiving_yards"),
+            tds=F("player__player_stats__tds"),
+            rush_attempts=F("player__player_stats__rush_attempts"),
+            receptions=F("player__player_stats__receptions"),
+            targets=F("player__player_stats__targets"),
+            first_downs=F("player__player_stats__first_downs"),
+            points=F("yards") * POINTS_PER_YARD + F("tds") * POINTS_PER_TD
+        )
+        picks = picks.order_by("-player__projected_price", "-player__favorite")
+        return picks
     
     def get_budgeted_picks(self, draft_id):
         from draft.models import POSITIONS, ALLOWED_POSITIONS
@@ -171,10 +196,10 @@ class DraftReadService(BaseService):
         for bpick in budget_picks:
             if bpick.position in budget_map:
                 budget_map[bpick.position]["pick"]["id"] = bpick.id
-                budget_map[bpick.position]["pick"]["player_id"] = bpick.player.id
+                budget_map[bpick.position]["pick"]["player_id"] = bpick.player.player_id
                 budget_map[bpick.position]["pick"]["player_name"] = bpick.player.name
                 budget_map[bpick.position]["pick"]["projected_price"] = bpick.player.projected_price
-                budget_map[bpick.position]["pick"]["actual_price"] = actual_prices.get(bpick.player.id, 0)
+                budget_map[bpick.position]["pick"]["actual_price"] = actual_prices.get(bpick.player.player_id, 0)
                 budget_map[bpick.position]["pick"]["budget_position"] = bpick.position
                 budget_map[bpick.position]["pick"]["status"] = bpick.status
         ordered_budget_map = {k: v for k, v in sorted(budget_map.items(), key=lambda item: item[1]['order'])}

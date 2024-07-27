@@ -5,10 +5,10 @@ export default function WatchedPlayers({draftContext, draftSend}) {
     const watchSum = draftContext.watchedPlayers?.reduce((acc, player) => acc + parseFloat(player.projected_price), 0);
     return (
         <div>
-            <div style={{fontSize: "24px", fontWeight: "bold"}}>WatchList</div>
+            <div className="component-header">WatchList</div>
             <table>
                 <thead>
-                    <tr>
+                    <tr className="component-subheader">
                         <th>Player Name</th>
                         <th>Price</th>
                     </tr>

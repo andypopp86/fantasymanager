@@ -214,10 +214,11 @@ class DraftPicksOutputSerializer(BaseSerializer):
     manager = ManagerOutputSerializer(read_only=True)
 
     class PlayerOutputSerializer(BaseSerializer):
-        id = serializers.IntegerField()
+        player_id = serializers.IntegerField()
         name = serializers.CharField()
         position = serializers.CharField()
         projected_price = serializers.DecimalField(max_digits=8, decimal_places=2)
+        favorite = serializers.BooleanField()
 
         class NFLTeamOutputSerializer(BaseSerializer):
             code = serializers.CharField()
@@ -233,6 +234,14 @@ class DraftPicksOutputSerializer(BaseSerializer):
         team = NFLTeamOutputSerializer(read_only=True)
 
     player = PlayerOutputSerializer(read_only=True)
+
+    yards = serializers.IntegerField()
+    tds = serializers.IntegerField()
+    rush_attempts = serializers.IntegerField()
+    receptions = serializers.IntegerField()
+    targets = serializers.IntegerField()
+    first_downs = serializers.IntegerField()
+    points = serializers.DecimalField(max_digits=8, decimal_places=2)
 
 
 class DraftAvailablePlayersAPI(APIView):
@@ -404,3 +413,16 @@ class DraftDeleteAPI(APIView):
             user=request.user
         ).delete_draft(draft_id=draft_id)
         return Response(status=status.HTTP_200_OK)
+
+class DraftFavoritePickAPI(APIView):
+    def post(self, request, draft_id, player_id):
+        player = DraftWriteService(
+            user=request.user
+        ).favorite_player(
+            draft_id=draft_id,
+            player_id=player_id,
+            favorite=request.data["params"]["favorite"]
+        )
+        response = Response(status=status.HTTP_200_OK)
+        response.data = {"error": "", "favorite": player.favorite}
+        return response

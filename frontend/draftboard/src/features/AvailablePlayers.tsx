@@ -7,11 +7,13 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
     const [nominatedPlayer, setNominatedPlayer] = useState(draftContext.undraftedPlayers![0].player || null);
     const [openDialog, setOpenDialog] = useState(false);
     const handleDragStart = (e, id) => {
+        const draggedPlayer = draftContext.undraftedPlayers.find((player) => player.player.player_id === id);
         draftSend({
             type: 'drag_player',
-            player: draftContext.undraftedPlayers.find((player) => player.player.id === id),
+            player: draggedPlayer,
         });
     }
+    const [statField, setStatField] = useState("points");
     const [nameFilterValue, setNameFilterValue] = useState("");
     const [positionFilterValue, setPositionFilterValue] = useState("");
     const [priceFilterValue, setPriceFilterValue] = useState(undefined);
@@ -30,7 +32,7 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
         const predicates = [];
         if (nameFilterValue !== "") { predicates.push(checkName); }
         if (positionFilterValue !== "") { predicates.push(checkPosition); }
-        if (priceFilterValue !== 0) { predicates.push(checkPrice); }
+        if (priceFilterValue !== undefined && priceFilterValue > 0) { predicates.push(checkPrice); }
         if (predicates.length === 0) {
             setFilteredPlayers(draftContext.undraftedPlayers);
             return;
@@ -67,9 +69,19 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
         setFilteredPlayers(draftContext.undraftedPlayers);
     }, [draftContext.undraftedPlayers]);
 
+    const handleStatChange = () => {
+        const stat = document.getElementById("stat") as HTMLSelectElement;
+        const statValue = stat.value;
+        const sortedPlayers = filteredPlayers.sort((a, b) => {
+            return parseFloat(b[statValue]) - parseFloat(a[statValue]);
+        });
+        setStatField(statValue);
+        setFilteredPlayers(sortedPlayers);
+    }
+
     return (
         <div>
-            <div style={{fontSize: "24px", fontWeight: "bold"}}>Available Players</div>
+            <div className="component-header">Available Players</div>
             <table className="table">
                 <tbody>
                     <tr>
@@ -77,14 +89,12 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
                         <td><input type="text" style={{width: "100px"}}
                             onBlur={(e) => handleNameFilterChange(e.target.value)} />
                         </td>
-                        <td><button className={"px-1 py-0 bg-blue-500 text-white rounded-md shadow-md hover:bg-blue-600"} onClick={handleFilterChange}>Filter</button></td>
                     </tr>
                     <tr>
                         <td scope="row">Position:</td>
                         <td><input type="text" style={{width: "100px"}}
                             onBlur={(e) => handlePositionFilterChange(e.target.value)} />
                         </td>
-                        <td><button className={"px-1 py-0 bg-gray-300 text-gray-800 rounded-md shadow-md hover:bg-gray-400"} onClick={clearFilter}>Clear</button></td>
                     </tr>
                     <tr>
                         <td scope="row">Price:</td>
@@ -92,25 +102,46 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
                         className="py-1 px-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:border-blue-500"
                         onBlur={(e) => handlePriceFilterChange(e.target.value)} /></td>
                     </tr>
+                    <tr>
+                    <td><button className={"px-1 py-0 bg-blue-500 text-white rounded-md shadow-md hover:bg-blue-600"} onClick={handleFilterChange}>Filter</button></td>
+                    <td><button className={"px-1 py-0 bg-gray-300 text-gray-800 rounded-md shadow-md hover:bg-gray-400"} onClick={clearFilter}>Clear</button></td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <select name="stat" id="stat" onChange={() => handleStatChange()}>
+                                <option value="points">Points</option>
+                                <option value="yards">Yards</option>
+                                <option value="tds">TD</option>
+                                <option value="first_downs">1st Down</option>
+                                <option value="rush_attempts">Rush</option>
+                                <option value="receptions">Rec</option>
+                                <option value="targets">Targets</option>
+                            </select>
+                        </td>
+                    </tr>
                 </tbody>
             </table>
             <table>
                 <thead>
-                    <tr>
+                    <tr className="component-subheader">
                         <th>Player Name</th>
                         <th>Position</th>
                         <th>Price</th>
+                        <th>Schd</th>
+                        <th>Stat</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {filteredPlayers?.map((pick) => (
+                    {filteredPlayers && filteredPlayers?.map((pick) => (
                         <AvailablePlayer
-                            key={pick.player.id}
+                            key={pick.player.player_id}
                             pick={pick}
                             setOpenDialog={setOpenDialog}
                             setNominatedPlayer={setNominatedPlayer}
                             handleDragStart={handleDragStart}
                             id={pick.player.id}
+                            draftContext={draftContext}
+                            statField={statField}
                         />
                     ))}
                 </tbody>

@@ -605,6 +605,14 @@ def update_notes(request, draft_id):
 #     return next_slot
 
 
+def player_stats(request, year):
+    player_stats = d.PlayerStats.objects.filter(year=year)
+    player_stats = player_stats.annotate(total_yards=F('rush_yards') + F('receiving_yards'))
+    player_stats = player_stats.order_by('-total_yards')
+    var_dict = {
+        "player_stats": player_stats
+    }
+    return render(request, 'draft/player_stats.html', var_dict)
 
 
 def favorite_player(request, draft_id, player_id):

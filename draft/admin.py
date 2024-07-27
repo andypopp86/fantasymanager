@@ -36,10 +36,10 @@ class FlexFilter(admin.SimpleListFilter):
 
 
 class PlayerAdmin(admin.ModelAdmin):
-    list_display = ('player_id', 'year', 'name', 'team', 'nickname',  'position',  'adp_formatted',  'projected_price',  'override_price')
+    list_display = ('player_id', 'year', 'name', 'team', 'favorite', 'nickname',  'position',  'adp_formatted',  'projected_price',  'override_price')
     search_fields = ('name', 'position', )
-    list_filter = ('position', 'year', 'team')
-    fields = ('player_id', 'team', 'year',  'name', 'nickname', 'position',  'adp_formatted',  'projected_price',  'override_price', 'skepticism')
+    list_filter = ('position', 'year', 'team', 'favorite')
+    fields = ('player_id', 'team', 'year',  'name', 'nickname', 'position',  'adp_formatted',  'projected_price',  'override_price', 'skepticism', 'favorite', )
     
 class DraftAdmin(admin.ModelAdmin):
     list_display = ('draft_name', 'year', 'drafter', 'projected_draft', )
@@ -145,6 +145,12 @@ class MatchupAdmin(admin.ModelAdmin):
     readonly_fields = ('year', 'week', 'home', 'away')
 
 
+class PlayerStatsAdmin(admin.ModelAdmin):
+    search_fields = ('player__name',)
+    list_display = ('player', 'year', 'age', 'games', 'games_started', 'rush_attempts', 'rush_yards', 'targets', 'receptions', 'receiving_yards', 'tds', 'first_downs')
+    list_filter = ('year', 'player')
+    fields = ('player', 'year', 'age', 'games', 'games_started', 'rush_attempts', 'rush_yards', 'targets', 'receptions', 'receiving_yards', 'tds', 'first_downs')
+
 
 
 admin.site.register(d.NFLTeam, NFLTeamAdmin)
@@ -157,3 +163,4 @@ admin.site.register(d.Matchup, MatchupAdmin)
 admin.site.register(d.BudgetPlayer, BudgetPlayerAdmin)
 admin.site.register(d.HistoricalDraftPicks, HistoricalDraftPickAdmin)
 admin.site.register(d.HistoricalPlayerStats, HistoricalPlayerStatsAdmin)
+admin.site.register(d.PlayerStats, PlayerStatsAdmin)

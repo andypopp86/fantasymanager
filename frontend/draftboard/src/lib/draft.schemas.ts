@@ -70,6 +70,10 @@ export interface DraftCreateParams {
     limit_def: number;
 }
 
+export interface FavoritePlayerParams {
+    favorite: boolean;
+}
+
 export type Manager = {
     id: number,
     name: string,
