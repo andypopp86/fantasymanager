@@ -602,7 +602,26 @@ def update_notes(request, draft_id):
 #             break
 #     return next_slot
 
-
+def override_prices(request, year):
+    if request.method == 'POST':
+        for var in vars(request.POST):
+            print(var, getattr(request.POST, var))
+        player_ids = request.POST.getlist('player_id')
+        override_prices = request.POST.getlist('override_price')
+        player_prices = dict(zip(player_ids, override_prices))
+        for k,v in player_prices.items():
+            if v != '':
+                price = int(v)
+                player = d.Player.objects.get(year=year, id=k)
+                player.override_price = price if price >= 0 else None
+                print(price, player.override_price)
+                player.save()
+    players = d.Player.objects.filter(year=year).order_by('-projected_price')
+    var_dict = {
+        "players": players
+    }
+    return render(request, 'draft/override_prices.html', var_dict)
+    
 def player_stats(request, year, draft_id):
     POINTS_PER_YARD = 0.1
     POINTS_PER_TD = 6

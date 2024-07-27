@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% load bootstrap3 %}
+{% load static %}
+
+{% bootstrap_css %}
+{% bootstrap_javascript %}
+
+{% block extra_css %}
+    <link rel='stylesheet' href="{% static 'css/draftboard.css' %}">
+{% endblock %}
+
+{% block extra_script %}
+    <script>
+        function sortTable(n) {
+            var $target = $(n);
+            var sortField = $target.data('sort');
+            var year = $('.draft-container').data('year');
+            var draftid = $('.draft-container').data('draftid');
+            var newLocation = `/draft/${year}/player_stats/${draftid}/?sort_by=${sortField}`;
+            window.location.href = newLocation;
+        }
+    </script>
+{% endblock %}
+
+{% block content %}
+
+{% bootstrap_messages %}
+<div class='draft-container' data-year="{{ draft.year }}">
+    <form method="post">
+    {% csrf_token %}
+    <div class="col-xs-12">
+        <button type="submit" class="btn btn-primary">Save Overrides</button>
+        <table class="table col-xs-12">
+            <tbody>
+                <thead>
+                    <th>Player</th>
+                    <th>Position</th>
+                    <!-- <th>Points</th> -->
+                    <th>Projected Price</th>
+                    <th>Override Price</th>
+                </thead>
+                {% for player in players %}
+                <tr>
+                    <td>{{ player.name }}</td>
+                    <td>{{ player.position }}</td>
+                    <!-- <td>{{ player.points }}</td> -->
+                    <td>${{ player.projected_price|floatformat:0 }}</td>
+                    <td>
+                        <input type="hidden" value="{{ player.id }}" name="player_id"  />
+                        <input type="number" value="{{ player.override_price }}" name="override_price"  />
+                    </td>
+                        
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    </form>
+
+{% endblock %}
