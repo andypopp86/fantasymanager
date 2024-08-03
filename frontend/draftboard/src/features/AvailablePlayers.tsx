@@ -20,6 +20,10 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
     const [priceFilterValue, setPriceFilterValue] = useState(undefined);
     const [filteredPlayers, setFilteredPlayers] = useState(draftContext.undraftedPlayers);
 
+    useEffect(() => {
+        setFilteredPlayers(draftContext.undraftedPlayers);
+    }, [draftContext.undraftedPlayers]);
+    
     const checkName = (player) => {
         return player.player.name.toLowerCase().includes(nameFilterValue.toLowerCase());
     }

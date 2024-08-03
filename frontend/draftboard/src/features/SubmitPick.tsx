@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-import { draftBudgetPick, draftPickSubmit, draftUnbudgetPick } from '../lib/data';
+import { draftBudgetPick, draftPickSubmit, draftUnbudgetPick, draftWatchPick } from '../lib/data';
 import { findBudgetedPositionSlotByPlayerId, getEmptyBudgetedPositionSlots, getPlayerEligibleBudgetSlots, getPlayerEligibleSlots, managersWhoHitPositionLimit } from '../utils/draftHelpers';
 
 type SubmitPickProps = {
@@ -99,7 +99,8 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
 
     }
 
-    const watchDraftPick = (player) => {
+    const watchDraftPick = (draftId, managerId, player) => {
+        draftWatchPick(draftId, managerId, player.player_id, {watch: true});
         draftSend({type: 'watch_player', player: player});
         setOpenDialog(false);
     }
@@ -189,7 +190,7 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
             </div>
             </div>
             <div className="flex justify-end">
-            <button className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md mr-2" onClick={() => watchDraftPick(player)}>
+            <button className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md mr-2" onClick={() => watchDraftPick(draftContext.draftId, managerId, player)}>
                 Watch
             </button>
             <button className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md mr-2" onClick={() => submitDraftPick(player)}>

@@ -2,7 +2,9 @@ import React from "react";
 import WatchedPlayer from "./WatchedPlayer.tsx";
 
 export default function WatchedPlayers({draftContext, draftSend}) {
-    const watchSum = draftContext.watchedPlayers?.reduce((acc, player) => acc + parseFloat(player.projected_price), 0);
+    const drafter = draftContext.managers.find((manager) => manager.is_drafter);
+    const watchSum = draftContext.watchedPlayers?.reduce((acc, watchedPlayer) => {
+        return acc + parseFloat(watchedPlayer.player.projected_price)}, 0);
     return (
         <div>
             <div className="component-header">WatchList</div>
@@ -18,11 +20,13 @@ export default function WatchedPlayers({draftContext, draftSend}) {
                         <td>Total</td>
                         <td>{watchSum}</td>
                     </tr>
-                    {draftContext.watchedPlayers?.map((player) => (
+                    {draftContext.watchedPlayers?.map((watchedPlayer) => (
                         <WatchedPlayer
-                            key={player.id}
-                            player={player}
+                            key={watchedPlayer.player_id}
+                            watchedPlayer={watchedPlayer}
                             draftSend={draftSend}
+                            draftId={draftContext.draftId}
+                            managerId={drafter.manager_id}
                         />
                     ))}
                 </tbody>

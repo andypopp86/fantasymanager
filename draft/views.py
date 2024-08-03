@@ -4,11 +4,12 @@ import html
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import render
 from django.urls import reverse
-from django.db.models import F, DecimalField, IntegerField, ExpressionWrapper
+from django.db.models import F, DecimalField, IntegerField, ExpressionWrapper, Sum
 from django.utils import timezone
 from django.db.models.expressions import Window
 from django.db.models.functions import RowNumber
 
+# from django.db.models.functions import Window
 
 from draft import models as d
 from draft.services.draft.draft import (
@@ -604,8 +605,6 @@ def update_notes(request, draft_id):
 
 def override_prices(request, year):
     if request.method == 'POST':
-        for var in vars(request.POST):
-            print(var, getattr(request.POST, var))
         player_ids = request.POST.getlist('player_id')
         override_prices = request.POST.getlist('override_price')
         player_prices = dict(zip(player_ids, override_prices))
@@ -614,7 +613,6 @@ def override_prices(request, year):
                 price = int(v)
                 player = d.Player.objects.get(year=year, id=k)
                 player.override_price = price if price >= 0 else None
-                print(price, player.override_price)
                 player.save()
     players = d.Player.objects.filter(year=year).order_by('-projected_price')
     var_dict = {
@@ -678,3 +676,27 @@ def skepticism_rating(request, draft_id, player_id):
 def react_draft_entrypoint(request):
     context = {}
     return render(request, "draft/index.html", context)
+
+
+from django.db.models import Sum
+from django.db.models import F
+from django.db.models import Window
+from django.db.models.functions import RowNumber
+
+def player_running_totals(request, draft_id):
+    draft = d.Draft.objects.get(id=draft_id)
+    picks = d.DraftPick.objects.filter(draft=draft, drafted=False).order_by('-player__projected_price')
+    budget_remaining = d.Manager.objects.filter(draft=draft).aggregate(Sum('budget'))['budget__sum']
+    budget_spent = draft.starting_budget * len(d.Manager.objects.filter(draft=draft)) - budget_remaining
+    running_total = 0
+    drafter = d.Manager.objects.filter(draft=draft, drafter=True).first()
+    for pick in picks:
+        running_total += pick.player.projected_price
+        pick.running_total = running_total
+    var_dict = {
+        "players": picks,
+        "budget_spent": budget_spent,
+        "drafter": drafter,
+        "budget_remaining": budget_remaining - drafter.budget
+    }
+    return render(request, 'draft/player_running_totals.html', var_dict)

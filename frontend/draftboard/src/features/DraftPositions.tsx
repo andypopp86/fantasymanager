@@ -25,7 +25,7 @@ export const DraftPositions = ({draftContext}) => {
                 <div className="border border-gray-300 rounded">
                     <div style={{height: "3.5rem"}}
                         className={"draft-slot flex justify-center items-center"}>
-                        <p>Positions</p>
+                        <p>Pos</p>
                     </div>
 
                     <ul className="mt-1">

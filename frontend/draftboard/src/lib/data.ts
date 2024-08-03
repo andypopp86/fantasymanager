@@ -118,6 +118,16 @@ export const draftRetrieve = <
         params: { ...params, ...options?.params }
     })
   }
+  export const draftWatchedPicksRetrieve = <
+  TData = AxiosResponse<DraftSlotsRetrieveOutput>,
+  >(
+    draft_id: string,
+    options?: AxiosRequestConfig,
+  ): Promise<TData> => {
+    return axios.default.get(`/api/drafts/draft/${draft_id}/watched_picks`, {
+        ...options,
+    })
+  }
 
 
 
@@ -144,7 +154,8 @@ export const draftRetrieve = <
     player_id: number,
     options?: AxiosRequestConfig,
   ): Promise<TData> => {
-    return axios.default.post(`/api/drafts/draft/${draft_id}/unsubmit_pick/${manager_id}/${player_id}/`, {
+    const unsubmitUrl = `/api/drafts/draft/${draft_id}/unsubmit_pick/${manager_id}/${player_id}/`;
+    return axios.default.post(unsubmitUrl, {
         options,
     })
   }
@@ -174,6 +185,25 @@ export const draftRetrieve = <
   ): Promise<TData> => {
     return axios.default.post(`/api/drafts/draft/${draft_id}/unbudget_pick/${manager_id}/${player_id}/`, {
         options,
+    })
+  }
+
+  type WatchParams = {
+    watch: boolean
+  }
+
+  export const draftWatchPick = <
+  TData = AxiosResponse<DraftSubmitPickOutput>,
+  >(
+    draft_id: number,
+    manager_id: number,
+    player_id: number,
+    params: WatchParams,
+    options?: AxiosRequestConfig,
+  ): Promise<TData> => {
+    return axios.default.post(`/api/drafts/draft/${draft_id}/watch/${manager_id}/${player_id}/`, {
+        options,
+        params,
     })
   }
 

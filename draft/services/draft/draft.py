@@ -96,7 +96,10 @@ class DraftWriteService(BaseService):
         return pick, None
     
     def unsubmit_pick(self, draft_id, manager_id, player_id):
-        pick = d.DraftPick.objects.filter(draft_id=draft_id, manager_id=manager_id, player_id=player_id).first()
+        draft = d.Draft.objects.filter(id=draft_id).first()
+        player = d.Player.objects.filter(year=draft.year, player_id=player_id).first()
+        manager = d.Manager.objects.filter(id=manager_id).first()
+        pick = d.DraftPick.objects.filter(draft=draft, manager=manager, player=player).first()
         if not pick:
             raise Http404
         manager = d.Manager.objects.filter(id=manager_id).first()
@@ -136,6 +139,20 @@ class DraftWriteService(BaseService):
         player.favorite = bool(favorite)
         player.save()
         return player
+    
+    def watch_pick(self, draft_id, manager_id, player_id, watch):
+        draft = d.Draft.objects.filter(id=draft_id).first()
+        player = d.Player.objects.filter(year=draft.year, player_id=player_id).first()
+        manager = d.Manager.objects.filter(id=manager_id).first()
+        pick, created = d.WatchPick.objects.update_or_create(
+            draft=draft,
+            manager=manager,
+            player=player,
+            defaults={'watched': bool(watch)}
+        )
+        if not created:
+            pick.watched = bool(watch)
+            pick.save()
 
 
 class DraftReadService(BaseService):
@@ -243,7 +260,7 @@ class DraftReadService(BaseService):
             manager_dict[cur_man_id]['draft_picks'][pick.position_slot]["pick"]["name"] = pick.player.name
             manager_dict[cur_man_id]['draft_picks'][pick.position_slot]["pick"]["price"] = pick.price
             manager_dict[cur_man_id]['draft_picks'][pick.position_slot]["pick"]["position"] = pick.player.position
-            manager_dict[cur_man_id]['draft_picks'][pick.position_slot]["pick"]["player_id"] = pick.player.id
+            manager_dict[cur_man_id]['draft_picks'][pick.position_slot]["pick"]["player_id"] = pick.player.player_id
             manager_dict[cur_man_id]['draft_picks'][pick.position_slot]["pick"]["pick_id"] = pick.id
             manager_dict[cur_man_id]['draft_picks'][pick.position_slot]["pick"]["projected_price"] = pick.player.projected_price
             manager_dict[cur_man_id]['draft_picks'][pick.position_slot]["position_slot"] = pick.position_slot
@@ -254,6 +271,10 @@ class DraftReadService(BaseService):
         for man_id, manager_dict in manager_dict.items():
             manager_list.append(manager_dict)
         return manager_list
+    
+    def get_watched_picks(self, draft_id):
+        watched_picks = d.WatchPick.objects.filter(draft_id=draft_id, watched=True).order_by("-player__projected_price")
+        return watched_picks
     
 
 def init_managers(managers, draft_dict):

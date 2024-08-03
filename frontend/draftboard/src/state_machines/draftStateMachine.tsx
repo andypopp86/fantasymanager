@@ -27,6 +27,7 @@ export const draftStateMachine = createMachine({
                     drafterId: ({ event }) => event.managers.find((manager) => manager.is_drafter).manager_id,
                     managers: ({ event }) => event.managers,
                     undraftedPlayers: ({ event }) => event.undraftedPlayers,
+                    watchedPlayers: ({ event }) => event.watchedPlayers,
                     budgetedPlayers: ({ event }) => event.budgetedPicks,
                     budgetSpent: ({ event }) => calculateBudgetSpent(event.budgetedPicks)
                     // TODO: implement draftedPlayers (low priority)
@@ -46,7 +47,7 @@ export const draftStateMachine = createMachine({
             'undraft_player': {
                 actions: assign({
                     // draftedPlayers: ({ context, event }) => context.draftedPlayers.filter((player) => player.id !== event.pick.player_id),
-                    budgetedPlayers: ({ context, event }) => updateBudgetedPlayers(context, event.positionSlot, event.player_id, event.player_name, event.pickSlot.pick.projected_price),
+                    // budgetedPlayers: ({ context, event }) => updateBudgetedPlayers(context, event.positionSlot, event.player_id, event.player_name, event.pickSlot.pick.projected_price),
                     budgetSpent: ({ context, event }) => calculateBudgetSpent(context.budgetedPlayers),
                     undraftedPlayers: ({ context, event }) => [recreatePlayer(event.pickSlot.pick), ...context.undraftedPlayers],
                     managers: ({ context, event }) => updateManagers(context.draftDetails, context.managers, event.managerId, event.pickSlot, "undraft"),
@@ -55,7 +56,8 @@ export const draftStateMachine = createMachine({
             },
             'unwatch_player': {
                 actions: assign({
-                    watchedPlayers: ({ context, event }) => context.watchedPlayers.filter((player) => player.id !== event.player.id),
+                    watchedPlayers: ({ context, event }) => context.watchedPlayers.filter((watchedPlayer) => {
+                        return watchedPlayer.player.player_id !== event.player.player_id}),
                 }),
                 target: 'waiting',
             },
@@ -99,7 +101,7 @@ export const draftStateMachine = createMachine({
             'draft_player': {
                 actions: assign({
                     // draftedPlayers: ({ context, event }) => [...context.draftedPlayers, event.player],
-                    undraftedPlayers: ({ context, event }) => context.undraftedPlayers.filter((uplayer) => uplayer.player.id !== event.pickSlot.pick.player_id),
+                    undraftedPlayers: ({ context, event }) => context.undraftedPlayers.filter((uplayer) => uplayer.player.player_id !== event.pickSlot.pick.player_id),
                     managers: ({ context, event }) => updateManagers(context.draftDetails, context.managers, event.managerId, event.pickSlot, "draft"),
                     budgetSpent: ({ context, event }) => calculateBudgetSpent(context.budgetedPlayers),
                 }),
@@ -107,7 +109,9 @@ export const draftStateMachine = createMachine({
             },
             'watch_player': {
                 actions: assign({
-                    watchedPlayers: ({ context, event }) => [...context.watchedPlayers, event.player],
+                    watchedPlayers: ({ context, event }) => {
+                        return [...context.watchedPlayers, {watched: true, player: event.player}]
+                    }
                 }),
                 target: 'waiting',
             },
@@ -210,10 +214,12 @@ const recreatePlayer = (pick: any) => {
         manager: null,
         player: {
             id: pick.player_id,
+            player_id: pick.player_id,
             name: pick.name,
             position: pick.position,
             projected_price: pick.projected_price,
         },
+        projected_price: pick.projected_price,
         price: null,
     }
     return recreatedPlayer;

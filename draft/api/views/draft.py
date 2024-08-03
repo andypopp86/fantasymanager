@@ -289,6 +289,27 @@ class DraftBudgetedPicksAPI(APIView):
         ).get_budgeted_picks(draft_id=draft_id)
         return Response(budgeted_picks, status=status.HTTP_200_OK)
 
+class WatchPicksOutputSerializer(BaseSerializer):
+    watched = serializers.BooleanField()
+
+    class PlayerOutputSerializer(BaseSerializer):
+        player_id = serializers.IntegerField()
+        name = serializers.CharField()
+        position = serializers.CharField()
+        projected_price = serializers.DecimalField(max_digits=8, decimal_places=2)
+        favorite = serializers.BooleanField()
+
+    player = PlayerOutputSerializer(read_only=True)
+
+
+class DraftWatchedPicksAPI(APIView):
+    def get(self, request, draft_id):
+        budgeted_picks = DraftReadService(
+            user=request.user
+        ).get_watched_picks(draft_id=draft_id)
+        output_data = [WatchPicksOutputSerializer.serialize(pick) for pick in budgeted_picks]
+        return Response(output_data, status=status.HTTP_200_OK)
+
 class DraftBoardAPI(APIView):
 
     manager = serializers.CharField()
@@ -368,6 +389,18 @@ class DraftUnbudgetPickAPI(APIView):
             draft_id=draft_id,
             manager_id=manager_id,
             player_id=player_id,
+        )
+        return Response(status=status.HTTP_200_OK)
+
+class DraftWatchPickAPI(APIView):
+    def post(self, request, draft_id, manager_id, player_id):
+        DraftWriteService(
+            user=request.user
+        ).watch_pick(
+            draft_id=draft_id,
+            manager_id=manager_id,
+            player_id=player_id,
+            watch=request.data["params"]["watch"]
         )
         return Response(status=status.HTTP_200_OK)
     

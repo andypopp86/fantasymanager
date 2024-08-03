@@ -47,6 +47,11 @@ export const DraftDashboard = () => {
                 href={`/draft/${selectedDraft.year}/player_stats/${selectedDraft.id}`}
                 target="_blank"
             >Player Stats</a>
+            <a 
+                className={"btn bg-orange-500 text-white hover:bg-orange-700 active:bg-orange-900 rounded-md px-2 py-1 mx-2"}
+                href={`/draft/${selectedDraft.id}/player_running_totals`}
+                target="_blank"
+            >Running Totals</a>
             {selectedDraft && <Draft draftDetails={selectedDraft} send={appSend} />}
             </>
         ) : isCreating ? (
