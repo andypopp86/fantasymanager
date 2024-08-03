@@ -34,7 +34,7 @@ export const DraftBoardSlot = ({
     }
 
     const unsubmitPick = async (draftId: number, manager: any, pick: any) => {
-        if (!draftId || !manager.manager_id || !pick) {
+        if (!draftId || !manager.manager_id || !pick.player_id) {
             return;
         }
         const players = manager.is_drafter ? draftContext.budgetedPlayers : manager.draft_picks;
