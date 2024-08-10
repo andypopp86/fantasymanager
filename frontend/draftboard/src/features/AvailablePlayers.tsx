@@ -18,6 +18,7 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
     const [nameFilterValue, setNameFilterValue] = useState("");
     const [positionFilterValue, setPositionFilterValue] = useState("");
     const [priceFilterValue, setPriceFilterValue] = useState(undefined);
+    const [budgetedFilterValue, setBudgetedFilterValue] = useState("off");
     const [filteredPlayers, setFilteredPlayers] = useState(draftContext.undraftedPlayers);
 
     useEffect(() => {
@@ -33,11 +34,19 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
     const checkPrice = (player) => {
         return player.projected_price <= priceFilterValue;
     }
+    const checkBudget = (player) => {
+        return budgetedPlayerIds.includes(player.player.player_id);
+    }
+    const budgetedPlayerIds = Object.keys(draftContext.budgetedPlayers).map((slot) => {
+        const budgetedPlayerId = draftContext.budgetedPlayers[slot].pick.player_id;
+        return budgetedPlayerId ;
+    });
     const handleFilterChange = () => {
         const predicates = [];
         if (nameFilterValue !== "") { predicates.push(checkName); }
         if (positionFilterValue !== "") { predicates.push(checkPosition); }
         if (priceFilterValue !== undefined && priceFilterValue > 0) { predicates.push(checkPrice); }
+        if (budgetedFilterValue === "on") { predicates.push(checkBudget); }
         if (predicates.length === 0) {
             setFilteredPlayers(draftContext.undraftedPlayers);
             return;
@@ -63,10 +72,16 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
         const floatValue = parseFloat(filterValue);
         setPriceFilterValue(floatValue || 0);
     }
+    const handleBudgetedFilterChange = (filterValue) => {
+        const newValue = filterValue === "on" ? "off" : "on";
+        setBudgetedFilterValue(newValue);
+    }
+
     const clearFilter = () => {
         setNameFilterValue("");
         setPositionFilterValue("");
         setPriceFilterValue(0.00);
+        setBudgetedFilterValue(undefined);
         setFilteredPlayers(draftContext.undraftedPlayers);
     }
 
@@ -116,6 +131,13 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
                         <td><input type="number" style={{width: "100px"}}
                         className="py-1 px-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:border-blue-500"
                         onBlur={(e) => handlePriceFilterChange(e.target.value)} /></td>
+                    </tr>
+                    <tr>
+                        <td scope="row">Budgeted:</td>
+                        <td>
+                            <input type="checkbox" style={{width: "100px"}} checked={budgetedFilterValue === "on"}
+                            onChange={(e) => handleBudgetedFilterChange(budgetedFilterValue)} />
+                        </td>
                     </tr>
                     <tr>
                     <td><button className={"px-1 py-0 bg-blue-500 text-white rounded-md shadow-md hover:bg-blue-600"} onClick={handleFilterChange}>Filter</button></td>
