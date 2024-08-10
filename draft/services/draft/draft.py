@@ -142,17 +142,17 @@ class DraftWriteService(BaseService):
     
     def watch_pick(self, draft_id, manager_id, player_id, watch):
         draft = d.Draft.objects.filter(id=draft_id).first()
-        player = d.Player.objects.filter(year=draft.year, player_id=player_id).first()
-        manager = d.Manager.objects.filter(id=manager_id).first()
-        pick, created = d.WatchPick.objects.update_or_create(
-            draft=draft,
-            manager=manager,
-            player=player,
-            defaults={'watched': bool(watch)}
-        )
-        if not created:
-            pick.watched = bool(watch)
-            pick.save()
+        d.Player.objects.filter(year=draft.year, player_id=player_id).update(watched=bool(watch))
+        # manager = d.Manager.objects.filter(id=manager_id).first()
+        # pick, created = d.WatchPick.objects.update_or_create(
+        #     draft=draft,
+        #     manager=manager,
+        #     player=player,
+        #     defaults={'watched': bool(watch)}
+        # )
+        # if not created:
+        #     pick.watched = bool(watch)
+        #     pick.save()
 
 
 class DraftReadService(BaseService):
@@ -273,8 +273,9 @@ class DraftReadService(BaseService):
         return manager_list
     
     def get_watched_picks(self, draft_id):
-        watched_picks = d.WatchPick.objects.filter(draft_id=draft_id, watched=True).order_by("-player__projected_price")
-        return watched_picks
+        draft = d.Draft.objects.filter(id=draft_id).first()
+        watched_players = d.Player.objects.filter(year=draft.year, watched=True).order_by("-projected_price")
+        return watched_players
     
 
 def init_managers(managers, draft_dict):

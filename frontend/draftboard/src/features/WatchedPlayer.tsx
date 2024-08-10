@@ -4,19 +4,18 @@ import { draftWatchPick } from "../lib/data";
 
 
 export default function WatchedPlayer({ watchedPlayer, draftSend, draftId, managerId }) {
-    const player = watchedPlayer.player;
-    const unwatchPlayer = (player) => {
-        draftWatchPick(draftId, managerId, player.player_id, {watch: false});
-        draftSend({type: 'unwatch_player', player: player});
+    const unwatchPlayer = (watchedPlayer) => {
+        draftWatchPick(draftId, managerId, watchedPlayer.player_id, {watch: false});
+        draftSend({type: 'unwatch_player', player: watchedPlayer});
     }
     return (
         <>
-        {player && (
-        <tr key={player.player_id} className="font-small" style={
-            {background: POSITION_BG_COLORS[player.position], color: POSITION_FG_COLORS[player.position]}
-            } onClick={() => unwatchPlayer(player)}>
-            <td>{player.name}</td>
-            <td>{player.projected_price}</td>
+        {watchedPlayer && (
+        <tr key={watchedPlayer.player_id} className="font-small" style={
+            {background: POSITION_BG_COLORS[watchedPlayer.position], color: POSITION_FG_COLORS[watchedPlayer.position]}
+            } onClick={() => unwatchPlayer(watchedPlayer)}>
+            <td>{watchedPlayer.name}</td>
+            <td>{watchedPlayer.projected_price}</td>
         </tr>
         )}
         

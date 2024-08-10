@@ -5,6 +5,7 @@ import { draftListRetrieve } from "../lib/data";
 import DraftList from "../features/DraftList";
 import DraftCreate from "../features/DraftCreate";
 import Draft from "../features/Draft";
+import PlanChangesModal from "./PlanChangesModal";
 import { useDraftAppState } from "../hooks/useDraftAppState";
 
 export const DraftDashboard = () => {

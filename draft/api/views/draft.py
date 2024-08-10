@@ -218,7 +218,10 @@ class DraftPicksOutputSerializer(BaseSerializer):
         name = serializers.CharField()
         position = serializers.CharField()
         projected_price = serializers.DecimalField(max_digits=8, decimal_places=2)
+        position_price = serializers.DecimalField(max_digits=8, decimal_places=2)
+        adp_price = serializers.DecimalField(max_digits=8, decimal_places=2)
         favorite = serializers.BooleanField()
+        notes = serializers.CharField()
 
         class NFLTeamOutputSerializer(BaseSerializer):
             code = serializers.CharField()
@@ -230,6 +233,7 @@ class DraftPicksOutputSerializer(BaseSerializer):
             early_season_rb = serializers.IntegerField()
             early_season_te = serializers.IntegerField()
             early_season_def = serializers.IntegerField()
+            defensive_ranking = serializers.IntegerField()
         
         team = NFLTeamOutputSerializer(read_only=True)
 
@@ -289,17 +293,12 @@ class DraftBudgetedPicksAPI(APIView):
         ).get_budgeted_picks(draft_id=draft_id)
         return Response(budgeted_picks, status=status.HTTP_200_OK)
 
-class WatchPicksOutputSerializer(BaseSerializer):
-    watched = serializers.BooleanField()
-
-    class PlayerOutputSerializer(BaseSerializer):
-        player_id = serializers.IntegerField()
-        name = serializers.CharField()
-        position = serializers.CharField()
-        projected_price = serializers.DecimalField(max_digits=8, decimal_places=2)
-        favorite = serializers.BooleanField()
-
-    player = PlayerOutputSerializer(read_only=True)
+class WatchPlayersOutputSerializer(BaseSerializer):
+    player_id = serializers.IntegerField()
+    name = serializers.CharField()
+    position = serializers.CharField()
+    projected_price = serializers.DecimalField(max_digits=8, decimal_places=2)
+    favorite = serializers.BooleanField()
 
 
 class DraftWatchedPicksAPI(APIView):
@@ -307,7 +306,7 @@ class DraftWatchedPicksAPI(APIView):
         budgeted_picks = DraftReadService(
             user=request.user
         ).get_watched_picks(draft_id=draft_id)
-        output_data = [WatchPicksOutputSerializer.serialize(pick) for pick in budgeted_picks]
+        output_data = [WatchPlayersOutputSerializer.serialize(pick) for pick in budgeted_picks]
         return Response(output_data, status=status.HTTP_200_OK)
 
 class DraftBoardAPI(APIView):

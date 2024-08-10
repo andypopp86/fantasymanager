@@ -1,16 +1,8 @@
 import React from "react";
-import { useState, useEffect } from "react";
 import BudgetedPick from "./BudgetedPick.tsx";
 import { draftBudgetPick } from "../lib/data";
-import { recalculateBudget } from "../utils/draftHelpers";
 
 export const BudgetedPicks = ({draftContext, draftSend}) => {
-    const [remainingBudget, setRemainingBudget] = useState(draftContext.draftDetails.starting_budget - draftContext.budgetSpent);
-    // curious whether this is necessary. Seemingly fixed the issue by breaking up the state setters into budgetedPlayers and budgetSpent
-    // useEffect(() => {
-    //     setRemainingBudget(recalculateBudget(draftContext.draftDetails.starting_budget, draftContext.budgetedPlayers));
-    // }, [draftContext]);
-
     const handleDrop = (e) => {
         const targetSlot = draftContext.budgetSlotTargeted
         const budgetSlots = draftContext.budgetedPlayers

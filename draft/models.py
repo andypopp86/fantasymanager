@@ -136,18 +136,24 @@ class Player(models.Model):
     adp_formatted = models.DecimalField(max_digits=8, decimal_places=2)
     projected_price = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     override_price = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    position_price = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    adp_price = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     nickname = models.CharField(max_length=200, null=True, blank=True)
     team = models.ForeignKey(NFLTeam, null=True, blank=True, on_delete=models.SET_NULL)
     year = models.IntegerField(default=2023)
     favorite = models.BooleanField(default=False)
     offensive_support = models.IntegerField(default=0)
     skepticism = models.IntegerField(default=0)
+    notes = models.TextField(null=True, blank=True)
+    wind_score = models.IntegerField(default=0, help_text="Wind at their back (Off/Def help)")
+    bye_week = models.IntegerField(null=True, blank=True)
+    watched = models.BooleanField(default=False)
 
     def __str__(self) -> str:
         return self.name
 
     def save(self, *args, **kwargs):
-        self.projected_price = max(self.projected_price, 1)
+        self.projected_price = max(self.projected_price or 0, 1)
         super().save(*args, **kwargs)
 
     class Meta:
@@ -443,3 +449,15 @@ class PlayerStats(models.Model):
     receiving_yards = models.IntegerField(null=True)
     tds = models.IntegerField(null=True)
     first_downs = models.IntegerField(null=True)
+
+
+class PositionADP(models.Model):
+    position = models.CharField(max_length=3)
+    adp = models.IntegerField()
+    average_price = models.DecimalField(max_digits=5, decimal_places=2)
+
+    class Meta:
+        ordering = ('position', 'adp')
+
+    def __str__(self):
+        return '%s - %s' % (self.position, self.adp)

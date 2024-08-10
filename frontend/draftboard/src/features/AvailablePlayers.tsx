@@ -94,7 +94,6 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
         setStatAbbreviation(ABBREV_NAMES[statValue]);
         setFilteredPlayers(sortedPlayers);
     }
-
     return (
         <div>
             <div className="component-header">Available Players</div>
@@ -143,7 +142,9 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
                     <tr className="component-subheader">
                         <th>Player Name</th>
                         <th>Position</th>
-                        <th>Price</th>
+                        <th>Pos$</th>
+                        <th>Adp$</th>
+                        <th>Diff$</th>
                         <th>Schd</th>
                         <th>{statAbbreviation}</th>
                     </tr>

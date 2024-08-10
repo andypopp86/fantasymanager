@@ -1,7 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 
 import { draftBudgetPick, draftPickSubmit, draftUnbudgetPick, draftWatchPick } from '../lib/data';
-import { findBudgetedPositionSlotByPlayerId, getEmptyBudgetedPositionSlots, getPlayerEligibleBudgetSlots, getPlayerEligibleSlots, managersWhoHitPositionLimit } from '../utils/draftHelpers';
+import { findBudgetedPositionSlotByPlayerId,
+         getEmptyBudgetedPositionSlots,
+         getPlayerEligibleBudgetSlots,
+         getPlayerEligibleSlots,
+         managersWhoHitPositionLimit,
+} from '../utils/draftHelpers';
 
 type SubmitPickProps = {
     draftContext: any,
@@ -17,7 +22,6 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
     const [price, setPrice] = useState(1);
     const [slotId, setSlotId] = useState("QB1");
     const [managersNotAllowedToDraftThisPosition, setManagersNotAllowedToDraftThisPosition] = useState(managersWhoHitPositionLimit(draftContext.managers, draftContext.draftDetails, player.position));
-
     // const [availableBudgetSlots, setAvailableBudgetSlots] = useState(["QB1"]);
     const availableBudgetSlots = ["QB1", "RB1", "RB2", "WR1", "WR2", "TE1", "FLEX1", "FLEX2", "DEF1", "BENCH1", "BENCH2", "BENCH3", "BENCH4", "BENCH5", "BENCH6", "BENCH7"];
     const handlePriceChange = (e) => {
@@ -125,6 +129,13 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
     const isNominatedPlayerInBudget = (player, budgetedPlayers) => {
         return Object.values(budgetedPlayers).some((pickSlot) => pickSlot.pick.player_id === player.player_id);
     }
+    
+    const getNotes = (notes) => {
+        if (!notes) {
+            return [];
+        }
+        return notes.split('\n');
+    }
 
 
     return (
@@ -135,7 +146,7 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
         <div className="fixed inset-0 z-50 overflow-auto bg-black bg-opacity-50 flex items-center justify-center">
         <div className={`${isNominatedPlayerInBudget(player, draftContext.budgetedPlayers)? "bg-yellow-400" : "bg-white"} rounded-lg p-8 max-w-lg w-full`}>
             <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold">{player.name}</h2>
+            <h2 className="text-lg font-semibold">{`${player.name} ($${parseInt(player.projected_price)})`}</h2>
             <button
                 className="text-gray-500 hover:text-gray-700 focus:outline-none"
                 onClick={() => cancelNomination()}
@@ -152,6 +163,11 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
                 </svg>
             </button>
             </div>
+            <ul style={{ listStyleType: 'disc', paddingLeft: '20px', marginLeft: '20px', marginBottom: '20px' }}>
+            {getNotes(player.notes).map((note, index) => (
+                <li key={index} className="">{note}</li>
+            ))}
+            </ul>
             <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Price</label>
                 <input
@@ -193,7 +209,9 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
             <button className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md mr-2" onClick={() => watchDraftPick(draftContext.draftId, managerId, player)}>
                 Watch
             </button>
-            <button className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md mr-2" onClick={() => submitDraftPick(player)}>
+            <button className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md mr-2" onClick={() => {
+                submitDraftPick(player);
+                }}>
                 Save
             </button>
             <button className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-md" onClick={() => cancelNomination()}>

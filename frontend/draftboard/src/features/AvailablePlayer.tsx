@@ -4,6 +4,7 @@ import { POSITION_BG_COLORS, POSITION_FG_COLORS } from "../utils/colors";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faHeart as solidHeart } from '@fortawesome/free-solid-svg-icons';
 import { faHeart as regularHeart } from '@fortawesome/free-regular-svg-icons';
+import { faEdit, faWind } from "@fortawesome/free-solid-svg-icons";
 
 interface HeartProps {
     filled: boolean;
@@ -45,6 +46,17 @@ export default function AvailablePlayer({pick, setOpenDialog, setNominatedPlayer
     const strengthOfSchedule = getStrengthOfSchedule(pick);
     const scheduleBG = strengthOfSchedule > 25 ? "bg-red-900" : strengthOfSchedule <= 5 ? "bg-green-900" : "bg-yellow-200";
     const scheduleFG = strengthOfSchedule > 25 ? "text-white" : strengthOfSchedule <= 5 ? "text-white" : "text-black";
+    const hasTheWind = (pick) => {
+        if (!pick.player.team) {
+            return false;
+        } else if (["QB", "WR", "TE"].includes(pick.player.position)) {
+            return pick.player.team.defensive_ranking <= 2;
+        } else if (pick.player.position === "RB") {
+            return pick.player.team.defensive_ranking >= 4;
+        }
+        return false;
+    }
+
     return (
         <>
         {pick && (
@@ -56,12 +68,24 @@ export default function AvailablePlayer({pick, setOpenDialog, setNominatedPlayer
                 <td onClick={() => nominatePlayer(pick.player)}>{pick.player.name}</td>
                 <td onClick={() => nominatePlayer(pick.player)}>{pick.player.position}</td>
                 <td onClick={() => nominatePlayer(pick.player)}>{parseInt(pick.projected_price)}</td>
+                <td onClick={() => nominatePlayer(pick.player)}>{parseInt(pick.player.adp_price)}</td>
+                <td onClick={() => nominatePlayer(pick.player)}>{parseInt(pick.player.adp_price)-parseInt(pick.projected_price)}</td>
                 <td className={scheduleBG + " " + scheduleFG}
                     >{strengthOfSchedule}
                 </td>
                 <td>{parseInt(pick[statField])}</td>
                 <td className="bg-white" onClick={() => postFavorite(pick.player, !isFavorite)}>
                     <Heart key={`H${pick.player.player_id}`} filled={isFavorite} size="sm"/>
+                </td>
+                <td className="bg-white" title={pick.player.notes}>
+                    {pick.player.notes &&
+                    <FontAwesomeIcon icon={faEdit} size="sm" color="blue" />
+                    }
+                </td>
+                <td className="bg-white">
+                    {hasTheWind(pick) &&
+                    <FontAwesomeIcon icon={faWind} size="sm" color="blue" />
+                    }
                 </td>
             </tr>
         )}

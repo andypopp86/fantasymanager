@@ -1,6 +1,7 @@
 import { createMachine, assign } from 'xstate';
 import { findBudgetedPositionSlotByPlayerId, checkForPositionLimitHit } from '../utils/draftHelpers';
 
+
 export const draftStateMachine = createMachine({
   context: {
     draftId: 0 as number,
@@ -15,6 +16,7 @@ export const draftStateMachine = createMachine({
     draggedPlayer: {} as any,
     budgetSlotTargeted: {} as any,
     budgetSpent: 0 as number,
+    planChanges: [] as any[],
   },
   initial: 'loadingDraft',
   states: {
@@ -57,7 +59,7 @@ export const draftStateMachine = createMachine({
             'unwatch_player': {
                 actions: assign({
                     watchedPlayers: ({ context, event }) => context.watchedPlayers.filter((watchedPlayer) => {
-                        return watchedPlayer.player.player_id !== event.player.player_id}),
+                        return watchedPlayer.player_id !== event.player.player_id}),
                 }),
                 target: 'waiting',
             },
@@ -102,6 +104,7 @@ export const draftStateMachine = createMachine({
                 actions: assign({
                     // draftedPlayers: ({ context, event }) => [...context.draftedPlayers, event.player],
                     undraftedPlayers: ({ context, event }) => context.undraftedPlayers.filter((uplayer) => uplayer.player.player_id !== event.pickSlot.pick.player_id),
+                    watchedPlayers: ({ context, event }) => context.watchedPlayers.filter((watchedPlayer) => watchedPlayer.player_id !== event.pickSlot.pick.player_id),
                     managers: ({ context, event }) => updateManagers(context.draftDetails, context.managers, event.managerId, event.pickSlot, "draft"),
                     budgetSpent: ({ context, event }) => calculateBudgetSpent(context.budgetedPlayers),
                 }),
@@ -110,7 +113,9 @@ export const draftStateMachine = createMachine({
             'watch_player': {
                 actions: assign({
                     watchedPlayers: ({ context, event }) => {
-                        return [...context.watchedPlayers, {watched: true, player: event.player}]
+                        const newWatchList = [...context.watchedPlayers, event.player];
+                        const priceDescWatchList = newWatchList.sort((a, b) => b.projected_price - a.projected_price);
+                        return priceDescWatchList;
                     }
                 }),
                 target: 'waiting',

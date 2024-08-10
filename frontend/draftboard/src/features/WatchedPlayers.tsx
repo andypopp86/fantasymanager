@@ -4,7 +4,7 @@ import WatchedPlayer from "./WatchedPlayer.tsx";
 export default function WatchedPlayers({draftContext, draftSend}) {
     const drafter = draftContext.managers.find((manager) => manager.is_drafter);
     const watchSum = draftContext.watchedPlayers?.reduce((acc, watchedPlayer) => {
-        return acc + parseFloat(watchedPlayer.player.projected_price)}, 0);
+        return acc + parseFloat(watchedPlayer.projected_price)}, 0);
     return (
         <div>
             <div className="component-header">WatchList</div>

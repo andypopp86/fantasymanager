@@ -39,14 +39,19 @@ class PlayerAdmin(admin.ModelAdmin):
     list_display = ('player_id', 'year', 'name', 'team', 'favorite', 'nickname',  'position',  'adp_formatted',  'projected_price',  'override_price')
     search_fields = ('name', 'position', )
     list_filter = ('position', 'year', 'team', 'favorite')
-    fields = ('player_id', 'team', 'year',  'name', 'nickname', 'position',  'adp_formatted',  'projected_price',  'override_price', 'skepticism', 'favorite', )
+    fields = ('player_id', 'notes', 'team', 'year',  'name', 'nickname', 'position',  'adp_formatted',  'projected_price', 'adp_price', 'override_price', 'skepticism', 'favorite', )
     
 class DraftAdmin(admin.ModelAdmin):
     list_display = ('draft_name', 'year', 'drafter', 'projected_draft', )
     # search_fields = ('draft_name', 'drafter', )
-    list_filter = ('draft_name', 'drafter',)
+    list_filter = ('locked', 'draft_name', 'drafter',)
     fields = ('draft_name', 'year', 'drafter', 'projected_draft', 'saved_slots', 'locked' )
-    
+
+class PositionADPAdmin(admin.ModelAdmin):
+    list_display = ('position', 'adp', 'average_price')
+    list_filter = ('position', 'adp',)
+    fields = ('position', 'adp', 'average_price')
+
 class ManagerAdmin(admin.ModelAdmin):
     list_display = ('draft', 'name', 'budget', 'drafter', 'position', )
     # search_fields = ('draft_name', 'drafter', )
@@ -164,3 +169,4 @@ admin.site.register(d.BudgetPlayer, BudgetPlayerAdmin)
 admin.site.register(d.HistoricalDraftPicks, HistoricalDraftPickAdmin)
 admin.site.register(d.HistoricalPlayerStats, HistoricalPlayerStatsAdmin)
 admin.site.register(d.PlayerStats, PlayerStatsAdmin)
+admin.site.register(d.PositionADP, PositionADPAdmin)
