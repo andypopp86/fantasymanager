@@ -132,6 +132,19 @@ export const draftStateMachine = createMachine({
                     budgetSpent: ({ context, event }) => calculateBudgetSpent(context.budgetedPlayers),
                 }),
             },
+            'unbudget_player': {
+                actions: assign({
+                    budgetedPlayers: ({ context, event }) => {
+                        context.budgetedPlayers[event.positionSlot]["pick"]["id"] = null;
+                        context.budgetedPlayers[event.positionSlot]["pick"]["player_id"] = null;
+                        context.budgetedPlayers[event.positionSlot]["pick"]["player_name"] = null;
+                        context.budgetedPlayers[event.positionSlot]["pick"]["projected_price"] = 0;
+                        context.budgetedPlayers[event.positionSlot]["pick"]["actual_price"] = 0;
+                        return context.budgetedPlayers;
+                    },
+                    budgetSpent: ({ context, event }) => calculateBudgetSpent(context.budgetedPlayers),
+                }),
+            },
 
         },
     },

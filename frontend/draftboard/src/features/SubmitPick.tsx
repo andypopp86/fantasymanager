@@ -90,6 +90,17 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
                 price: price,
             }
             draftSend(budgetPlayerSendEvent);
+        } else {
+            const existingBudgetSlot = findBudgetedPositionSlotByPlayerId(draftContext.budgetedPlayers, pickSlot.pick.player_id);
+            if (existingBudgetSlot) {
+                if (budgetPick.player_id) {
+                    draftSend({
+                        type: 'unbudget_player',
+                        positionSlot: existingBudgetSlot,
+                    });
+                    draftUnbudgetPick(draftContext.draftId, draftContext.drafterId, pickSlot.pick.player_id);
+                }
+            }
         }
         draftPickSubmit(draftContext.draftId, managerId, player.player_id, {price: price, position_slot: slotId}).then((response) => {
             const errMsg = response.data['error']
@@ -206,13 +217,13 @@ export default function SubmitPick({ draftContext, player, setOpenDialog, openDi
             </div>
             </div>
             <div className="flex justify-end">
-            <button className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md mr-2" onClick={() => watchDraftPick(draftContext.draftId, managerId, player)}>
-                Watch
-            </button>
             <button className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md mr-2" onClick={() => {
                 submitDraftPick(player);
                 }}>
                 Save
+            </button>
+            <button className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md mr-2" onClick={() => watchDraftPick(draftContext.draftId, managerId, player)}>
+                Watch
             </button>
             <button className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-md" onClick={() => cancelNomination()}>
                 Cancel
