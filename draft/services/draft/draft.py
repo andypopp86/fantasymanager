@@ -71,6 +71,21 @@ class DraftWriteService(BaseService):
         else:
             raise Exception("Draft is locked")
         return draft
+    
+    def update_plan_changes(self, draft_id, manager_id, draft_pick, budgeted_player, position_slot):
+        manager = d.Manager.objects.filter(id=manager_id).first()
+        if not manager.drafter:
+            return
+        draft = d.Draft.objects.filter(id=draft_id).first()
+        if budgeted_player and (draft_pick.player_id != budgeted_player.player_id):
+            d.PlanChange.objects.create(
+                draft=draft,
+                draft_pick=draft_pick,
+                budget_pick=budgeted_player,
+                position=position_slot
+            )
+            
+
 
     def submit_pick(self, draft_id, manager_id, player_id, price, position_slot):
         draft = d.Draft.objects.filter(id=draft_id).first()
@@ -167,7 +182,7 @@ class DraftReadService(BaseService):
         return draft
     
     def get_drafts(self):
-        drafts = d.Draft.objects.all().order_by("-year", "draft_name")
+        drafts = d.Draft.objects.all().order_by("-year", "-date_created", "draft_name")
         return drafts
     
     def get_picks(self, draft_id):
@@ -277,6 +292,8 @@ class DraftReadService(BaseService):
         watched_players = d.Player.objects.filter(year=draft.year, watched=True).order_by("-projected_price")
         return watched_players
     
+    def get_budgeted_player(self, draft_id, position_slot):
+        return d.BudgetPlayer.objects.filter(draft_id=draft_id, position=position_slot).first()
 
 def init_managers(managers, draft_dict):
     for manager in managers:

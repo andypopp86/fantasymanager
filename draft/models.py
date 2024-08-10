@@ -178,6 +178,7 @@ class Draft(models.Model):
     limit_wr = models.IntegerField(default=8)
     limit_te = models.IntegerField(default=3)
     limit_def = models.IntegerField(default=2)
+    date_created = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:
         return '%s' % (self.draft_name)
@@ -461,3 +462,16 @@ class PositionADP(models.Model):
 
     def __str__(self):
         return '%s - %s' % (self.position, self.adp)
+
+
+class PlanChange(models.Model):
+    draft = models.ForeignKey(Draft, on_delete=models.CASCADE)
+    budget_pick = models.ForeignKey(BudgetPlayer, on_delete=models.CASCADE)
+    draft_pick = models.ForeignKey(DraftPick, on_delete=models.CASCADE)
+    position = models.CharField(max_length=50, choices=BUDGET_POSITIONS, null=True, blank=True)
+
+    class Meta:
+        unique_together = ('draft', 'position')
+
+    def __str__(self):
+        return '%s - %s - %s - %s' % (self.draft.draft_name, self.position, self.budget_pick, self.draft_pick)

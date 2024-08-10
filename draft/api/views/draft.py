@@ -343,6 +343,12 @@ class DraftSubmitPickAPI(APIView):
     )
     def post(self, request, draft_id, manager_id, player_id):
         input_data = self.DraftPickCreateSerializer(data=request.data["params"]).get_input_data()
+        budgeted_player = DraftReadService(
+            user=request.user
+        ).get_budgeted_player(
+            draft_id=draft_id,
+            position_slot=input_data["position_slot"],
+        )
         pick, err_msg = DraftWriteService(
             user=request.user
         ).submit_pick(
@@ -350,6 +356,15 @@ class DraftSubmitPickAPI(APIView):
             manager_id=manager_id,
             player_id=player_id,
             price=input_data["price"],
+            position_slot=input_data["position_slot"],
+        )
+        DraftWriteService(
+            user=request.user
+        ).update_plan_changes(
+            draft_id=draft_id,
+            manager_id=manager_id,
+            draft_pick=pick,
+            budgeted_player=budgeted_player,
             position_slot=input_data["position_slot"],
         )
         response = Response(status=status.HTTP_200_OK)

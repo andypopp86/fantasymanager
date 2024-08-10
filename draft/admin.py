@@ -42,10 +42,10 @@ class PlayerAdmin(admin.ModelAdmin):
     fields = ('player_id', 'notes', 'team', 'year',  'name', 'nickname', 'position',  'adp_formatted',  'projected_price', 'adp_price', 'override_price', 'skepticism', 'favorite', )
     
 class DraftAdmin(admin.ModelAdmin):
-    list_display = ('draft_name', 'year', 'drafter', 'projected_draft', )
+    list_display = ('draft_name', 'year', 'drafter', 'projected_draft', 'date_created')
     # search_fields = ('draft_name', 'drafter', )
     list_filter = ('locked', 'draft_name', 'drafter',)
-    fields = ('draft_name', 'year', 'drafter', 'projected_draft', 'saved_slots', 'locked' )
+    fields = ('draft_name', 'year', 'drafter', 'projected_draft', 'saved_slots', 'locked', 'date_created' )
 
 class PositionADPAdmin(admin.ModelAdmin):
     list_display = ('position', 'adp', 'average_price')
@@ -157,6 +157,11 @@ class PlayerStatsAdmin(admin.ModelAdmin):
     fields = ('player', 'year', 'age', 'games', 'games_started', 'rush_attempts', 'rush_yards', 'targets', 'receptions', 'receiving_yards', 'tds', 'first_downs')
 
 
+class PlanChangeAdmin(admin.ModelAdmin):
+    list_display = ('draft', 'budget_pick', 'draft_pick', 'position')
+    # list_filter = ('draft', 'budget_pick', 'draft_pick', 'position')
+    fields = ('draft', 'budget_pick', 'draft_pick', 'position')
+
 
 admin.site.register(d.NFLTeam, NFLTeamAdmin)
 admin.site.register(d.Player, PlayerAdmin)
@@ -170,3 +175,4 @@ admin.site.register(d.HistoricalDraftPicks, HistoricalDraftPickAdmin)
 admin.site.register(d.HistoricalPlayerStats, HistoricalPlayerStatsAdmin)
 admin.site.register(d.PlayerStats, PlayerStatsAdmin)
 admin.site.register(d.PositionADP, PositionADPAdmin)
+admin.site.register(d.PlanChange, PlanChangeAdmin)
