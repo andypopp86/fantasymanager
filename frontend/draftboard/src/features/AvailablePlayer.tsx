@@ -20,11 +20,7 @@ interface HeartProps {
     );
   };
 
-export default function AvailablePlayer({pick, setOpenDialog, setNominatedPlayer, handleDragStart, id, draftContext, statField }) {
-    function nominatePlayer (pick) {
-        setNominatedPlayer(pick);
-        setOpenDialog(true);
-    }
+export default function AvailablePlayer({pick, nominatePlayer, handleDragStart, id, draftContext, statField }) {
     const handleDrag = (e) => {
         e.preventDefault();
     };
