@@ -23,6 +23,9 @@ export const DraftPositions = ({draftContext}) => {
             {draftContext && draftContext.budgetedPlayers && 
             <>
                 <div className="border border-gray-300 rounded">
+                    <div className="flex justify-center border-b border-gray-300 bg-gray-100">
+                        <span className="text-xs py-0.5 font-semibold">Draft Board</span>
+                    </div>
                     <div style={{height: "3.5rem"}}
                         className={"draft-slot flex justify-center items-center"}>
                         <p>Pos</p>

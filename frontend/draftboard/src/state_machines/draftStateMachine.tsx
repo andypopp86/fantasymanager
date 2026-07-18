@@ -84,6 +84,18 @@ export const draftStateMachine = createMachine({
                 }),
                 target: 'waiting',
             },
+            'reslot_manager': {
+                actions: assign({
+                    managers: ({ context, event }) => reslotManagerPicks(context.managers, event.managerId, event.assignments),
+                }),
+                target: 'waiting',
+            },
+            'reslot_budget': {
+                actions: assign({
+                    budgetedPlayers: ({ context, event }) => reslotBudgetedPlayers(context.budgetedPlayers, event.assignments),
+                }),
+                target: 'waiting',
+            },
             'unbudget_player': {
                 actions: assign({
                     budgetedPlayers: ({ context, event }) => {
@@ -135,6 +147,16 @@ export const draftStateMachine = createMachine({
                     nominationPrice: () => 0,
                 }),
                 target: 'waiting',
+            },
+            'reslot_manager': {
+                actions: assign({
+                    managers: ({ context, event }) => reslotManagerPicks(context.managers, event.managerId, event.assignments),
+                }),
+            },
+            'reslot_budget': {
+                actions: assign({
+                    budgetedPlayers: ({ context, event }) => reslotBudgetedPlayers(context.budgetedPlayers, event.assignments),
+                }),
             },
             'budget_player': {
                 actions: assign({
@@ -233,6 +255,49 @@ const updateManagers = (draftDetails: any, managers: any[], manager_id: number, 
     checkForPositionLimitHit(updatedManagers, draftDetails, pickSlot.pick.position, manager_id);
     return updatedManagers;
 }
+
+const EMPTY_DRAFT_PICK = { name: '-', price: 0, position: '', player_id: '', pick_id: '', projected_price: 0, actual_price: 0 };
+const EMPTY_BUDGET_PICK = { name: '', position: '', player_id: '', player_name: '', pick_id: '', projected_price: 0, price: 0, actual_price: 0, budget_position: '', status: '' };
+
+// Rewrite one manager's draft_picks so each player lands in its assigned slot.
+// Slots keep their canonical order (the source object is already QB1..BENCH7).
+const reslotManagerPicks = (managers: any[], managerId: number, assignments: Record<string, number>) => {
+    return managers.map((manager) => {
+        if (manager.manager_id !== managerId) return manager;
+        const pickByPlayer: Record<string, any> = {};
+        Object.values(manager.draft_picks).forEach((slot: any) => {
+            if (slot.pick && slot.pick.player_id) pickByPlayer[slot.pick.player_id] = slot.pick;
+        });
+        const newDraftPicks: Record<string, any> = {};
+        Object.keys(manager.draft_picks).forEach((slotName) => {
+            const template = manager.draft_picks[slotName];
+            const assignedPlayerId = assignments[slotName];
+            const movedPick = assignedPlayerId != null ? pickByPlayer[assignedPlayerId] : undefined;
+            newDraftPicks[slotName] = movedPick
+                ? { ...template, pick: { ...movedPick, slot: slotName } }
+                : { ...template, pick: { ...EMPTY_DRAFT_PICK } };
+        });
+        return { ...manager, draft_picks: newDraftPicks };
+    });
+};
+
+// Rewrite the budgeted roster so each player lands in its assigned slot.
+const reslotBudgetedPlayers = (budgetedPlayers: any, assignments: Record<string, number>) => {
+    const pickByPlayer: Record<string, any> = {};
+    Object.values(budgetedPlayers).forEach((slot: any) => {
+        if (slot.pick && slot.pick.player_id) pickByPlayer[slot.pick.player_id] = slot.pick;
+    });
+    const newBudgeted: Record<string, any> = {};
+    Object.keys(budgetedPlayers).forEach((slotName) => {
+        const template = budgetedPlayers[slotName];
+        const assignedPlayerId = assignments[slotName];
+        const movedPick = assignedPlayerId != null ? pickByPlayer[assignedPlayerId] : undefined;
+        newBudgeted[slotName] = movedPick
+            ? { ...template, pick: { ...movedPick, budget_position: slotName } }
+            : { ...template, pick: { ...EMPTY_BUDGET_PICK } };
+    });
+    return newBudgeted;
+};
 
 const recreatePlayer = (pick: any) => {
     const recreatedPlayer = {

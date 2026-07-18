@@ -23,6 +23,8 @@ draft_urlpatterns = [
     path("<int:draft_id>/budget_pick/<int:manager_id>/<int:player_id>/", api_views.DraftBudgetPickAPI.as_view(), name="draft_budget_pick"),
     path("<int:draft_id>/unbudget_pick/<int:manager_id>/<int:player_id>/", api_views.DraftUnbudgetPickAPI.as_view(), name="draft_unbudget_pick"),
     path("<int:draft_id>/watch/<int:manager_id>/<int:player_id>/", api_views.DraftWatchPickAPI.as_view(), name="watch_pick"),
+    path("<int:draft_id>/reslot_picks/<int:manager_id>/", api_views.DraftReslotPicksAPI.as_view(), name="reslot_picks"),
+    path("<int:draft_id>/reslot_budget/<int:manager_id>/", api_views.DraftReslotBudgetAPI.as_view(), name="reslot_budget"),
 
     # path("draft_board/<int:draft_id>", api_views.DraftBoardAPI.as_view(), name="draft"),
     # path("detail/<int:draft_id>", api_views.DraftDetailAPI.as_view(), name="draft"),
