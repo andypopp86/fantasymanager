@@ -222,6 +222,7 @@ class DraftPicksOutputSerializer(BaseSerializer):
         adp_price = serializers.DecimalField(max_digits=8, decimal_places=2)
         favorite = serializers.BooleanField()
         notes = serializers.CharField()
+        target_type = serializers.CharField(allow_null=True, required=False)
 
         class NFLTeamOutputSerializer(BaseSerializer):
             code = serializers.CharField()

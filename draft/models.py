@@ -90,6 +90,15 @@ ALLOWED_POSITIONS = {
 
 FLEX_POSITIONS = ('RB', 'WR', 'TE')
 
+TARGET_TYPES = (
+    ('prime', 'Prime'),
+    ('starter', 'Starter'),
+    ('streamer', 'Streamer'),
+    ('sleeper', 'Sleeper'),
+    ('catalyst', 'Catalyst'),
+    ('undraftable', 'Undraftable'),
+)
+
 class NFLTeam(models.Model):
     code = models.CharField(max_length=10)
     name = models.CharField(max_length=100, null=True, blank=True)
@@ -148,6 +157,7 @@ class Player(models.Model):
     wind_score = models.IntegerField(default=0, help_text="Wind at their back (Off/Def help)")
     bye_week = models.IntegerField(null=True, blank=True)
     watched = models.BooleanField(default=False)
+    target_type = models.CharField(max_length=20, choices=TARGET_TYPES, null=True, blank=True)
 
     def __str__(self) -> str:
         return self.name
