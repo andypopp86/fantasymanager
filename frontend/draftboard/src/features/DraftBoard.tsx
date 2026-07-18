@@ -3,7 +3,8 @@ import { MANAGER_BG_COLORS, MANAGER_FG_COLORS } from "../utils/colors";
 import { DraftBoardSlot } from "./DraftBoardSlot";
 import { DraftPositions } from "./DraftPositions";
 import { draftPickSubmit, draftBudgetPick, draftUnbudgetPick, draftReslotPicks } from "../lib/data";
-import { findBudgetedPositionSlotByPlayerId, autoSlotAssignments } from "../utils/draftHelpers";
+import { findBudgetedPositionSlotByPlayerId } from "../utils/draftHelpers";
+import { autoSlotAssignments } from "../utils/reordering";
 
 type DraftBoardProps = {
     draftContext: any,

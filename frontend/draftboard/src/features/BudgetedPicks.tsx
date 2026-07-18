@@ -1,7 +1,7 @@
 import React from "react";
 import BudgetedPick from "./BudgetedPick.tsx";
 import { draftBudgetPick, draftReslotBudget } from "../lib/data";
-import { autoSlotAssignments } from "../utils/draftHelpers";
+import { autoSlotAssignments } from "../utils/reordering";
 
 export const BudgetedPicks = ({draftContext, draftSend}) => {
     // Auto-slot the budgeted roster: update the UI immediately via the state
