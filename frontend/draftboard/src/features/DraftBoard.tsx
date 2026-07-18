@@ -2,14 +2,27 @@ import React from "react";
 import { MANAGER_BG_COLORS, MANAGER_FG_COLORS } from "../utils/colors";
 import { DraftBoardSlot } from "./DraftBoardSlot";
 import { DraftPositions } from "./DraftPositions";
-import { draftPickSubmit, draftBudgetPick, draftUnbudgetPick } from "../lib/data";
+import { draftPickSubmit, draftBudgetPick, draftUnbudgetPick, draftReslotPicks } from "../lib/data";
 import { findBudgetedPositionSlotByPlayerId } from "../utils/draftHelpers";
+import { autoSlotAssignments } from "../utils/reordering";
 
 type DraftBoardProps = {
     draftContext: any,
     draftSend: any
 }
 export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
+    // Auto-slot one manager's drafted players by price/position: update the UI
+    // immediately via the state machine, and persist the new slots to the server.
+    const shuffleTeam = (manager: any) => {
+        const players = Object.values(manager.draft_picks || {})
+            .map((slot: any) => slot.pick)
+            .filter((pick: any) => pick.player_id)
+            .map((pick: any) => ({ player_id: pick.player_id, position: pick.position, price: Number(pick.price) }));
+        const assignments = autoSlotAssignments(players);
+        draftSend({ type: "reslot_manager", managerId: manager.manager_id, assignments });
+        draftReslotPicks(draftContext.draftId, manager.manager_id, { assignments });
+    };
+
     // Drop the nominated player onto a specific manager's slot to register the DraftPick.
     const handleDrop = (e, positionSlot: string, manager: any) => {
         e.preventDefault();
@@ -91,6 +104,13 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
             <DraftPositions draftContext={draftContext} />
             {draftContext.managers.map((manager, index) => (
                 <div key={index} className="border border-gray-300 rounded">
+                    <div className="flex justify-center border-b border-gray-300 bg-gray-100">
+                        <button
+                            className="text-[10px] py-0.5 hover:opacity-70"
+                            title="Auto-slot this team by price/position"
+                            onClick={() => shuffleTeam(manager)}
+                        >🔀 Reorder</button>
+                    </div>
                     <div className={"text-lg text-center font-semibold font-small"} style={cannotAfford(manager)
                         ? {backgroundColor: "black", color: "white"}
                         : {backgroundColor: MANAGER_BG_COLORS[manager.manager_position], color: MANAGER_FG_COLORS[manager.manager_position]}}>

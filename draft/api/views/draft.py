@@ -407,6 +407,30 @@ class DraftUnbudgetPickAPI(APIView):
         )
         return Response(status=status.HTTP_200_OK)
 
+class DraftReslotPicksAPI(APIView):
+    def post(self, request, draft_id, manager_id):
+        DraftWriteService(
+            user=request.user
+        ).reslot_picks(
+            draft_id=draft_id,
+            manager_id=manager_id,
+            assignments=request.data["params"]["assignments"],
+        )
+        return Response(status=status.HTTP_200_OK)
+
+
+class DraftReslotBudgetAPI(APIView):
+    def post(self, request, draft_id, manager_id):
+        DraftWriteService(
+            user=request.user
+        ).reslot_budget(
+            draft_id=draft_id,
+            manager_id=manager_id,
+            assignments=request.data["params"]["assignments"],
+        )
+        return Response(status=status.HTTP_200_OK)
+
+
 class DraftWatchPickAPI(APIView):
     def post(self, request, draft_id, manager_id, player_id):
         DraftWriteService(

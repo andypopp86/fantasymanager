@@ -1,8 +1,25 @@
 import React from "react";
 import BudgetedPick from "./BudgetedPick.tsx";
-import { draftBudgetPick } from "../lib/data";
+import { draftBudgetPick, draftReslotBudget } from "../lib/data";
+import { autoSlotAssignments } from "../utils/reordering";
 
 export const BudgetedPicks = ({draftContext, draftSend}) => {
+    // Auto-slot the budgeted roster: update the UI immediately via the state
+    // machine, and persist the new slots to the server.
+    const shuffleBudget = () => {
+        const players = Object.values(draftContext.budgetedPlayers || {})
+            .map((slot: any) => slot.pick)
+            .filter((pick: any) => pick.player_id)
+            .map((pick: any) => ({
+                player_id: pick.player_id,
+                position: pick.position,
+                price: Number(pick.actual_price || pick.projected_price),
+            }));
+        const assignments = autoSlotAssignments(players);
+        draftSend({ type: "reslot_budget", assignments });
+        draftReslotBudget(draftContext.draftId, draftContext.drafterId, { assignments });
+    };
+
     const handleDrop = (e) => {
         const targetSlot = draftContext.budgetSlotTargeted
         const budgetSlots = draftContext.budgetedPlayers
@@ -28,7 +45,14 @@ export const BudgetedPicks = ({draftContext, draftSend}) => {
     }
     return (
         <div>
-            <div className="component-header">Budgeted Players</div>
+            <div className="component-header flex justify-between items-center">
+                <span>Budgeted Players</span>
+                <button
+                    className="text-sm leading-none hover:opacity-70"
+                    title="Auto-slot budgeted players by price/position"
+                    onClick={shuffleBudget}
+                >🔀</button>
+            </div>
             <table>
                 <thead>
                     <tr className="component-subheader">

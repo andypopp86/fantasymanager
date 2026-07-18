@@ -188,6 +188,38 @@ export const draftRetrieve = <
     })
   }
 
+  type ReslotParams = {
+    assignments: Record<string, number>
+  }
+
+  export const draftReslotPicks = <
+  TData = AxiosResponse<DraftSubmitPickOutput>,
+  >(
+    draft_id: number,
+    manager_id: number,
+    params: ReslotParams,
+    options?: AxiosRequestConfig,
+  ): Promise<TData> => {
+    return axios.default.post(`/api/drafts/draft/${draft_id}/reslot_picks/${manager_id}/`, {
+        params,
+        options,
+    })
+  }
+
+  export const draftReslotBudget = <
+  TData = AxiosResponse<DraftSubmitPickOutput>,
+  >(
+    draft_id: number,
+    manager_id: number,
+    params: ReslotParams,
+    options?: AxiosRequestConfig,
+  ): Promise<TData> => {
+    return axios.default.post(`/api/drafts/draft/${draft_id}/reslot_budget/${manager_id}/`, {
+        params,
+        options,
+    })
+  }
+
   type WatchParams = {
     watch: boolean
   }

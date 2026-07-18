@@ -2,6 +2,7 @@ from django.http import Http404
 from rest_framework.exceptions import ValidationError
 
 from core.services.base import BaseService
+from django.db import transaction
 from django.db.models import F, Case, When
 from django.utils import timezone
 
@@ -171,6 +172,36 @@ class DraftWriteService(BaseService):
         player.save()
         return player
     
+    def reslot_picks(self, draft_id, manager_id, assignments):
+        """Rewrite a manager's drafted picks into the given {slot: player_id} layout.
+
+        Slots are cleared first so the reassignment can't collide with a slot the
+        same player is vacating. Ineligible pairings (per ALLOWED_POSITIONS) are skipped.
+        """
+        picks = d.DraftPick.objects.filter(draft_id=draft_id, manager_id=manager_id, drafted=True)
+        picks_by_player = {pick.player.player_id: pick for pick in picks}
+        with transaction.atomic():
+            picks.update(position_slot=None)
+            for slot, player_id in assignments.items():
+                pick = picks_by_player.get(int(player_id))
+                if pick is None or validate_slot_eligibility(pick.player, slot):
+                    continue
+                pick.position_slot = slot
+                pick.save(update_fields=['position_slot'])
+
+    def reslot_budget(self, draft_id, manager_id, assignments):
+        """Rewrite a manager's budgeted players into the given {slot: player_id} layout."""
+        bpicks = d.BudgetPlayer.objects.filter(draft_id=draft_id, manager_id=manager_id, status='budgeted')
+        bpicks_by_player = {bpick.player.player_id: bpick for bpick in bpicks}
+        with transaction.atomic():
+            bpicks.update(position=None)
+            for slot, player_id in assignments.items():
+                bpick = bpicks_by_player.get(int(player_id))
+                if bpick is None or validate_slot_eligibility(bpick.player, slot):
+                    continue
+                bpick.position = slot
+                bpick.save(update_fields=['position'])
+
     def watch_pick(self, draft_id, manager_id, player_id, watch):
         draft = d.Draft.objects.filter(id=draft_id).first()
         d.Player.objects.filter(year=draft.year, player_id=player_id).update(watched=bool(watch))
@@ -253,6 +284,7 @@ class DraftReadService(BaseService):
                 budget_map[bpick.position]["pick"]["id"] = bpick.id
                 budget_map[bpick.position]["pick"]["player_id"] = bpick.player.player_id
                 budget_map[bpick.position]["pick"]["player_name"] = bpick.player.name
+                budget_map[bpick.position]["pick"]["position"] = bpick.player.position
                 budget_map[bpick.position]["pick"]["projected_price"] = bpick.player.override_price or bpick.player.projected_price
                 budget_map[bpick.position]["pick"]["actual_price"] = actual_prices.get(bpick.player.player_id, 0)
                 budget_map[bpick.position]["pick"]["budget_position"] = bpick.position
