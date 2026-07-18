@@ -25,7 +25,7 @@ SECRET_KEY = env('SECRET_KEY')
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.0/howto/deployment/checklist/
 
-ALLOWED_HOSTS = ['localhost']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]']
 
 DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 
@@ -166,7 +166,7 @@ if not DEBUG:
     SECURE_HSTS_PRELOAD = True
     X_FRAME_OPTIONS = "DENY"
 
-    ALLOWED_HOSTS = ["ap-exercise-competition.herokuapp.com"]
+    # ALLOWED_HOSTS = ["ap-exercise-competition.herokuapp.com"]
 
     # EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
     # EMAIL_HOST = env("EMAIL_HOST")
