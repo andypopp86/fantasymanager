@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 from email.policy import default
 from django.core.management.base import BaseCommand, CommandError
 
@@ -42,7 +45,7 @@ class Command(BaseCommand):
             loops += 1
 
         # for price in average_adp_prices:
-        #     print(price)
+        #     logger.info(price)
         
         data_path = os.path.join(os.getcwd(),'data','players.json')
         with open(data_path, 'r') as f:
@@ -54,7 +57,7 @@ class Command(BaseCommand):
                         projected_price = round(average_adp_prices[player_ct],2)
                     except:
                         projected_price = 0.00
-                    print('updating player %s (%s) with price %s' % (player_json['name'], player_json['player_id'], projected_price))
+                    logger.info('updating player %s (%s) with price %s' % (player_json['name'], player_json['player_id'], projected_price))
                     player, created = d.Player.objects.get_or_create(
                         player_id=player_json['player_id'],
                         defaults={

@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 from django.core.management.base import BaseCommand, CommandError
 
 import os 
@@ -15,7 +18,7 @@ class Command(BaseCommand):
         if options['delete_all_first']:
             existing_rules = r.Rule.objects.all()
             for rule in existing_rules:
-                print('deleting rule', rule)
+                logger.info('deleting rule', rule)
                 rule.delete()
         
         data_path = os.path.join(os.getcwd(),'data','rules.txt')

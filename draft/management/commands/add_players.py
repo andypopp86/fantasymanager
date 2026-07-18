@@ -1,13 +1,137 @@
+import logging
+import csv
+logger = logging.getLogger(__name__)
+
 from email.policy import default
 from django.core.management.base import BaseCommand, CommandError
 
 import os 
-import requests
 import json
 
 from django.utils import timezone
+from django.db import models
 
 from draft import models as d
+
+def load_ffc_json(average_adp_prices, this_year):
+    data_path = os.path.join(os.getcwd(),'data','players.json')
+    with open(data_path, 'r') as f:
+        data = json.load(f)
+        player_ct = 0
+        for player_json in data['players']:
+            if player_json['position'] != 'PK':
+                try:
+                    projected_price = round(average_adp_prices[player_ct],2)
+                except:
+                    projected_price = 0.00
+                logger.info('updating player %s (%s) with price %s' % (player_json['name'], player_json['player_id'], projected_price))
+                nfl_team = d.NFLTeam.objects.filter(code=player_json['team']).first()
+                player, created = d.Player.objects.get_or_create(
+                    player_id=player_json['player_id'],
+                    year=this_year,
+                    defaults={
+                        'name': player_json['name'],
+                        'position': player_json['position'],
+                        'adp_formatted': player_json['adp_formatted'],
+                        'projected_price': projected_price,
+                        'team': nfl_team
+                    }
+                )
+                player.projected_price = projected_price
+                if not created:
+                    player.team = nfl_team
+                player.save()
+                player_ct += 1
+
+
+def load_fantasypros_txt(this_year):
+    data_path = os.path.join(os.getcwd(),'data', f'{this_year}_players.txt')
+    with open(data_path, 'r') as f:
+        player_ct = 0
+        csv_reader = csv.reader(f, delimiter='\t',)
+        for row in csv_reader:
+            player_ct += 1
+            if player_ct == 1:
+                continue
+            rank = row[0]
+            name = row[1]
+            team_code = row[2]
+            posrank = row[3]
+            bye = row[4]
+            posrankfull = row[5]
+            pos = row[6]
+            player_id = row[7]
+            team = d.NFLTeam.objects.filter(code=team_code, year=this_year).first()
+            create_new = False
+            try:
+                player_id = int(player_id)
+            except:
+                create_new = True
+            try:
+                bye = int(bye)
+            except:
+                bye = None
+
+            created = False
+            if create_new:
+                max_player_id = d.Player.objects.filter(year=this_year).aggregate(max_id=models.Max('player_id'))['max_id']
+                player = d.Player.objects.create(
+                    player_id=max_player_id + 1,
+                    year=this_year,
+                    name=name,
+                    position=pos,
+                    team=team,
+                    adp_formatted=rank,
+                    bye_week=bye
+                )
+            else:
+                player, created = d.Player.objects.get_or_create(player_id=player_id, year=this_year, 
+                                                    defaults={
+                                                        'name': name, 'position': pos, 
+                                                        'team': team, "adp_formatted": rank,
+                                                        "bye_week": bye
+                                                        })
+            if not created:
+                player.name = name
+                player.position = pos
+                player.team = team
+                player.adp_formatted = rank
+                player.bye_week = bye
+                player.save()
+
+            if pos not in ('QB', 'RB', 'WR', 'TE', "DEF"):
+                continue
+            try:
+                rank = int(rank)
+            except:
+                print(f'couldnt convert rank {rank} to int')
+                continue
+            
+            # try:
+            #     projected_price = int(round(average_adp_prices[player_ct],0))
+            # except:
+            #     projected_price = 0.00
+            # nfl_team = d.NFLTeam.objects.filter(code=team, year=this_year).first()
+            # if not nfl_team:
+            #     print(f'couldnt find team {team} in year {this_year}')
+            # player, created = d.Player.objects.get_or_create(
+            #     player_id=f"{this_year}{rank}",
+            #     defaults={
+            #         'adp_formatted': rank,
+            #         'year': this_year,
+            #         'name': name,
+            #         'position': pos,
+            #     }
+            # )
+            # if created:
+            #     print(f'created player {player.name} ({player.player_id}) - {player.position} - {player.team}')
+            # if not player.team:
+            #     print(f'updating player {player.name} ({player.player_id}) - {player.position} - {player.team} - {team}')
+            # if team and team != "#N/A":
+            #     player.team = nfl_team 
+            # player.projected_price = projected_price
+            # player.save()
+
 
 class Command(BaseCommand):
     # help = 'Closes the specified poll for voting'
@@ -20,67 +144,39 @@ class Command(BaseCommand):
         team_ct = 10
         this_year = timezone.now().year
 
-        url = f'https://fantasyfootballcalculator.com/api/v1/adp/{type}?teams={team_ct}&year={this_year}'
-        resp = requests.get(url)
-        jresp = json.loads(resp)
-        print(jresp)
+        # url = f'https://fantasyfootballcalculator.com/api/v1/adp/{type}?teams={team_ct}&year={this_year}'
+        # resp = requests.get(url)
+        # jresp = json.loads(resp)
+        # logger.info(jresp)
 
-        return
-        kickers = d.Player.objects.filter(position='PK')
-        kickers.delete()
-        yearly_prices = {}
-        years = d.HistoricalDraftPicks.objects.all().distinct('year')
-        for year in years:
-            yearly_prices[year.year] = []
-        historical_picks = d.HistoricalDraftPicks.objects.all().order_by('year', '-price')
-        for pick in historical_picks:
-            if pick.player:
-                yearly_prices[pick.year].append(pick.price)
-        
-        loops = 0
-        stop_pricing = False
-        average_adp_prices = []
-        while loops < 300 and not stop_pricing:
-            draft_pos_prices = []
-            for year in yearly_prices.keys():
-                try:
-                    draft_pos_prices.append(yearly_prices[year][loops])
-                except:
-                    pass 
-            if len(draft_pos_prices) == 0:
-                stop_pricing = True
-            else:
-                average_adp_prices.append(sum(draft_pos_prices) / len(draft_pos_prices))
-            loops += 1
-
-        # for price in average_adp_prices:
-        #     print(price)
-        
-        data_path = os.path.join(os.getcwd(),'data','players.json')
-        with open(data_path, 'r') as f:
-            data = json.load(f)
-            player_ct = 0
-            for player_json in data['players']:
-                if player_json['position'] != 'PK':
+        # return
+        if False:
+            kickers = d.Player.objects.filter(position='PK')
+            kickers.delete()
+            yearly_prices = {}
+            years = d.HistoricalDraftPicks.objects.all().distinct('year')
+            for year in years:
+                yearly_prices[year.year] = []
+            historical_picks = d.HistoricalDraftPicks.objects.all().order_by('year', '-price')
+            for pick in historical_picks:
+                if pick.player:
+                    yearly_prices[pick.year].append(pick.price)
+            
+            loops = 0
+            stop_pricing = False
+            average_adp_prices = []
+            while loops < 300 and not stop_pricing:
+                draft_pos_prices = []
+                for year in yearly_prices.keys():
                     try:
-                        projected_price = round(average_adp_prices[player_ct],2)
+                        draft_pos_prices.append(yearly_prices[year][loops])
                     except:
-                        projected_price = 0.00
-                    print('updating player %s (%s) with price %s' % (player_json['name'], player_json['player_id'], projected_price))
-                    nfl_team = d.NFLTeam.objects.filter(code=player_json['team']).first()
-                    player, created = d.Player.objects.get_or_create(
-                        player_id=player_json['player_id'],
-                        year=this_year,
-                        defaults={
-                            'name': player_json['name'],
-                            'position': player_json['position'],
-                            'adp_formatted': player_json['adp_formatted'],
-                            'projected_price': projected_price,
-                            'team': nfl_team
-                        }
-                    )
-                    player.projected_price = projected_price
-                    if not created:
-                        player.team = nfl_team
-                    player.save()
-                    player_ct += 1
+                        pass 
+                if len(draft_pos_prices) == 0:
+                    stop_pricing = True
+                else:
+                    average_adp_prices.append(sum(draft_pos_prices) / len(draft_pos_prices))
+                loops += 1
+
+        # load_ffc_json(average_adp_prices, this_year)
+        load_fantasypros_txt(this_year)

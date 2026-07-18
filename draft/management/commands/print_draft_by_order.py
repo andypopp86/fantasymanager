@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
@@ -21,7 +24,7 @@ class Command(BaseCommand):
         pos = options["position"]
         draft = d.Draft.objects.filter(id=options['draft_id']).first()
         if not draft:
-            print('NO SUCH DRAFT')
+            logger.info('NO SUCH DRAFT')
         sort_field, sort_direction = options["order"].split(":")
         sort_direction = "-" if sort_direction == "desc" else ""
         picks = draft.drafted_players.filter(drafted=True)
@@ -33,5 +36,5 @@ class Command(BaseCommand):
             if (not mgr or mgr == pick.manager.name) \
                 and (not pos or pos == pick.player.position):
                 elems = [str(idx), f"${str(pick.price)}", pick.player.position, pick.manager.name, pick.player.name, pick.last_update_time.strftime("%H:%M:%S")]
-                print("\t".join(elems))
+                logger.info("\t".join(elems))
 

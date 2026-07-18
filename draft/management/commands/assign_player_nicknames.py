@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 from django.core.management.base import BaseCommand, CommandError
 
 import os 
@@ -21,4 +24,4 @@ class Command(BaseCommand):
                     player.nickname = columns[0]
                     player.save()
                 except Exception as exc:
-                    print(exc)
+                    logger.info(exc)

@@ -1,17 +1,39 @@
+import logging
+
 from functools import cached_property
 from django.utils import timezone
 from django.db import models
 from django.db.models import Case, Value, When, F
 
+logger = logging.getLogger(__name__)
+
+BUDGET_POSITIONS = (
+    ('QB1', 'QB1'),
+    ('RB1', 'RB1'),
+    ('RB2', 'RB2'),
+    ('WR1', 'WR1'),
+    ('WR2', 'WR2'),
+    ('TE1', 'TE1'),
+    ('FLEX1', 'FLEX1'),
+    ('FLEX2', 'FLEX2'),
+    ('DEF1', 'DEF1'),
+    ('BENCH1', 'BENCH1'),
+    ('BENCH2', 'BENCH2'),
+    ('BENCH3', 'BENCH3'),
+    ('BENCH4', 'BENCH4'),
+    ('BENCH5', 'BENCH5'),
+    ('BENCH6', 'BENCH6'),
+    ('BENCH7', 'BENCH7'),
+)
 POSITIONS = (
     (0, 'QB1'),
     (1, 'RB1'),
     (2, 'RB2'),
     (3, 'WR1'),
     (4, 'WR2'),
-    (5, 'FLEX1'),
-    (6, 'FLEX2'),
-    (7, 'TE1'),
+    (5, 'TE1'),
+    (6, 'FLEX1'),
+    (7, 'FLEX2'),
     (8, 'DEF1'),
     (9, 'BENCH1'),
     (10, 'BENCH2'),
@@ -38,6 +60,32 @@ POSITIONS_MAP = {
     'BENCH5': 13,
     'BENCH6': 14,
     'BENCH7': 15,
+}
+QB_POSITIONS = ('QB',)
+RB_POSITIONS = ('RB',)
+WR_POSITIONS = ('WR',)
+TE_POSITIONS = ('TE',)
+DEF_POSITIONS = ('DEF',)
+BENCH_POSITIONS = ('QB', 'RB', 'WR', 'TE', 'DEF')
+FLEX_POSITIONS = ('RB', 'WR', 'TE')
+
+ALLOWED_POSITIONS = {
+    "QB1": QB_POSITIONS,
+    "RB1": RB_POSITIONS,
+    "RB2": RB_POSITIONS,
+    "WR1": WR_POSITIONS,
+    "WR2": WR_POSITIONS,
+    "FLEX1": FLEX_POSITIONS,
+    "FLEX2": FLEX_POSITIONS,
+    "TE1": TE_POSITIONS,
+    "DEF1": DEF_POSITIONS,
+    "BENCH1": BENCH_POSITIONS,
+    "BENCH2": BENCH_POSITIONS,
+    "BENCH3": BENCH_POSITIONS,
+    "BENCH4": BENCH_POSITIONS,
+    "BENCH5": BENCH_POSITIONS,
+    "BENCH6": BENCH_POSITIONS,
+    "BENCH7": BENCH_POSITIONS,
 }
 
 FLEX_POSITIONS = ('RB', 'WR', 'TE')
@@ -82,24 +130,30 @@ class Matchup(models.Model):
         ordering = ['-year', 'week']
 
 class Player(models.Model):
-    player_id = models.CharField(max_length=100)
+    player_id = models.IntegerField()
     name = models.CharField(max_length=100)
     position = models.CharField(max_length=100)
     adp_formatted = models.DecimalField(max_digits=8, decimal_places=2)
     projected_price = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     override_price = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    position_price = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    adp_price = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     nickname = models.CharField(max_length=200, null=True, blank=True)
     team = models.ForeignKey(NFLTeam, null=True, blank=True, on_delete=models.SET_NULL)
     year = models.IntegerField(default=2023)
     favorite = models.BooleanField(default=False)
     offensive_support = models.IntegerField(default=0)
     skepticism = models.IntegerField(default=0)
+    notes = models.TextField(null=True, blank=True)
+    wind_score = models.IntegerField(default=0, help_text="Wind at their back (Off/Def help)")
+    bye_week = models.IntegerField(null=True, blank=True)
+    watched = models.BooleanField(default=False)
 
     def __str__(self) -> str:
         return self.name
 
     def save(self, *args, **kwargs):
-        self.projected_price = max(self.projected_price, 1)
+        self.projected_price = max(self.projected_price or 0, 1)
         super().save(*args, **kwargs)
 
     class Meta:
@@ -118,17 +172,18 @@ class Draft(models.Model):
     saved_slots = models.TextField(blank=True)
     locked = models.BooleanField(default=False)
     starting_budget = models.IntegerField(default=200)
+    rounds = models.IntegerField(default=19)
     limit_qb = models.IntegerField(default=3)
     limit_rb = models.IntegerField(default=8)
     limit_wr = models.IntegerField(default=8)
     limit_te = models.IntegerField(default=3)
     limit_def = models.IntegerField(default=2)
+    date_created = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:
         return '%s' % (self.draft_name)
     
     def save(self, *args, **kwargs):
-        print(f'year {self.year}')
         if not self.year:
             self.year = timezone.now().year
         super(Draft, self).save(*args, **kwargs)
@@ -155,9 +210,35 @@ class Draft(models.Model):
             try:
                 dp.save()
             except Exception as exc:
-                print(f"could not save {dp.player.id} {dp.player.name}")
+                logger.error(f"could not save {dp.player.id} {dp.player.name}")
 
         DraftPick.objects.bulk_create(players_to_add)
+
+    def draft_rounds(self):
+        """
+        Output a list of lists of draft pick objects
+        """
+        managers = self.managers.all().order_by("position")
+        rounds = [[
+            {
+                "manager": manager.name,
+                "manager_position": manager.position,
+                "pick": {"name": "No Selection", "price": 0, "position": ""},
+                "round": round_number
+             } for manager in managers
+        ] for round_number in range(self.rounds)]
+
+        current_manager = None
+        manager_player_ct = 0
+        for pick in self.drafted_players.filter(drafted=True).order_by("manager__position", "-last_update_time"):
+            if current_manager != pick.manager:
+                current_manager = pick.manager
+                manager_player_ct = 0
+            round_pick_dict = rounds[manager_player_ct][pick.manager.position]
+            round_pick_dict["pick"] = {"name": pick.player.name, "price": pick.price, "position": pick.player.position}
+            manager_player_ct += 1
+
+        return rounds
 
 
 class Manager(models.Model):
@@ -257,7 +338,7 @@ class DraftPick(models.Model):
     price = models.IntegerField(null=True, blank=True)
     created = models.DateTimeField(auto_now_add=True)
     drafted = models.BooleanField(default=False)
-    position_slot = models.CharField(max_length=50, choices=POSITIONS, null=True, blank=True)
+    position_slot = models.CharField(max_length=50, choices=BUDGET_POSITIONS, null=True, blank=True)
     last_update_time = models.DateTimeField(auto_now=True, null=True, blank=True)
 
     class Meta:
@@ -271,7 +352,7 @@ class DraftPick(models.Model):
     def save(self, *args, **kwargs):
         self.last_update_time=timezone.now()
         if self.drafted and (not self.manager or not self.price):
-            raise Exception('Must provide manager and price if player is drafted')
+            raise Exception(f'Must provide manager ({self.manager}) and price ({self.price}) if player is drafted')
         super(DraftPick, self).save(*args, **kwargs)
 
     def manager_short_name(self):
@@ -348,8 +429,49 @@ class BudgetPlayer(models.Model):
     player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='budgeted_players')
     manager = models.ForeignKey(Manager, on_delete=models.CASCADE, related_name="budgeted_players", null=True, blank=True)
     price = models.IntegerField(null=True, blank=True)
-    position = models.CharField(max_length=50, choices=POSITIONS)
+    position = models.CharField(max_length=50, choices=BUDGET_POSITIONS, null=True, blank=True)
     status = models.CharField(max_length=50, choices=BUDGET_STATUSES, default='none')
 
     def __str__(self):
         return '%s - %s - %s' % (self.player.name, self.position, self.price)
+
+
+class PlayerStats(models.Model):
+    year = models.IntegerField()
+    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='player_stats')
+    type = models.CharField(max_length=100, choices=(("rushing", "Rushing"), ("receiving", "Receiving"), ("passing", "Passing")))
+    age = models.IntegerField(null=True)
+    games = models.IntegerField(null=True)
+    games_started = models.IntegerField(null=True)
+    rush_attempts = models.IntegerField(null=True)
+    rush_yards = models.IntegerField(null=True)
+    targets = models.IntegerField(null=True)
+    receptions = models.IntegerField(null=True)
+    receiving_yards = models.IntegerField(null=True)
+    tds = models.IntegerField(null=True)
+    first_downs = models.IntegerField(null=True)
+
+
+class PositionADP(models.Model):
+    position = models.CharField(max_length=3)
+    adp = models.IntegerField()
+    average_price = models.DecimalField(max_digits=5, decimal_places=2)
+
+    class Meta:
+        ordering = ('position', 'adp')
+
+    def __str__(self):
+        return '%s - %s' % (self.position, self.adp)
+
+
+class PlanChange(models.Model):
+    draft = models.ForeignKey(Draft, on_delete=models.CASCADE)
+    budget_pick = models.ForeignKey(BudgetPlayer, on_delete=models.CASCADE)
+    draft_pick = models.ForeignKey(DraftPick, on_delete=models.CASCADE)
+    position = models.CharField(max_length=50, choices=BUDGET_POSITIONS, null=True, blank=True)
+
+    class Meta:
+        unique_together = ('draft', 'position')
+
+    def __str__(self):
+        return '%s - %s - %s - %s' % (self.draft.draft_name, self.position, self.budget_pick, self.draft_pick)

@@ -2,7 +2,8 @@ from django.core.management.base import BaseCommand, CommandError
 
 import os 
 import json
-
+import logging
+logger = logging.getLogger(__name__)
 from draft import models as d
 
 class Command(BaseCommand):
@@ -18,7 +19,7 @@ class Command(BaseCommand):
             if not options['year']:
                 raise Exception('Must provide year to delete')
             result = d.HistoricalDraftPicks.objects.filter(year=options['year']).delete()
-            print(result)
+            logger.info(result)
 
         if options['filename']:
             data_path = os.path.join(os.getcwd(),'data',options['filename'])

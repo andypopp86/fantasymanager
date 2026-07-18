@@ -32,22 +32,26 @@ class FlexFilter(admin.SimpleListFilter):
         elif self.value() == 'False':
             return queryset.filter(position__in=['QB', 'Def'])
         else:
-            print(self.value())
             return queryset
 
 
 class PlayerAdmin(admin.ModelAdmin):
-    list_display = ('player_id', 'year', 'name', 'team', 'nickname',  'position',  'adp_formatted',  'projected_price',  'override_price')
+    list_display = ('player_id', 'year', 'name', 'team', 'favorite', 'nickname',  'position',  'adp_formatted',  'projected_price',  'override_price')
     search_fields = ('name', 'position', )
-    list_filter = ('position', 'year')
-    fields = ('player_id', 'team', 'year',  'name', 'nickname', 'position',  'adp_formatted',  'projected_price',  'override_price', 'skepticism')
+    list_filter = ('position', 'year', 'team', 'favorite')
+    fields = ('player_id', 'notes', 'team', 'year',  'name', 'nickname', 'position',  'adp_formatted',  'projected_price', 'adp_price', 'override_price', 'skepticism', 'favorite', )
     
 class DraftAdmin(admin.ModelAdmin):
-    list_display = ('draft_name', 'year', 'drafter', 'projected_draft', )
+    list_display = ('draft_name', 'year', 'drafter', 'projected_draft', 'date_created')
     # search_fields = ('draft_name', 'drafter', )
-    list_filter = ('draft_name', 'drafter',)
-    fields = ('draft_name', 'year', 'drafter', 'projected_draft', 'saved_slots', 'locked' )
-    
+    list_filter = ('locked', 'draft_name', 'drafter',)
+    fields = ('draft_name', 'year', 'drafter', 'projected_draft', 'saved_slots', 'locked', 'date_created' )
+
+class PositionADPAdmin(admin.ModelAdmin):
+    list_display = ('position', 'adp', 'average_price')
+    list_filter = ('position', 'adp',)
+    fields = ('position', 'adp', 'average_price')
+
 class ManagerAdmin(admin.ModelAdmin):
     list_display = ('draft', 'name', 'budget', 'drafter', 'position', )
     # search_fields = ('draft_name', 'drafter', )
@@ -75,7 +79,7 @@ class DraftPickAdmin(admin.ModelAdmin):
             )
         }),
     )
-    readonly_fields = ('created', 'position_slot')
+    readonly_fields = ('created',)
 
 class WatchPickAdmin(admin.ModelAdmin):
     list_display = ('draft', 'player', 'manager', 'watched')
@@ -110,9 +114,13 @@ class HistoricalPlayerStatsAdmin(admin.ModelAdmin):
     fields = ('year', 'player', 'fantasy_points','rank', 'pass_yards','pass_tds','rush_att','rush_yards','rush_tds','receptions','rec_yards','rec_tds')
 
 class BudgetPlayerAdmin(admin.ModelAdmin):
-    list_display = ('draft', 'player', 'manager', 'price', 'get_position_display', 'get_status_display')
+    list_display = ('draft', 'player', 'manager', 'price', 'position', 'status_display')
     list_filter = ('draft', 'manager', 'status')
     readonly_fields = ('draft', 'player', 'manager', 'price' )
+
+    @admin.display(description='Status')
+    def status_display(self, obj):
+        return obj.get_status_display()
 
 class NFLTeamAdmin(admin.ModelAdmin):
     list_display = ('code', 'name', 'year', 'playoff_weather_score', 'early_season_schedule', 'playoff_schedule', 'defensive_ranking', 'pass_ranking', 'run_ranking')
@@ -120,7 +128,7 @@ class NFLTeamAdmin(admin.ModelAdmin):
     fields = ('code', 'name', 'year', 'playoff_weather_score', 
               'early_season_schedule', 'early_season_qb', 'early_season_rb', 'early_season_wr', 'early_season_te', 'early_season_def',
               'defensive_ranking', 'oline_ranking', 'pass_ranking', 'run_ranking')
-    readonly_fields = ('code', 'year',)
+    readonly_fields = ('year',)
 
 class TeamMatchupFilter(admin.SimpleListFilter):
     title = 'Team'
@@ -142,6 +150,17 @@ class MatchupAdmin(admin.ModelAdmin):
     readonly_fields = ('year', 'week', 'home', 'away')
 
 
+class PlayerStatsAdmin(admin.ModelAdmin):
+    search_fields = ('player__name',)
+    list_display = ('player', 'year', 'age', 'games', 'games_started', 'rush_attempts', 'rush_yards', 'targets', 'receptions', 'receiving_yards', 'tds', 'first_downs')
+    list_filter = ('year', 'player')
+    fields = ('player', 'year', 'age', 'games', 'games_started', 'rush_attempts', 'rush_yards', 'targets', 'receptions', 'receiving_yards', 'tds', 'first_downs')
+
+
+class PlanChangeAdmin(admin.ModelAdmin):
+    list_display = ('draft', 'budget_pick', 'draft_pick', 'position')
+    # list_filter = ('draft', 'budget_pick', 'draft_pick', 'position')
+    fields = ('draft', 'budget_pick', 'draft_pick', 'position')
 
 
 admin.site.register(d.NFLTeam, NFLTeamAdmin)
@@ -154,3 +173,6 @@ admin.site.register(d.Matchup, MatchupAdmin)
 admin.site.register(d.BudgetPlayer, BudgetPlayerAdmin)
 admin.site.register(d.HistoricalDraftPicks, HistoricalDraftPickAdmin)
 admin.site.register(d.HistoricalPlayerStats, HistoricalPlayerStatsAdmin)
+admin.site.register(d.PlayerStats, PlayerStatsAdmin)
+admin.site.register(d.PositionADP, PositionADPAdmin)
+admin.site.register(d.PlanChange, PlanChangeAdmin)

@@ -1,0 +1,59 @@
+.draftboard-grid {
+    display: grid;
+    grid-template-areas:
+        "sidebar main";
+    grid-template-columns: auto auto;
+    grid-template-rows: 1fr;
+    gap: 10px;
+    height: 100vh;
+    width: 100%;
+}
+
+.draft-slot {
+    height: 3rem;
+    width: 100%;
+    border: 1px solid black;
+    justify-content: center;
+    align-items: center;
+}
+
+.draft-sidebar { grid-area : sidebar; }
+.draft-main { grid-area : main; }
+
+.font-small { font-size: 0.75rem; }
+
+.draft-pick {
+    height: 3.5rem;
+    width: 100%;
+    border: 1px solid black;
+    justify-content: center;
+    align-items: center;
+}
+
+.draft-pick span {
+    height: 100%;
+}
+.draft-pick span:first-child {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.draft-pick span:last-child {
+    width: 2rem;
+    display: flex;
+    align-items: center;
+}
+
+.drag-over {
+    background-color: lightblue;
+}
+
+.component-subheader th {
+    font-size: 0.8rem;
+}
+
+.component-header {
+    font-size: 1rem;
+    font-weight: bold;
+}

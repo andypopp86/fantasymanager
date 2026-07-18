@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% load bootstrap3 %}
+{% load static %}
+
+{% bootstrap_css %}
+{% bootstrap_javascript %}
+
+{% block extra_css %}
+    <link rel='stylesheet' href="{% static 'css/draftboard.css' %}">
+{% endblock %}
+
+{% block extra_script %}
+    <script>
+
+    </script>
+{% endblock %}
+
+{% block content %}
+
+{% bootstrap_messages %}
+<div class='draft-container' data-draftid="{{ draft.id }}" data-year="{{ draft.year }}">
+    {% csrf_token %}
+    <div class="col-xs-12">
+        <table>
+            <thead>
+                <th>Budget Spent</th>
+                <th>Budget Remaining</th>
+                <th>My Budget</th>
+            </thead>
+            <tr>
+                <td>{{ budget_spent }}</td>
+                <td>{{ budget_remaining }}</td>
+                <td>{{ drafter.budget }}</td>
+            </tr>
+        </table>
+        </table>
+        <table class="table col-xs-12">
+            <tbody>
+                <thead>
+                    <th>Player</th>
+                    <th>Position</th>
+                    <th>Price</th>
+                    <th>Running Total</th>
+                </thead>
+                {% for pick in players %}
+                <tr>
+                    <td>{{ pick.player.name }}</td>
+                    <td>{{ pick.player.position }}</td>
+                    <td>{{ pick.player.projected_price }}</td>
+                    <td>{{ pick.running_total }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+{% endblock %}

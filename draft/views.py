@@ -1,17 +1,17 @@
 import json
 import html
 
-from decimal import Decimal
-
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
-from django.shortcuts import render, reverse
-from django.db.models import F
+from django.shortcuts import render
+from django.urls import reverse
+from django.db.models import F, DecimalField, IntegerField, ExpressionWrapper, Sum
 from django.utils import timezone
 from django.db.models.expressions import Window
 from django.db.models.functions import RowNumber
 
+# from django.db.models.functions import Window
 
-from draft import models as d 
+from draft import models as d
 from draft.services.draft.draft import (
     init_managers, init_adp_rounds,
     get_draft_board_objects, populate_draft_board, get_draft_object_lists, get_draft_context,
@@ -24,6 +24,7 @@ from draft.services.draft.draft import (
     picks_data_add_skepticism_rank,
     picks_data_add_offensive_support_rank,
     refresh_player_budget,
+    get_pick_position_slot,
 )
 
 def get_draft_board_data(request, draft_id):
@@ -174,19 +175,7 @@ def draft_player(request, draft_id, player_id):
     manager = d.Manager.objects.get(id=manager_id)
     drafter = draft.managers.filter(drafter=True).first()
     current_projected_team = get_new_projected_team(drafter)
-    player_assigned_slot = None
-    for team_slot, player in current_projected_team.items():
-        if position in ('QB') and not player and (team_slot.startswith('QB') or team_slot.startswith('BENCH')):
-            player_assigned_slot = str(team_slot)
-            break
-        elif position in ('RB', 'WR', 'TE') and not player and \
-            (team_slot.startswith('RB') or team_slot.startswith('FLEX') or team_slot.startswith('BENCH')):
-            player_assigned_slot = str(team_slot)
-            break
-        elif position in ('DEF') and not player and \
-            (team_slot.startswith('RB') or team_slot.startswith('BENCH')):
-            player_assigned_slot = str(team_slot)
-            break
+    player_assigned_slot = get_pick_position_slot(position, current_projected_team)
 
     # team_slots, open_position_slots, filled_slot = manager.current_team
     # next_slot = get_next_open_slot(position, team_slots)
@@ -614,7 +603,39 @@ def update_notes(request, draft_id):
 #             break
 #     return next_slot
 
-
+def override_prices(request, year):
+    if request.method == 'POST':
+        player_ids = request.POST.getlist('player_id')
+        override_prices = request.POST.getlist('override_price')
+        player_prices = dict(zip(player_ids, override_prices))
+        for k,v in player_prices.items():
+            if v != '':
+                price = int(v)
+                player = d.Player.objects.get(year=year, id=k)
+                player.override_price = price if price >= 0 else None
+                player.save()
+    players = d.Player.objects.filter(year=year).order_by('-projected_price')
+    var_dict = {
+        "players": players
+    }
+    return render(request, 'draft/override_prices.html', var_dict)
+    
+def player_stats(request, year, draft_id):
+    POINTS_PER_YARD = 0.1
+    POINTS_PER_TD = 6
+    draft = d.Draft.objects.get(id=draft_id)
+    sort_by = request.GET.get('sort_by', 'points_per_dollar')
+    field_sort = f'-{sort_by}'
+    player_stats = d.PlayerStats.objects.filter(year=year, player__drafted_players__draft__id=draft_id, player__drafted_players__drafted=False)
+    player_stats = player_stats.annotate(total_yards=F('rush_yards') + F('receiving_yards'))
+    player_stats = player_stats.annotate(points=F("total_yards") * POINTS_PER_YARD + F("tds") * POINTS_PER_TD)
+    player_stats = player_stats.annotate(points_per_dollar=ExpressionWrapper(F("points") / F("player__projected_price"), output_field=DecimalField(decimal_places=1)))
+    player_stats = player_stats.order_by(field_sort)
+    var_dict = {
+        "player_stats": player_stats,
+        "draft": draft,
+    }
+    return render(request, 'draft/player_stats.html', var_dict)
 
 
 def favorite_player(request, draft_id, player_id):
@@ -652,3 +673,30 @@ def skepticism_rating(request, draft_id, player_id):
     response = JsonResponse(json.dumps(data), safe=False)
     return response
 
+def react_draft_entrypoint(request):
+    context = {}
+    return render(request, "draft/index.html", context)
+
+
+from django.db.models import Sum
+from django.db.models import F
+from django.db.models import Window
+from django.db.models.functions import RowNumber
+
+def player_running_totals(request, draft_id):
+    draft = d.Draft.objects.get(id=draft_id)
+    picks = d.DraftPick.objects.filter(draft=draft, drafted=False).order_by('-player__projected_price')
+    budget_remaining = d.Manager.objects.filter(draft=draft).aggregate(Sum('budget'))['budget__sum']
+    budget_spent = draft.starting_budget * len(d.Manager.objects.filter(draft=draft)) - budget_remaining
+    running_total = 0
+    drafter = d.Manager.objects.filter(draft=draft, drafter=True).first()
+    for pick in picks:
+        running_total += pick.player.projected_price
+        pick.running_total = running_total
+    var_dict = {
+        "players": picks,
+        "budget_spent": budget_spent,
+        "drafter": drafter,
+        "budget_remaining": budget_remaining - drafter.budget
+    }
+    return render(request, 'draft/player_running_totals.html', var_dict)

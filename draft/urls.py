@@ -7,16 +7,17 @@ from draft import views as d
 app_name = 'Rule'
 
 urlpatterns = [
-	path(r'', d.list, name='list'),
+	path(r'list/', d.list, name='list'),
 	path(r'create/', d.create_draft, name='create'),
 	path(r'start/', d.start_draft, name='start'),
 	path(r'board/<int:draft_id>/', d.draft_board, name='board'),
+	path(r'react_draft_entrypoint/', d.react_draft_entrypoint, name='react_draft_entrypoint'),
 	# path(r'board/<int:draft_id>/json/', d.get_draft_board_json, name='board_data_json'),
 	# path(r'board/<int:draft_id>/data/', d.get_draft_board_data, name='board_data'),
 	# path(r'board_prices/<int:draft_id>/<int:rounds>', d.price_board, name='price_board'),
 	path(r'draft_player/<int:draft_id>/<int:player_id>/', d.draft_player, name='draft_player'),
 	path(r'undraft_player/<int:draft_id>/<int:player_id>/', d.undraft_player, name='undraft_player'),
-	path(r'unbudget_player/<int:draft_id>/<int:player_id>/', d.unbudget_player, name='undraft_player'),
+	path(r'unbudget_player/<int:draft_id>/<int:player_id>/', d.unbudget_player, name='unbudget_player'),
 	path(r'watch_player/<int:draft_id>/<int:player_id>/', d.watch_player, name='watch_player'),
 	path(r'unwatch_player/<int:draft_id>/<int:player_id>/', d.unwatch_player, name='unwatch_player'),
 	path(r'budget_player/<int:draft_id>/<int:player_id>/', d.budget_player, name='budget_player'),
@@ -27,4 +28,7 @@ urlpatterns = [
 	path(r'unfavorite_player/<int:draft_id>/<int:player_id>/', d.unfavorite_player, name='unfavorite_player'),
 	path(r'skepticism_rating/<int:draft_id>/<int:player_id>/', d.skepticism_rating, name='skepticism_rating'),
 	path(r'notes/<int:draft_id>/', d.update_notes, name='update_notes'),
+    path("<int:year>/player_stats/<int:draft_id>/", d.player_stats, name="player_stats"),
+    path("<int:year>/override_prices/", d.override_prices, name="override_prices"),
+    path("player_running_totals/<int:draft_id>/", d.player_running_totals, name="player_running_totals"),
 ]

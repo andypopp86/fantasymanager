@@ -14,3 +14,10 @@ class BaseSerializer(serializers.Serializer):
     def get_validated_data(self):
         self.is_valid(raise_exception=True)
         return self.validated_data
+
+
+class BaseInputSerializer(BaseSerializer):
+
+    def get_input_data(self):
+        self.is_valid(raise_exception=True)
+        return self.validated_data

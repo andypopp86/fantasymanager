@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
@@ -19,6 +22,6 @@ class Command(BaseCommand):
             for k,v in new_projected_team.items():
                 if v:
                     data = [draft.draft_name, k, str(v['player']), str(v['price']), str(v['position'])]
-                    print("|".join(data))
+                    logger.info("|".join(data))
                 else:
-                    print('missing')
+                    logger.info('missing')
