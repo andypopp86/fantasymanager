@@ -25,6 +25,10 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
             alert("Set a winning price greater than 0 before drafting.");
             return;
         }
+        if (price > Number(manager.manager_budget)) {
+            alert(`${manager.manager_name} has only $${manager.manager_budget} left — can't draft ${player.name} for $${price}.`);
+            return;
+        }
         const targetSlot = manager.draft_picks[positionSlot];
         if (targetSlot?.pick?.player_id) {
             alert(`${positionSlot} is already filled by ${targetSlot.pick.name}.`);
@@ -72,6 +76,11 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
             }
         });
     }
+    // Highlight owners who can't cover the current winning price while a player is on the block.
+    const nominationActive = !!(draftContext.nominatedPlayer && draftContext.nominatedPlayer.player_id);
+    const cannotAfford = (manager: any) =>
+        nominationActive && draftContext.nominationPrice > Number(manager.manager_budget);
+
     return (
         <>
             {draftContext.managers.length === 0 && <div>Loading...</div>}
@@ -82,9 +91,11 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
             <DraftPositions draftContext={draftContext} />
             {draftContext.managers.map((manager, index) => (
                 <div key={index} className="border border-gray-300 rounded">
-                    <div className={"text-lg text-center font-semibold font-small"} style={{backgroundColor: MANAGER_BG_COLORS[manager.manager_position],color: MANAGER_FG_COLORS[manager.manager_position]}}>
+                    <div className={"text-lg text-center font-semibold font-small"} style={cannotAfford(manager)
+                        ? {backgroundColor: "black", color: "white"}
+                        : {backgroundColor: MANAGER_BG_COLORS[manager.manager_position], color: MANAGER_FG_COLORS[manager.manager_position]}}>
                         <h2 >{manager.manager_name}</h2>
-                        <p>${manager.manager_budget}</p>
+                        <p style={cannotAfford(manager) ? {textDecoration: "line-through"} : undefined}>${manager.manager_budget}</p>
                     </div>
                 <div className="mt-1">
                     <ul className="mt-1">
