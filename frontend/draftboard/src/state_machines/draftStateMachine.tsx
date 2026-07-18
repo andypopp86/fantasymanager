@@ -8,6 +8,7 @@ export const draftStateMachine = createMachine({
     drafterId: 0 as number,
     draftDetails: {} as any,
     nominatedPlayer: {} as any,
+    nominationPrice: 0 as number,
     managers: [] as any[],
     undraftedPlayers: [] as any[],
     draftedPlayers: [] as any[],
@@ -43,6 +44,7 @@ export const draftStateMachine = createMachine({
             'nominate_player': {
                 actions: assign({
                     nominatedPlayer: ({ event }) => event.player,
+                    nominationPrice: ({ event }) => Math.round(parseFloat(event.player.projected_price)) || 1,
                 }),
                 target: 'player_nominated',
             },
@@ -100,6 +102,11 @@ export const draftStateMachine = createMachine({
     },
     player_nominated: {
         on: {
+            'set_nomination_price': {
+                actions: assign({
+                    nominationPrice: ({ event }) => event.price,
+                }),
+            },
             'draft_player': {
                 actions: assign({
                     // draftedPlayers: ({ context, event }) => [...context.draftedPlayers, event.player],
@@ -107,6 +114,8 @@ export const draftStateMachine = createMachine({
                     watchedPlayers: ({ context, event }) => context.watchedPlayers.filter((watchedPlayer) => watchedPlayer.player_id !== event.pickSlot.pick.player_id),
                     managers: ({ context, event }) => updateManagers(context.draftDetails, context.managers, event.managerId, event.pickSlot, "draft"),
                     budgetSpent: ({ context, event }) => calculateBudgetSpent(context.budgetedPlayers),
+                    nominatedPlayer: () => ({}),
+                    nominationPrice: () => 0,
                 }),
                 target: 'waiting',
             },
@@ -122,7 +131,8 @@ export const draftStateMachine = createMachine({
             },
             'cancel_nomination': {
                 actions: assign({
-                    nominatedPlayer: ({ context }) => {},
+                    nominatedPlayer: () => ({}),
+                    nominationPrice: () => 0,
                 }),
                 target: 'waiting',
             },

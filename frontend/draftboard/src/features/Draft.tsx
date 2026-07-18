@@ -6,6 +6,7 @@ import { AvailablePlayers } from "../features/AvailablePlayers";
 import WatchedPlayers from "../features/WatchedPlayers";
 import { useDraftState } from "../hooks/useDraftState";
 import { BudgetedPicks } from "./BudgetedPicks";
+import { NominationArea } from "./NominationArea";
 import PlanChangesModal from "./PlanChangesModal";
 
 type DraftProps = {
@@ -94,7 +95,10 @@ export default function Draft({draftDetails, send}: DraftProps) {
                 <>
                     <div className="draft-sidebar flex gap-2">
                         <AvailablePlayers draftContext={draftContext} draftSend={draftSend} />
-                        <WatchedPlayers draftContext={draftContext} draftSend={draftSend} />
+                        <div className="flex flex-col gap-2">
+                            <NominationArea draftContext={draftContext} draftSend={draftSend} />
+                            <WatchedPlayers draftContext={draftContext} draftSend={draftSend} />
+                        </div>
                         <BudgetedPicks draftContext={draftContext} draftSend={draftSend} />
                     </div>
                     <div className="draft-main">

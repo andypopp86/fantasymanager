@@ -1,9 +1,7 @@
 import logging
 
-from functools import cached_property
 from django.utils import timezone
 from django.db import models
-from django.db.models import Case, Value, When, F
 
 logger = logging.getLogger(__name__)
 
@@ -43,24 +41,6 @@ POSITIONS = (
     (14, 'BENCH6'),
     (15, 'BENCH7'),
 )
-POSITIONS_MAP = {
-    'QB1': 0,
-    'RB1': 1,
-    'RB2': 2,
-    'WR1': 3,
-    'WR2': 4,
-    'FLEX1': 5,
-    'FLEX2': 6,
-    'TE1': 7,
-    'DEF1': 8,
-    'BENCH1': 9,
-    'BENCH2': 10,
-    'BENCH3': 11,
-    'BENCH4': 12,
-    'BENCH5': 13,
-    'BENCH6': 14,
-    'BENCH7': 15,
-}
 QB_POSITIONS = ('QB',)
 RB_POSITIONS = ('RB',)
 WR_POSITIONS = ('WR',)
@@ -88,7 +68,6 @@ ALLOWED_POSITIONS = {
     "BENCH7": BENCH_POSITIONS,
 }
 
-FLEX_POSITIONS = ('RB', 'WR', 'TE')
 
 class NFLTeam(models.Model):
     code = models.CharField(max_length=10)
@@ -268,55 +247,6 @@ class Manager(models.Model):
         spent = sum(pick_prices)
         self.budget = self.draft.starting_budget - spent
         self.save(update_fields=['budget'])
-    
-    @cached_property
-    def current_team(self):
-        picks = self.manager_players.filter(drafted=True)
-        picks = picks.annotate(pos_order=Case(
-            When(player__position='QB', then=Value(1)),
-            When(player__position='RB', then=Value(2)),
-            When(player__position='WR', then=Value(3)),
-            When(player__position='TE', then=Value(4)),
-            When(player__position='DEF', then=Value(5)),
-            default=Value(6),
-        )).order_by(F('pos_order'), '-price')
-        team_slots = {x[1]:{'slot': x[0], 'pick': None} for x in POSITIONS}
-        loop_ct = 0
-        filled_slot = None
-
-        MAX_ITERS = 200
-        for pick in picks:
-            position = str(pick.player.position)
-            applied = False
-            slot_num = 1
-            slot_value = None
-            while not applied and loop_ct < MAX_ITERS:
-                loop_ct += 1
-                slot_pos = '%s%s' % (position, slot_num)
-                slot_dict = team_slots.get(slot_pos, -1)
-                slot_value = slot_dict['pick'] if slot_dict != -1 else -1
-                if slot_num == 8:
-                    applied = True # skip to next pick
-                    slot_dict['source'] = 'drafted'
-                    continue
-                elif slot_value is None:
-                    team_slots[slot_pos]['pick'] = pick
-                    applied = True
-                    filled_slot = str(slot_pos)
-                elif slot_value == -1 and pick.player.position in ('RB', 'WR', 'TE') and 'FLEX' not in slot_pos:
-                    position = 'FLEX'
-                    slot_num = 1
-                elif slot_value == -1 and pick.player.position in ('RB', 'WR', 'TE') and 'FLEX' in slot_pos:
-                    position = 'BENCH'
-                    slot_num = 1
-                else:
-                    slot_num += 1
-
-        open_position_slots = set()
-        for slot, slot_dict in team_slots.items():
-            if slot_dict['pick'] is None:
-                open_position_slots.add(slot[:-1])
-        return team_slots, open_position_slots, filled_slot
 
 class WatchPick(models.Model):
     draft = models.ForeignKey(Draft, on_delete=models.CASCADE)

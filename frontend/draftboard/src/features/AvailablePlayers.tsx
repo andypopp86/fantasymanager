@@ -1,11 +1,11 @@
 import React, { useEffect } from "react";
 import AvailablePlayer from "./AvailablePlayer.tsx";
 import { useState } from "react";
-import SubmitPick from "./SubmitPick.tsx";
 
 export const AvailablePlayers = ({draftContext, draftSend}) => {
-    const [nominatedPlayer, setNominatedPlayer] = useState(draftContext.undraftedPlayers![0].player || null);
-    const [openDialog, setOpenDialog] = useState(false);
+    const nominatePlayer = (player) => {
+        draftSend({ type: 'nominate_player', player });
+    }
     const handleDragStart = (e, id) => {
         const draggedPlayer = draftContext.undraftedPlayers.find((player) => player.player.player_id === id);
         draftSend({
@@ -176,8 +176,7 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
                         <AvailablePlayer
                             key={pick.player.player_id}
                             pick={pick}
-                            setOpenDialog={setOpenDialog}
-                            setNominatedPlayer={setNominatedPlayer}
+                            nominatePlayer={nominatePlayer}
                             handleDragStart={handleDragStart}
                             id={pick.player.id}
                             draftContext={draftContext}
@@ -186,15 +185,6 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
                     ))}
                 </tbody>
             </table>
-            {openDialog && (
-            <SubmitPick
-                draftContext={draftContext}
-                player={nominatedPlayer}
-                openDialog={openDialog}
-                setOpenDialog={setOpenDialog}
-                draftSend={draftSend}
-            />
-            )}
         </div>
     )
 }
