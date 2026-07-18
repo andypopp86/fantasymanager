@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { POSITION_BG_COLORS, POSITION_FG_COLORS } from "../utils/colors";
-import { draftWatchPick } from "../lib/data";
 
 type NominationAreaProps = {
     draftContext: any;
@@ -41,12 +40,6 @@ export const NominationArea = ({ draftContext, draftSend }: NominationAreaProps)
 
     const cancel = () => draftSend({ type: "cancel_nomination" });
 
-    const watch = () => {
-        draftWatchPick(draftContext.draftId, draftContext.drafterId, nominatedPlayer.player_id, { watch: true });
-        draftSend({ type: "watch_player", player: nominatedPlayer });
-        draftSend({ type: "cancel_nomination" });
-    };
-
     return (
         <div>
             <div className="component-header">Nomination</div>
@@ -84,14 +77,15 @@ export const NominationArea = ({ draftContext, draftSend }: NominationAreaProps)
                                 onChange={handlePriceChange}
                             />
                         </div>
+                        {nominatedPlayer.notes && (
+                            <ul className="w-full text-xs text-gray-700 list-disc pl-5 mb-2">
+                                {nominatedPlayer.notes.split("\n").map((note, index) => (
+                                    <li key={index}>{note}</li>
+                                ))}
+                            </ul>
+                        )}
                         <p className="text-gray-500 text-xs text-center mb-2">Drag the card to a slot to draft</p>
                         <div className="flex gap-2">
-                            <button
-                                className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-md text-sm"
-                                onClick={watch}
-                            >
-                                Watch
-                            </button>
                             <button
                                 className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-3 py-1 rounded-md text-sm"
                                 onClick={cancel}
