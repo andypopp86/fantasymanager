@@ -94,6 +94,12 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
         setFilteredPlayers(draftContext.undraftedPlayers);
     }
 
+    const handleFilterKeyDown = (e) => {
+        if (e.key === "Enter") {
+            handleFilterChange();
+        }
+    }
+
     useEffect(() => {
         setFilteredPlayers(draftContext.undraftedPlayers);
     }, [draftContext.undraftedPlayers]);
@@ -126,20 +132,23 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
                     <tr>
                         <td scope="row">Name:</td>
                         <td><input type="text" style={{width: "100px"}}
-                            onBlur={(e) => handleNameFilterChange(e.target.value)} />
+                            onChange={(e) => handleNameFilterChange(e.target.value)}
+                            onKeyDown={handleFilterKeyDown} />
                         </td>
                     </tr>
                     <tr>
                         <td scope="row">Position:</td>
                         <td><input type="text" style={{width: "100px"}}
-                            onBlur={(e) => handlePositionFilterChange(e.target.value)} />
+                            onChange={(e) => handlePositionFilterChange(e.target.value)}
+                            onKeyDown={handleFilterKeyDown} />
                         </td>
                     </tr>
                     <tr>
                         <td scope="row">Price:</td>
                         <td><input type="number" style={{width: "100px"}}
                         className="py-1 px-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:border-blue-500"
-                        onBlur={(e) => handlePriceFilterChange(e.target.value)} /></td>
+                        onChange={(e) => handlePriceFilterChange(e.target.value)}
+                        onKeyDown={handleFilterKeyDown} /></td>
                     </tr>
                     <tr>
                         <td scope="row">Budgeted:</td>
