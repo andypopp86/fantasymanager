@@ -22,9 +22,9 @@ export const DraftPositions = ({draftContext}) => {
         <>
             {draftContext && draftContext.budgetedPlayers && 
             <>
-                <div className="border border-gray-300 rounded">
+                <div className="border border-gray-300 rounded" style={{ fontSize: "0.875rem" }}>
                     <div className="flex justify-center border-b border-gray-300 bg-gray-100">
-                        <span className="text-xs py-0.5 font-semibold">Draft Board</span>
+                        <span className="text-xs py-0.5 font-semibold">&nbsp;</span>
                     </div>
                     <div style={{height: "3.5rem"}}
                         className={"draft-slot flex justify-center items-center"}>
@@ -36,7 +36,7 @@ export const DraftPositions = ({draftContext}) => {
                         <li key={positionSlot} className="draft-slot flex justify-center items-center"
                             style={{backgroundColor: getPositionBGColor(actualPositions, positionSlot), color: getPositionFGColor(actualPositions, positionSlot) }}
                             >
-                            {positionSlot}
+                            {positionSlot.replace(/^BENCH(\d+)$/, "B$1")}
                         </li>
                     ))}
                     </ul>

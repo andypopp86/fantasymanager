@@ -5,7 +5,6 @@ import { draftListRetrieve } from "../lib/data";
 import DraftList from "../features/DraftList";
 import DraftCreate from "../features/DraftCreate";
 import Draft from "../features/Draft";
-import PlanChangesModal from "./PlanChangesModal";
 import { useDraftAppState } from "../hooks/useDraftAppState";
 
 export const DraftDashboard = () => {
@@ -39,20 +38,8 @@ export const DraftDashboard = () => {
 
   return (
     <>
-        <div>App State: {currentState}</div>
         {isDrafting ? (
             <>
-            <button className={"btn"} onClick={() => appSend({type: "draft.back"})}>Back</button>
-            <a 
-                className={"btn bg-blue-500 text-white hover:bg-blue-700 active:bg-blue-900 rounded-md px-2 py-1"}
-                href={`/draft/${selectedDraft.year}/player_stats/${selectedDraft.id}`}
-                target="_blank"
-            >Player Stats</a>
-            <a 
-                className={"btn bg-orange-500 text-white hover:bg-orange-700 active:bg-orange-900 rounded-md px-2 py-1 mx-2"}
-                href={`/draft/${selectedDraft.id}/player_running_totals`}
-                target="_blank"
-            >Running Totals</a>
             {selectedDraft && <Draft draftDetails={selectedDraft} send={appSend} />}
             </>
         ) : isCreating ? (
