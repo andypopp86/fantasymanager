@@ -15,6 +15,9 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
     // A drafter pick whose budget slot holds a different player, awaiting the
     // owner's decision in the conflict modal (null when there's nothing pending).
     const [pendingConflict, setPendingConflict] = useState<any>(null);
+    // How many rows to hide from the top of the board, to make room for
+    // drag-and-drop into the remaining (lower) slots as the draft fills up.
+    const [hiddenRows, setHiddenRows] = useState(0);
     // Auto-slot one manager's drafted players by price/position: update the UI
     // immediately via the state machine, and persist the new slots to the server.
     const shuffleTeam = (manager: any) => {
@@ -181,7 +184,7 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
                 className="grid gap-1"
                 style={{ gridTemplateColumns: `3rem repeat(${draftContext.managers.length}, minmax(0, 1fr))` }}
             >
-            <DraftPositions draftContext={draftContext} />
+            <DraftPositions draftContext={draftContext} hiddenRows={hiddenRows} setHiddenRows={setHiddenRows} />
             {draftContext.managers.map((manager, index) => (
                 <div key={index} className="border border-gray-300 rounded">
                     <div className="flex justify-center border-b border-gray-300 bg-gray-100">
@@ -189,7 +192,7 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
                             className="text-[10px] py-0.5 hover:opacity-70"
                             title="Auto-slot this team by price/position"
                             onClick={() => shuffleTeam(manager)}
-                        >🔀 Reorder</button>
+                        >🔀</button>
                     </div>
                     <div className={"text-lg text-center font-semibold font-small"} style={cannotAfford(manager)
                         ? {backgroundColor: "black", color: "white"}
@@ -199,7 +202,9 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
                     </div>
                 <div className="mt-1">
                     <ul className="mt-1">
-                    {manager.draft_picks && Object.entries(manager.draft_picks).map(([positionSlot, pickSlot]) => (
+                    {manager.draft_picks && Object.entries(manager.draft_picks)
+                        .slice(hiddenRows)
+                        .map(([positionSlot, pickSlot]) => (
                         <DraftBoardSlot
                             key={positionSlot}
                             positionSlot={positionSlot}
