@@ -4,6 +4,7 @@ import { draftWatchPick } from "../lib/data";
 
 export default function WatchedPlayers({draftContext, draftSend}) {
     const [isDragOver, setIsDragOver] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(true);
     const drafter = draftContext.managers.find((manager) => manager.is_drafter);
     const watchSum = draftContext.watchedPlayers?.reduce((acc, watchedPlayer) => {
         return acc + parseFloat(watchedPlayer.projected_price)}, 0);
@@ -34,6 +35,19 @@ export default function WatchedPlayers({draftContext, draftSend}) {
         draftSend({ type: "watch_player", player: watchedPlayer });
     };
 
+    if (isCollapsed) {
+        return (
+            <button
+                className="component-header border border-gray-400 rounded-md px-1 py-2 hover:bg-gray-100"
+                style={{ writingMode: "vertical-rl" }}
+                onClick={() => setIsCollapsed(false)}
+                title="Show WatchList"
+            >
+                WatchList ▸
+            </button>
+        );
+    }
+
     return (
         <div
             onDragOver={handleDragOver}
@@ -41,7 +55,16 @@ export default function WatchedPlayers({draftContext, draftSend}) {
             onDrop={handleDrop}
             style={{ backgroundColor: isDragOver ? "#dbeafe" : undefined }}
         >
-            <div className="component-header">WatchList</div>
+            <div className="component-header flex items-center justify-between">
+                <span>WatchList</span>
+                <button
+                    className="border border-gray-400 rounded px-1 text-xs hover:bg-gray-100"
+                    onClick={() => setIsCollapsed(true)}
+                    title="Hide WatchList"
+                >
+                    Hide
+                </button>
+            </div>
             <table>
                 <thead>
                     <tr className="component-subheader">
