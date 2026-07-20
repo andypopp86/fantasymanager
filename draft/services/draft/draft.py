@@ -84,16 +84,23 @@ class DraftWriteService(BaseService):
         return draft
     
     def update_plan_changes(self, draft_id, manager_id, draft_pick, budgeted_player, position_slot):
+        # draft_pick is None when submit_pick failed; nothing to record then.
+        if draft_pick is None:
+            return
         manager = d.Manager.objects.filter(id=manager_id).first()
         if not manager.drafter:
             return
         draft = d.Draft.objects.filter(id=draft_id).first()
         if budgeted_player and (draft_pick.player_id != budgeted_player.player_id):
-            d.PlanChange.objects.create(
+            # PlanChange is unique per (draft, position); re-drafting a slot must
+            # overwrite the prior record rather than raise IntegrityError.
+            d.PlanChange.objects.update_or_create(
                 draft=draft,
-                draft_pick=draft_pick,
-                budget_pick=budgeted_player,
-                position=position_slot
+                position=position_slot,
+                defaults={
+                    "draft_pick": draft_pick,
+                    "budget_pick": budgeted_player,
+                },
             )
             
 

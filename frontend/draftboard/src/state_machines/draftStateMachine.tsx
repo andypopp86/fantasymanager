@@ -73,7 +73,7 @@ export const draftStateMachine = createMachine({
             },
             'budget_player': {
                 actions: assign({
-                    budgetedPlayers: ({ context, event }) => updateBudgetedPlayers(context, event.positionSlot, event.player_id, event.player_name, event.price),
+                    budgetedPlayers: ({ context, event }) => updateBudgetedPlayers(context, event.positionSlot, event.player_id, event.player_name, event.price, event.position),
                     budgetSpent: ({ context, event }) => calculateBudgetSpent(context.budgetedPlayers),
                 }),
                 target: 'waiting',
@@ -160,7 +160,7 @@ export const draftStateMachine = createMachine({
             },
             'budget_player': {
                 actions: assign({
-                    budgetedPlayers: ({ context, event }) => updateBudgetedPlayers(context, event.positionSlot, event.player_id, event.player_name, event.price),
+                    budgetedPlayers: ({ context, event }) => updateBudgetedPlayers(context, event.positionSlot, event.player_id, event.player_name, event.price, event.position),
                     budgetSpent: ({ context, event }) => calculateBudgetSpent(context.budgetedPlayers),
                 }),
             },
@@ -175,6 +175,16 @@ export const draftStateMachine = createMachine({
                         return context.budgetedPlayers;
                     },
                     budgetSpent: ({ context, event }) => calculateBudgetSpent(context.budgetedPlayers),
+                }),
+            },
+            // Drafting to the owner's team overwrites the matching budget slot. When
+            // that slot already holds a *different* player, DraftBoard raises the
+            // conflict modal and dispatches this instead of a bare 'budget_player',
+            // so the displaced player can be kept (moved) and other picks dropped.
+            'apply_budget_resolution': {
+                actions: assign({
+                    budgetedPlayers: ({ context, event }) => applyBudgetResolution(context.budgetedPlayers, event),
+                    budgetSpent: ({ context }) => calculateBudgetSpent(context.budgetedPlayers),
                 }),
             },
 
@@ -318,11 +328,70 @@ const recreatePlayer = (pick: any) => {
     return recreatedPlayer;
 }
 
-const updateBudgetedPlayers = (context: any, positionSlot: string, player_id: number, player_name: string, price: number) => {
+const clearBudgetPick = (pick: any) => {
+    pick.id = null;
+    pick.player_id = "";
+    pick.player_name = "";
+    pick.position = "";
+    pick.projected_price = 0;
+    pick.actual_price = 0;
+};
+
+// Resolve a drafter budget-slot conflict in a single pass so the panel never
+// flickers through an inconsistent state:
+//   1. drop the picks the user chose to remove,
+//   2. relocate the displaced player to the slot the user picked (if kept),
+//   3. drop the drafted player into its slot (overwriting the displaced player).
+// The drafted player's old budget slot (if any) is also cleared, mirroring the
+// server's budget_pick which moves the single BudgetPlayer row.
+const applyBudgetResolution = (budgetedPlayers: any, event: any) => {
+    const { draftSlot, draftedPlayer, keptSlot, removeSlots = [], price } = event;
+    const displaced = { ...budgetedPlayers[draftSlot].pick };
+
+    removeSlots.forEach((slot: string) => clearBudgetPick(budgetedPlayers[slot].pick));
+
+    if (keptSlot && displaced.player_id) {
+        Object.assign(budgetedPlayers[keptSlot].pick, {
+            id: displaced.id,
+            player_id: displaced.player_id,
+            player_name: displaced.player_name,
+            position: displaced.position,
+            projected_price: displaced.projected_price,
+            actual_price: displaced.actual_price || 0,
+        });
+    }
+
+    Object.keys(budgetedPlayers).forEach((slot) => {
+        if (slot !== draftSlot && String(budgetedPlayers[slot].pick.player_id) === String(draftedPlayer.player_id)) {
+            clearBudgetPick(budgetedPlayers[slot].pick);
+        }
+    });
+
+    Object.assign(budgetedPlayers[draftSlot].pick, {
+        id: null,
+        player_id: draftedPlayer.player_id,
+        player_name: draftedPlayer.name,
+        position: draftedPlayer.position,
+        // The winning price rides in `price`; the nominated-player object has no
+        // `.price`, so using it here would render NaN in the budget panel.
+        projected_price: price,
+        actual_price: 0,
+    });
+
+    return budgetedPlayers;
+};
+
+const updateBudgetedPlayers = (context: any, positionSlot: string, player_id: number, player_name: string, price: number, position: string) => {
     let updatedBudgetedPlayers = Object.assign({}, context.budgetedPlayers);
     updatedBudgetedPlayers[positionSlot]["pick"]["player_id"] = player_id;
     updatedBudgetedPlayers[positionSlot]["pick"]["player_name"] = player_name;
     updatedBudgetedPlayers[positionSlot]["pick"]["projected_price"] = price;
+    // Store the player's real position so slot-eligibility checks (e.g. the budget
+    // conflict modal) work even before the next server refetch, which is the only
+    // other place this gets populated.
+    if (position !== undefined) {
+        updatedBudgetedPlayers[positionSlot]["pick"]["position"] = position;
+    }
     return updatedBudgetedPlayers;
 }
 
