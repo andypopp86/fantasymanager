@@ -33,6 +33,7 @@ export const BudgetedPicks = ({draftContext, draftSend}) => {
                 player_id: draftContext.draggedPlayer.player.player_id,
                 player_name: draftContext.draggedPlayer.player.name,
                 price: draftContext.draggedPlayer.projected_price,  // double check this
+                position: budgetedPlayerPos,
             });
             const managerId = draftContext.drafterId;
             draftBudgetPick(draftContext.draftId, managerId, draftContext.draggedPlayer.player.player_id, 

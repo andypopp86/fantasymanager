@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useState } from "react";
 import { MANAGER_BG_COLORS, MANAGER_FG_COLORS } from "../utils/colors";
 import { DraftBoardSlot } from "./DraftBoardSlot";
 import { DraftPositions } from "./DraftPositions";
+import BudgetConflictModal from "./BudgetConflictModal";
 import { draftPickSubmit, draftBudgetPick, draftUnbudgetPick, draftReslotPicks } from "../lib/data";
 import { findBudgetedPositionSlotByPlayerId } from "../utils/draftHelpers";
 import { autoSlotAssignments } from "../utils/reordering";
@@ -11,6 +12,9 @@ type DraftBoardProps = {
     draftSend: any
 }
 export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
+    // A drafter pick whose budget slot holds a different player, awaiting the
+    // owner's decision in the conflict modal (null when there's nothing pending).
+    const [pendingConflict, setPendingConflict] = useState<any>(null);
     // Auto-slot one manager's drafted players by price/position: update the UI
     // immediately via the state machine, and persist the new slots to the server.
     const shuffleTeam = (manager: any) => {
@@ -65,13 +69,33 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
             }
         };
 
-        // Keep the drafter's budget panel consistent with what actually happened.
-        if (managerId === draftContext.drafterId) {
+        const isDrafter = managerId === draftContext.drafterId;
+
+        // Drafting to the owner's team overwrites the matching budget slot. If that
+        // slot already holds a *different* player, pause and let the owner decide who
+        // to keep/drop instead of silently losing the budgeted player.
+        if (isDrafter) {
+            const budgetPick = draftContext.budgetedPlayers[positionSlot]?.pick;
+            const conflicts = budgetPick && budgetPick.player_id && budgetPick.player_id !== ""
+                && String(budgetPick.player_id) !== String(player.player_id);
+            if (conflicts) {
+                setPendingConflict({ player, price, positionSlot, manager, pickSlot, displaced: budgetPick });
+                return;
+            }
+        }
+
+        finalizeDraft({ player, price, positionSlot, manager, pickSlot, isDrafter });
+    }
+
+    // Mirror a straightforward (non-conflicting) pick into the budget, then submit.
+    const finalizeDraft = ({ player, price, positionSlot, manager, pickSlot, isDrafter }) => {
+        const managerId = manager.manager_id;
+        if (isDrafter) {
             draftBudgetPick(draftContext.draftId, managerId, player.player_id, {
                 projected_price: price,
                 budget_position: positionSlot,
             });
-            draftSend({ type: 'budget_player', positionSlot, player_id: player.player_id, player_name: player.name, price });
+            draftSend({ type: 'budget_player', positionSlot, player_id: player.player_id, player_name: player.name, price, position: player.position });
         } else {
             const existingBudgetSlot = findBudgetedPositionSlotByPlayerId(draftContext.budgetedPlayers, player.player_id);
             if (existingBudgetSlot) {
@@ -79,15 +103,60 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
                 draftUnbudgetPick(draftContext.draftId, draftContext.drafterId, player.player_id);
             }
         }
+        submitPick({ player, price, positionSlot, manager, pickSlot });
+    }
 
-        draftPickSubmit(draftContext.draftId, managerId, player.player_id, { price, position_slot: positionSlot }).then((response) => {
+    const submitPick = ({ player, price, positionSlot, manager, pickSlot }) => {
+        draftPickSubmit(draftContext.draftId, manager.manager_id, player.player_id, { price, position_slot: positionSlot }).then((response) => {
             const errMsg = response.data['error'];
             if (errMsg == null) {
-                draftSend({ type: 'draft_player', pickSlot, price, managerId });
+                draftSend({ type: 'draft_player', pickSlot, price, managerId: manager.manager_id });
             } else {
                 alert(`Error submitting pick = ${errMsg}`);
             }
         });
+    }
+
+    // Owner confirmed the conflict modal: persist the budget changes (keep the
+    // displaced player in its new slot, drop the chosen picks, move the drafted
+    // player in), mirror them into the state machine, then submit the pick.
+    const resolveConflict = ({ keptSlot, removeSlots }) => {
+        const { player, price, positionSlot, manager, pickSlot, displaced } = pendingConflict;
+        const { draftId, drafterId, budgetedPlayers } = draftContext;
+
+        removeSlots.forEach((slot) => {
+            const playerId = budgetedPlayers[slot]?.pick?.player_id;
+            if (playerId) draftUnbudgetPick(draftId, drafterId, playerId);
+        });
+        if (displaced.player_id) {
+            if (keptSlot) {
+                // Move the displaced player to its new slot (one budget row per player).
+                draftBudgetPick(draftId, drafterId, displaced.player_id, {
+                    projected_price: displaced.projected_price,
+                    budget_position: keptSlot,
+                });
+            } else {
+                // Not kept: drop it from the budget, else its row still claims this
+                // slot on the server and reappears on the next refetch.
+                draftUnbudgetPick(draftId, drafterId, displaced.player_id);
+            }
+        }
+        draftBudgetPick(draftId, drafterId, player.player_id, {
+            projected_price: price,
+            budget_position: positionSlot,
+        });
+
+        draftSend({
+            type: 'apply_budget_resolution',
+            draftSlot: positionSlot,
+            draftedPlayer: player,
+            price,
+            keptSlot: keptSlot || null,
+            removeSlots,
+        });
+
+        setPendingConflict(null);
+        submitPick({ player, price, positionSlot, manager, pickSlot });
     }
     // Highlight owners who can't cover the current winning price while a player is on the block.
     const nominationActive = !!(draftContext.nominatedPlayer && draftContext.nominatedPlayer.player_id);
@@ -96,6 +165,14 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
 
     return (
         <>
+            {pendingConflict && (
+                <BudgetConflictModal
+                    pending={pendingConflict}
+                    draftContext={draftContext}
+                    onConfirm={resolveConflict}
+                    onCancel={() => setPendingConflict(null)}
+                />
+            )}
             {draftContext.managers.length === 0 && <div>Loading...</div>}
             {draftContext.managers.length > 0 && 
             <>
