@@ -100,7 +100,10 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
             {draftContext.managers.length > 0 && 
             <>
             <div className="component-header">Draft Board</div>
-            <div className="grid grid-cols-11 gap-1">
+            <div
+                className="grid gap-1"
+                style={{ gridTemplateColumns: `3rem repeat(${draftContext.managers.length}, minmax(0, 1fr))` }}
+            >
             <DraftPositions draftContext={draftContext} />
             {draftContext.managers.map((manager, index) => (
                 <div key={index} className="border border-gray-300 rounded">
