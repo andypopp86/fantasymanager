@@ -2,8 +2,10 @@ import React from "react";
 import { POSITION_BG_COLORS, POSITION_FG_COLORS } from "../utils/colors";
 
 
-export const DraftPositions = ({draftContext}) => {
+export const DraftPositions = ({draftContext, hiddenRows, setHiddenRows}) => {
     const actualPositions = ["QB", "RB", "WR", "TE", "DEF"];
+    const totalRows = Object.keys(draftContext.budgetedPlayers || {}).length;
+    const clampHiddenRows = (value) => Math.max(0, Math.min(totalRows, parseInt(value) || 0));
     const getPositionBGColor = (actualPositions, positionSlot) => {
         
         if (actualPositions.includes(positionSlot.substring(0, 2))) {
@@ -28,11 +30,21 @@ export const DraftPositions = ({draftContext}) => {
                     </div>
                     <div style={{height: "3.5rem"}}
                         className={"draft-slot flex justify-center items-center"}>
-                        <p>Pos</p>
+                        <input
+                            type="number"
+                            min={0}
+                            max={totalRows}
+                            value={hiddenRows}
+                            onChange={(e) => setHiddenRows(clampHiddenRows(e.target.value))}
+                            title="Hide this many rows from the top of the board to free up space"
+                            className="w-10 text-center border border-gray-300 rounded text-sm"
+                        />
                     </div>
 
                     <ul className="mt-1">
-                    {draftContext.budgetedPlayers && Object.entries(draftContext.budgetedPlayers).map(([positionSlot, pickSlot]) => (
+                    {draftContext.budgetedPlayers && Object.entries(draftContext.budgetedPlayers)
+                        .slice(hiddenRows)
+                        .map(([positionSlot, pickSlot]) => (
                         <li key={positionSlot} className="draft-slot flex justify-center items-center"
                             style={{backgroundColor: getPositionBGColor(actualPositions, positionSlot), color: getPositionFGColor(actualPositions, positionSlot) }}
                             >
