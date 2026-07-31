@@ -119,9 +119,11 @@ export interface DraftSubmitPickOutput {
 }
 
 // ---------------------------------------------------------------------------
-// Draft-machine context shapes (client-side state, NOT the API types above).
-// This is the single source of truth for what lives in the draftStateMachine
-// context — and therefore exactly what a Dexie snapshot (lib/db.ts) persists.
+// Client-side data shapes (NOT the API param/output types above).
+// Dexie (lib/db.ts) is the client-side database: server fetches hydrate its
+// tables, components read it via useDraftData/liveQuery, and every mutation
+// goes through lib/mutations.ts. The XState machine holds FLOW state only
+// (nomination, drag) — see DraftFlowContext at the bottom.
 // ---------------------------------------------------------------------------
 
 // Roster/budget slot name from the server's BUDGET_POSITIONS:
@@ -192,25 +194,65 @@ export type WatchedPlayer = {
     projected_price: number | string,
 }
 
-// The draftStateMachine context. Persisted verbatim to Dexie on every
-// transition; restored verbatim when the server is unreachable.
-export type DraftContext = {
+// ---- Dexie table rows (lib/db.ts) -----------------------------------------
+// Modeled on the SERVER's rows, not the UI's lists: a DraftPickRow mirrors
+// DraftPick (one row per draft+player; "available" is just drafted=false),
+// BudgetPickRow mirrors BudgetPlayer. UI lists are projections (useDraftData).
+
+export type DraftPickRow = {
     draftId: number,
-    drafterId: number,
-    draftDetails: Draft | Record<string, never>,
+    player_id: number | string,
+    drafted: boolean, // not indexed (IndexedDB can't index booleans); partition in JS
+    manager_id: number | null,
+    price: number | null,
+    slot: SlotName | null,
+    pick_id?: number | string | null,
+    player: PlayerDetail,
+    projected_price: number | string,
+    // points, yards, tds, rush_attempts, receptions, targets, first_downs …
+    stats: Record<string, number | string | null>,
+}
+
+export type BudgetPickRow = {
+    draftId: number,
+    player_id: number | string,
+    slot: SlotName,
+    player_name: string,
+    position: string,
+    projected_price: number | string,
+    actual_price: number | string,
+    status: string,
+}
+
+export type WatchPickRow = {
+    draftId: number,
+    player_id: number | string,
+    name: string,
+    position: string,
+    projected_price: number | string,
+}
+
+// Per-draft singleton row: details, managers (identity only — budgets are
+// DERIVED from drafted rows, never stored), and the slot template.
+export type DraftMetaRow = {
+    draftId: number,
+    savedAt: string,
+    draftDetails: Draft,
+    managers: {
+        manager_id: number,
+        manager_name: string,
+        manager_position: number,
+        is_drafter: boolean,
+    }[],
+    slots: { slot: SlotName, order: number, allowed_positions: string[] }[],
+}
+
+// ---- XState flow context ---------------------------------------------------
+// The machine holds ONLY in-flight interaction state; all draft data lives in
+// Dexie and reaches components via useDraftData.
+export type DraftFlowContext = {
     nominatedPlayer: PlayerDetail | Record<string, never>,
     nominationPrice: number,
-    managers: SlottedManager[],
-    undraftedPlayers: UndraftedPlayer[],
-    draftedPlayers: any[], // TODO in the machine; unused
-    watchedPlayers: WatchedPlayer[],
-    budgetedPlayers: Record<SlotName, PickSlot>,
     draggedPlayer: { player: PlayerDetail, projected_price?: number | string } | Record<string, never>,
     budgetSlotTargeted: SlotName | Record<string, never>,
-    budgetSpent: number,
-    planChanges: any[],
-    // Dexie-restore flags: true/timestamp when this session was hydrated from
-    // a local snapshot because the server was unreachable.
-    restoredFromSnapshot: boolean,
-    snapshotSavedAt: string | null,
 }

@@ -1,12 +1,11 @@
 import React from "react";
 import { POSITION_BG_COLORS, POSITION_FG_COLORS } from "../utils/colors";
-import { draftWatchPick } from "../lib/data";
+import { unwatchPick } from "../lib/mutations";
 
 
 export default function WatchedPlayer({ watchedPlayer, draftSend, draftId, managerId }) {
     const unwatchPlayer = (watchedPlayer) => {
-        draftWatchPick(draftId, managerId, watchedPlayer.player_id, {watch: false});
-        draftSend({type: 'unwatch_player', player: watchedPlayer});
+        unwatchPick(draftId, managerId, watchedPlayer.player_id);
     }
     return (
         <>

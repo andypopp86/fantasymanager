@@ -1,27 +1,25 @@
 import Dexie, { type Table } from "dexie";
-import type { DraftContext } from "./draft.schemas";
+import type { BudgetPickRow, DraftMetaRow, DraftPickRow, WatchPickRow } from "./draft.schemas";
 
-// Local (IndexedDB) persistence of live draft state, so a mid-draft page
-// reload or server outage doesn't lose the board. The server stays the source
-// of truth whenever it's reachable — snapshots are a fallback, not a sync.
-
-// One snapshot per draft: the entire machine context, written atomically so a
-// restore is always a consistent instant (a player is available OR drafted,
-// never both). Split into per-concept tables only when a real read/write
-// pattern needs it (e.g. a future pendingWrites queue) — not for tidiness.
-export type DraftSnapshot = {
-    draftId: number;
-    savedAt: string; // ISO timestamp, indexed for pruning
-    context: DraftContext;
-};
+// Dexie is the client-side database. Server fetches hydrate these tables
+// (hydrateDraft below), components read them live via useDraftData, and all
+// writes go through lib/mutations.ts (one transaction + one API call each).
+// The server remains the source of truth: a successful refetch replaces a
+// draft's rows wholesale. If the server is unreachable, last session's rows
+// are simply still here — offline viewing needs no special restore path.
 
 // Schema history. Dexie applies version() blocks sequentially to upgrade
 // whatever version a browser has — so APPEND a new version(n) for every
 // change and never edit or remove an existing block.
-//   v1: draftSnapshots keyed by draftId
-//   v2: + savedAt index (enables pruning stale snapshots)
+//   v1: draftSnapshots (whole-context blob) keyed by draftId
+//   v2: + savedAt index on draftSnapshots
+//   v3: server-modeled tables (draft_picks/budget_picks/watch_picks/draft_meta);
+//       draftSnapshots dropped — Dexie is now the data layer, not a crash dump
 class DraftboardDB extends Dexie {
-    draftSnapshots!: Table<DraftSnapshot, number>;
+    draft_picks!: Table<DraftPickRow, [number, number | string]>;
+    budget_picks!: Table<BudgetPickRow, [number, number | string]>;
+    watch_picks!: Table<WatchPickRow, [number, number | string]>;
+    draft_meta!: Table<DraftMetaRow, number>;
 
     constructor() {
         super("draftboard");
@@ -31,37 +29,114 @@ class DraftboardDB extends Dexie {
         this.version(2).stores({
             draftSnapshots: "draftId, savedAt",
         });
+        this.version(3).stores({
+            draftSnapshots: null,
+            draft_picks: "[draftId+player_id], draftId, [draftId+manager_id], [draftId+slot]",
+            budget_picks: "[draftId+player_id], draftId, [draftId+slot]",
+            watch_picks: "[draftId+player_id], draftId",
+            draft_meta: "draftId",
+        });
     }
 }
 
 export const db = new DraftboardDB();
 
-// Snapshots fire on every state-machine transition (including drags), so
-// coalesce bursts into one write.
-const SAVE_DEBOUNCE_MS = 300;
-let saveTimer: ReturnType<typeof setTimeout> | null = null;
+// Replace one draft's rows with fresh server data, atomically. Payloads are
+// the four load-query responses (see Draft.tsx) passed through verbatim.
+export const hydrateDraft = async (
+    draftId: number,
+    // The four load-query responses; typed loose because the data.ts wrapper
+    // generics don't reflect the actual runtime arrays.
+    payloads: {
+        draftDetails: any,
+        availablePlayers: any,
+        managerPicks: any,
+        budgetedPicks: any,
+        watchedPlayers: any,
+    },
+) => {
+    const { draftDetails, availablePlayers, managerPicks, budgetedPicks, watchedPlayers } = payloads;
 
-export const saveDraftSnapshot = (draftId: number, context: DraftContext) => {
-    if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-        saveTimer = null;
-        db.draftSnapshots
-            .put({ draftId, savedAt: new Date().toISOString(), context })
-            .catch((err) => console.error("Failed to save draft snapshot", err));
-    }, SAVE_DEBOUNCE_MS);
-};
+    const STAT_FIELDS = ["points", "yards", "tds", "first_downs", "rush_attempts", "receptions", "targets"];
+    const pickRows: DraftPickRow[] = availablePlayers.map((item) => ({
+        draftId,
+        player_id: item.player.player_id,
+        drafted: false,
+        manager_id: null,
+        price: null,
+        slot: null,
+        player: item.player,
+        projected_price: item.projected_price,
+        stats: Object.fromEntries(STAT_FIELDS.map((f) => [f, item[f]])),
+    }));
+    managerPicks.forEach((manager) => {
+        Object.entries(manager.draft_picks || {}).forEach(([slot, pickSlot]: [string, any]) => {
+            const pick = pickSlot.pick;
+            if (!pick.player_id) return;
+            pickRows.push({
+                draftId,
+                player_id: pick.player_id,
+                drafted: true,
+                manager_id: manager.manager_id,
+                price: pick.price,
+                slot,
+                pick_id: pick.pick_id,
+                player: { player_id: pick.player_id, name: pick.name, position: pick.position, projected_price: pick.projected_price },
+                projected_price: pick.projected_price,
+                stats: {},
+            });
+        });
+    });
 
-export const loadDraftSnapshot = (draftId: number): Promise<DraftSnapshot | undefined> =>
-    db.draftSnapshots.get(draftId);
+    const budgetRows: BudgetPickRow[] = Object.entries(budgetedPicks)
+        .filter(([, slotObj]: [string, any]) => slotObj.pick.player_id !== "" && slotObj.pick.player_id != null)
+        .map(([slot, slotObj]: [string, any]) => ({
+            draftId,
+            player_id: slotObj.pick.player_id,
+            slot,
+            player_name: slotObj.pick.player_name,
+            position: slotObj.pick.position,
+            projected_price: slotObj.pick.projected_price,
+            actual_price: slotObj.pick.actual_price || 0,
+            status: slotObj.pick.status,
+        }));
 
-export const deleteDraftSnapshot = (draftId: number): Promise<void> =>
-    db.draftSnapshots.delete(draftId);
+    const watchRows: WatchPickRow[] = watchedPlayers.map((player) => ({
+        draftId,
+        player_id: player.player_id,
+        name: player.name,
+        position: player.position,
+        projected_price: player.projected_price,
+    }));
 
-// Snapshots of long-finished drafts are dead weight (each can be hundreds of
-// KB); drop any not written in this many days. Run once per app load.
-const SNAPSHOT_TTL_DAYS = 45;
+    const meta: DraftMetaRow = {
+        draftId,
+        savedAt: new Date().toISOString(),
+        draftDetails,
+        managers: managerPicks.map((manager) => ({
+            manager_id: manager.manager_id,
+            manager_name: manager.manager_name,
+            manager_position: manager.manager_position,
+            is_drafter: manager.is_drafter,
+        })),
+        slots: Object.entries(budgetedPicks).map(([slot, slotObj]: [string, any]) => ({
+            slot,
+            order: slotObj.order,
+            allowed_positions: slotObj.allowed_positions,
+        })),
+    };
 
-export const pruneStaleSnapshots = (): Promise<number> => {
-    const cutoff = new Date(Date.now() - SNAPSHOT_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
-    return db.draftSnapshots.where("savedAt").below(cutoff).delete();
+    await db.transaction("rw", db.draft_picks, db.budget_picks, db.watch_picks, db.draft_meta, async () => {
+        await Promise.all([
+            db.draft_picks.where("draftId").equals(draftId).delete(),
+            db.budget_picks.where("draftId").equals(draftId).delete(),
+            db.watch_picks.where("draftId").equals(draftId).delete(),
+        ]);
+        await Promise.all([
+            db.draft_picks.bulkPut(pickRows),
+            db.budget_picks.bulkPut(budgetRows),
+            db.watch_picks.bulkPut(watchRows),
+            db.draft_meta.put(meta),
+        ]);
+    });
 };

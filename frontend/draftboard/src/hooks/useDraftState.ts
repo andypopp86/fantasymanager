@@ -1,40 +1,22 @@
 import { createActor } from "xstate";
 import { draftStateMachine } from "../state_machines/draftStateMachine";
 import { useSelector } from '@xstate/react';
-import { saveDraftSnapshot, pruneStaleSnapshots } from "../lib/db";
 
-// Drop snapshots of long-finished drafts once per app load.
-pruneStaleSnapshots().catch((err) => console.error("Failed to prune draft snapshots", err));
-
-// One app-wide actor (not per-component) so draft state — including transient
-// bits like the current nomination — survives SPA navigation between pages.
-// draft_loaded reconciles fresh server data into it on every return visit.
+// One app-wide actor (not per-component) so flow state — the current
+// nomination, drag — survives SPA navigation between pages. Draft DATA lives
+// in Dexie and is read via useDraftData; this machine is interaction-only.
 const draftActor = createActor(draftStateMachine).start();
 
-// Persist every context change to Dexie so a reload or server outage can pick
-// up where the draft left off. Saved without the restored-flags so a
-// snapshot-of-a-restored-session hydrates the same as any other snapshot.
-draftActor.subscribe((state) => {
-    const context = state.context;
-    if (!context.draftId) return;
-    saveDraftSnapshot(context.draftId, {
-        ...context,
-        restoredFromSnapshot: false,
-        snapshotSavedAt: null,
-    });
-});
-
 export const useDraftState = () => {
-    const {currentState, draftContext} = useSelector(draftActor, (state) => {
+    const {currentState, flowContext} = useSelector(draftActor, (state) => {
         return {
             currentState: state.value,
-            draftContext: state.context,
-
+            flowContext: state.context,
         }
     });
     return {
         currentState,
         draftStateRef: draftActor,
-        draftContext
+        flowContext,
     };
 }
