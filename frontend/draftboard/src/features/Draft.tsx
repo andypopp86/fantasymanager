@@ -97,7 +97,7 @@ export default function Draft({draftDetails, send}: DraftProps) {
             Changes made now may not reach the server.
         </p>
     )}
-    {draftContext && draftContext.draftId && (
+    {draftContext && draftContext.draftId === draftDetails.id && (
         <div className="draftboard-grid">
             {((playersData && managerPicks) || draftContext.restoredFromSnapshot) && (
                 <>

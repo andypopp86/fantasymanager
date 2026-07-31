@@ -2,6 +2,24 @@ import { createMachine, assign } from 'xstate';
 import { findBudgetedPositionSlotByPlayerId, checkForPositionLimitHit } from '../utils/draftHelpers';
 
 
+// Server-owned slices, re-assignable from any state: every draft_loaded
+// (initial load, SPA return visit, React Query refetch) takes the server's
+// version of these wholesale. Client-only state (nomination) is reconciled
+// separately per state below.
+const assignServerSlices = {
+    draftId: ({ event }) => event.draftDetails.id,
+    draftDetails: ({ event }) => event.draftDetails,
+    drafterId: ({ event }) => event.managers.find((manager) => manager.is_drafter).manager_id,
+    managers: ({ event }) => event.managers,
+    undraftedPlayers: ({ event }) => event.undraftedPlayers,
+    watchedPlayers: ({ event }) => event.watchedPlayers,
+    budgetedPlayers: ({ event }) => event.budgetedPicks,
+    budgetSpent: ({ event }) => calculateBudgetSpent(event.budgetedPicks),
+    restoredFromSnapshot: () => false,
+    snapshotSavedAt: () => null,
+    // TODO: implement draftedPlayers (low priority)
+};
+
 export const draftStateMachine = createMachine({
   context: {
     draftId: 0 as number,
@@ -28,19 +46,7 @@ export const draftStateMachine = createMachine({
     loadingDraft: {
         on: {
             'draft_loaded': {
-                actions: assign({
-                    draftId: ({ event }) => event.draftDetails.id,
-                    draftDetails: ({ event }) => event.draftDetails,
-                    drafterId: ({ event }) => event.managers.find((manager) => manager.is_drafter).manager_id,
-                    managers: ({ event }) => event.managers,
-                    undraftedPlayers: ({ event }) => event.undraftedPlayers,
-                    watchedPlayers: ({ event }) => event.watchedPlayers,
-                    budgetedPlayers: ({ event }) => event.budgetedPicks,
-                    budgetSpent: ({ event }) => calculateBudgetSpent(event.budgetedPicks),
-                    restoredFromSnapshot: () => false,
-                    snapshotSavedAt: () => null,
-                    // TODO: implement draftedPlayers (low priority)
-                }),
+                actions: assign(assignServerSlices),
                 target: 'waiting',
             },
             // Server unreachable: hydrate from the local Dexie snapshot instead.
@@ -58,6 +64,18 @@ export const draftStateMachine = createMachine({
     },
     waiting: {
         on: {
+            // Re-hydrate server data on SPA return visits and refetches. Loading a
+            // *different* draft resets nomination state; the same draft keeps it.
+            'draft_loaded': {
+                actions: assign({
+                    ...assignServerSlices,
+                    nominatedPlayer: ({ context, event }) =>
+                        event.draftDetails.id === context.draftId ? context.nominatedPlayer : {},
+                    nominationPrice: ({ context, event }) =>
+                        event.draftDetails.id === context.draftId ? context.nominationPrice : 0,
+                }),
+                target: 'waiting',
+            },
             'nominate_player': {
                 actions: assign({
                     nominatedPlayer: ({ event }) => event.player,
@@ -131,6 +149,22 @@ export const draftStateMachine = createMachine({
     },
     player_nominated: {
         on: {
+            // Same-draft reload keeps the player on the block; a different draft
+            // abandons the nomination and returns to waiting.
+            'draft_loaded': [
+                {
+                    guard: ({ context, event }) => event.draftDetails.id === context.draftId,
+                    actions: assign(assignServerSlices),
+                },
+                {
+                    actions: assign({
+                        ...assignServerSlices,
+                        nominatedPlayer: () => ({}),
+                        nominationPrice: () => 0,
+                    }),
+                    target: 'waiting',
+                },
+            ],
             'set_nomination_price': {
                 actions: assign({
                     nominationPrice: ({ event }) => event.price,
