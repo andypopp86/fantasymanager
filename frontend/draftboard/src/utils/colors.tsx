@@ -13,6 +13,13 @@ export const POSITION_FG_COLORS = {
     "DEF": "white",
 }
 
+export const getBudgetPerSlotColors = (value: number) => {
+    if (value <= 1) return { backgroundColor: "#ff0000", color: "white" };
+    if (value < 2) return { backgroundColor: "orangered", color: "white" };
+    if (value <= 5) return { backgroundColor: "yellow", color: "black" };
+    return { backgroundColor: "green", color: "white" };
+}
+
 export const MANAGER_BG_COLORS = [
     "red", "blue", "green", "orange", "purple", "grey", "yellow", "Goldenrod", "DodgerBlue", "IndianRed", "MediumPurple"
 ]

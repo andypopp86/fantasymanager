@@ -161,6 +161,14 @@ predefined plan into the budget panel instead of editing slots under time pressu
 Postgres on :5434). `fantasy/settings.py` sets `TESTING = 'test' in sys.argv` and
 strips `debug_toolbar` from apps/middleware under tests (it refuses to run when
 Django forces DEBUG=False).
+**Budget-per-remaining-slot** (`utils/draftHelpers.budgetPerRemainingSlot`): shown as a
+color-coded strip (`features/BudgetPerSlot.tsx`) in the sidebar directly below the
+Nomination area. Formula:
+`(manager_budget − 1) / (openSlots − 1)` over the drafter's **actual** roster
+(`draft_picks`, not the budget plan) — the two `−1`s reserve $1 for the DEF slot, which
+should never cost more. Denominator clamps at 1; returns `null` (badge hidden) when the
+roster is full. Color scale in `utils/colors.getBudgetPerSlotColors`: ≤1 bright red,
+1–2 orange-red, 2–5 yellow, >5 green.
 
 **Key data shapes** (loose `any` in the code):
 - Budget slot: `{ order, allowed_positions: string[], pick: { player_id, player_name, position, projected_price, actual_price, price, budget_position, status, ... } }`, keyed by slot name. Empty pick ⇒ `player_id === ""`.

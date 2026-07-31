@@ -2,9 +2,10 @@ import React, { useState } from "react";
 import WatchedPlayer from "./WatchedPlayer.tsx";
 import { draftWatchPick } from "../lib/data";
 
-export default function WatchedPlayers({draftContext, draftSend}) {
+// Visibility is owned by Draft.tsx: when hidden, only a small button next to
+// Back renders (out of the way); when shown, the panel sits here in the sidebar.
+export default function WatchedPlayers({draftContext, draftSend, onHide}) {
     const [isDragOver, setIsDragOver] = useState(false);
-    const [isCollapsed, setIsCollapsed] = useState(true);
     const drafter = draftContext.managers.find((manager) => manager.is_drafter);
     const watchSum = draftContext.watchedPlayers?.reduce((acc, watchedPlayer) => {
         return acc + parseFloat(watchedPlayer.projected_price)}, 0);
@@ -35,19 +36,6 @@ export default function WatchedPlayers({draftContext, draftSend}) {
         draftSend({ type: "watch_player", player: watchedPlayer });
     };
 
-    if (isCollapsed) {
-        return (
-            <button
-                className="component-header border border-gray-400 rounded-md px-1 py-2 hover:bg-gray-100"
-                style={{ writingMode: "vertical-rl" }}
-                onClick={() => setIsCollapsed(false)}
-                title="Show WatchList"
-            >
-                WatchList ▸
-            </button>
-        );
-    }
-
     return (
         <div
             onDragOver={handleDragOver}
@@ -59,7 +47,7 @@ export default function WatchedPlayers({draftContext, draftSend}) {
                 <span>WatchList</span>
                 <button
                     className="border border-gray-400 rounded px-1 text-xs hover:bg-gray-100"
-                    onClick={() => setIsCollapsed(true)}
+                    onClick={onHide}
                     title="Hide WatchList"
                 >
                     Hide

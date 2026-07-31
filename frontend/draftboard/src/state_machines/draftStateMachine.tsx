@@ -84,6 +84,12 @@ export const draftStateMachine = createMachine({
                 }),
                 target: 'waiting',
             },
+            'set_player_favorite': {
+                actions: assign({
+                    undraftedPlayers: ({ context, event }) => setPlayerFavorite(context.undraftedPlayers, event.playerId, event.favorite),
+                }),
+                target: 'waiting',
+            },
             'reslot_manager': {
                 actions: assign({
                     managers: ({ context, event }) => reslotManagerPicks(context.managers, event.managerId, event.assignments),
@@ -153,6 +159,11 @@ export const draftStateMachine = createMachine({
                     managers: ({ context, event }) => reslotManagerPicks(context.managers, event.managerId, event.assignments),
                 }),
             },
+            'set_player_favorite': {
+                actions: assign({
+                    undraftedPlayers: ({ context, event }) => setPlayerFavorite(context.undraftedPlayers, event.playerId, event.favorite),
+                }),
+            },
             'reslot_budget': {
                 actions: assign({
                     budgetedPlayers: ({ context, event }) => reslotBudgetedPlayers(context.budgetedPlayers, event.assignments),
@@ -193,6 +204,16 @@ export const draftStateMachine = createMachine({
     },
 });
 
+
+// Mirror a heart-toggle into the available-players list so favorite state
+// (and the favorite filter) stays live without waiting for a refetch.
+const setPlayerFavorite = (undraftedPlayers: any[], playerId: any, favorite: boolean) => {
+    return undraftedPlayers.map((uplayer) =>
+        uplayer.player.player_id === playerId
+            ? { ...uplayer, player: { ...uplayer.player, favorite } }
+            : uplayer
+    );
+}
 
 const updateManagers = (draftDetails: any, managers: any[], manager_id: number, pickSlot: any, action: string) => {
     const price = action === "draft" ? pickSlot.pick.price : -pickSlot.pick.price;
