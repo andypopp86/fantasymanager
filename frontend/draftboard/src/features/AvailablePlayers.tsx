@@ -23,10 +23,6 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
     const [targetTypeFilterValue, setTargetTypeFilterValue] = useState("");
     const [filteredPlayers, setFilteredPlayers] = useState(draftContext.undraftedPlayers);
 
-    useEffect(() => {
-        setFilteredPlayers(draftContext.undraftedPlayers);
-    }, [draftContext.undraftedPlayers]);
-    
     const checkName = (player) => {
         return player.player.name.toLowerCase().includes(nameFilterValue.toLowerCase());
     }
@@ -110,8 +106,10 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
         }
     }
 
+    // The player list changes on every pick (and refetch); re-apply the active
+    // filters instead of resetting, so results stay filtered until Clear.
     useEffect(() => {
-        setFilteredPlayers(draftContext.undraftedPlayers);
+        handleFilterChange();
     }, [draftContext.undraftedPlayers]);
 
     const handleStatChange = () => {
