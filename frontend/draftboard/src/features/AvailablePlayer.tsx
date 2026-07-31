@@ -67,12 +67,14 @@ export default function AvailablePlayer({pick, nominatePlayer, handleDragStart, 
                 <td onClick={() => nominatePlayer(pick.player)}>{pick.player.name}</td>
                 <td onClick={() => nominatePlayer(pick.player)}>{pick.player.position}</td>
                 <td onClick={() => nominatePlayer(pick.player)}>{parseInt(pick.projected_price)}</td>
+                {/* Unused for the 2026 draft; matching headers are commented out in AvailablePlayers.tsx
                 <td onClick={() => nominatePlayer(pick.player)}>{parseInt(pick.player.adp_price)}</td>
                 <td onClick={() => nominatePlayer(pick.player)}>{parseInt(pick.player.adp_price)-parseInt(pick.projected_price)}</td>
                 <td className={scheduleBG + " " + scheduleFG}
                     >{strengthOfSchedule}
                 </td>
                 <td>{parseInt(pick[statField])}</td>
+                */}
                 <td className="bg-white" onClick={() => postFavorite(pick.player, !isFavorite)}>
                     <Heart key={`H${pick.player.player_id}`} filled={isFavorite} size="sm"/>
                 </td>

@@ -214,10 +214,12 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
                         <th>Player Name</th>
                         <th>Position</th>
                         <th>Pos$</th>
+                        {/* Unused for the 2026 draft; matching cells are commented out in AvailablePlayer.tsx
                         <th>Adp$</th>
                         <th>Diff$</th>
                         <th>Schd</th>
                         <th>{statAbbreviation}</th>
+                        */}
                     </tr>
                 </thead>
                 <tbody>
