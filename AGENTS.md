@@ -144,6 +144,14 @@ guard a `None` pick — otherwise re-drafting a slot 500s, which surfaces on the
 "the pick submitted but the board didn't update" (the optimistic budget change lands, but
 the `draftPickSubmit` promise rejects so `draft_player` never fires).
 
+**Budget-per-remaining-slot** (`utils/draftHelpers.budgetPerRemainingSlot`): shown as a
+color-coded badge in the drafter's draft-board column header. Formula:
+`(manager_budget − 1) / (openSlots − 1)` over the drafter's **actual** roster
+(`draft_picks`, not the budget plan) — the two `−1`s reserve $1 for the DEF slot, which
+should never cost more. Denominator clamps at 1; returns `null` (badge hidden) when the
+roster is full. Color scale in `utils/colors.getBudgetPerSlotColors`: ≤1 bright red,
+1–2 orange-red, 2–5 yellow, >5 green.
+
 **Key data shapes** (loose `any` in the code):
 - Budget slot: `{ order, allowed_positions: string[], pick: { player_id, player_name, position, projected_price, actual_price, price, budget_position, status, ... } }`, keyed by slot name. Empty pick ⇒ `player_id === ""`.
 - Manager: `{ manager_id, manager_name, manager_position, manager_budget, is_drafter, draft_picks: { [slot]: { allowed_positions, position_slot, pick: {...} } } }`.

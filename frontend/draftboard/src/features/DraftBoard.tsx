@@ -4,7 +4,8 @@ import { DraftBoardSlot } from "./DraftBoardSlot";
 import { DraftPositions } from "./DraftPositions";
 import BudgetConflictModal from "./BudgetConflictModal";
 import { draftPickSubmit, draftBudgetPick, draftUnbudgetPick, draftReslotPicks } from "../lib/data";
-import { findBudgetedPositionSlotByPlayerId } from "../utils/draftHelpers";
+import { findBudgetedPositionSlotByPlayerId, budgetPerRemainingSlot } from "../utils/draftHelpers";
+import { getBudgetPerSlotColors } from "../utils/colors";
 import { autoSlotAssignments } from "../utils/reordering";
 
 type DraftBoardProps = {
@@ -161,6 +162,22 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
         setPendingConflict(null);
         submitPick({ player, price, positionSlot, manager, pickSlot });
     }
+    // Dollars per open slot on the drafter's actual team, shown in their header.
+    const perSlotBadge = (manager: any) => {
+        if (manager.manager_id !== draftContext.drafterId) return null;
+        const perSlot = budgetPerRemainingSlot(manager);
+        if (perSlot === null) return null;
+        return (
+            <p
+                className="text-xs font-bold rounded mx-1 mb-0.5"
+                style={getBudgetPerSlotColors(perSlot)}
+                title="Remaining budget minus $1 (reserved for DEF), divided by remaining open slots (excluding DEF)"
+            >
+                ${perSlot.toFixed(1)}/slot
+            </p>
+        );
+    };
+
     // Highlight owners who can't cover the current winning price while a player is on the block.
     const nominationActive = !!(draftContext.nominatedPlayer && draftContext.nominatedPlayer.player_id);
     const cannotAfford = (manager: any) =>
@@ -199,6 +216,7 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
                         : {backgroundColor: MANAGER_BG_COLORS[manager.manager_position], color: MANAGER_FG_COLORS[manager.manager_position]}}>
                         <h2 >{manager.manager_name}</h2>
                         <p style={cannotAfford(manager) ? {textDecoration: "line-through"} : undefined}>${manager.manager_budget}</p>
+                        {perSlotBadge(manager)}
                     </div>
                 <div className="mt-1">
                     <ul className="mt-1">
