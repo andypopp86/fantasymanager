@@ -7,6 +7,7 @@ import WatchedPlayers from "../features/WatchedPlayers";
 import { useDraftState } from "../hooks/useDraftState";
 import { BudgetedPicks } from "./BudgetedPicks";
 import { NominationArea } from "./NominationArea";
+import { BudgetPerSlot } from "./BudgetPerSlot";
 
 type DraftProps = {
     draftDetails: any
@@ -85,6 +86,7 @@ export default function Draft({draftDetails, send}: DraftProps) {
                         <WatchedPlayers draftContext={draftContext} draftSend={draftSend} />
                         <div className="flex flex-col gap-2">
                             <NominationArea draftContext={draftContext} draftSend={draftSend} />
+                            <BudgetPerSlot draftContext={draftContext} />
                             <BudgetedPicks draftContext={draftContext} draftSend={draftSend} />
                         </div>
                     </div>

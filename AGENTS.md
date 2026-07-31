@@ -145,7 +145,8 @@ guard a `None` pick — otherwise re-drafting a slot 500s, which surfaces on the
 the `draftPickSubmit` promise rejects so `draft_player` never fires).
 
 **Budget-per-remaining-slot** (`utils/draftHelpers.budgetPerRemainingSlot`): shown as a
-color-coded badge in the drafter's draft-board column header. Formula:
+color-coded strip (`features/BudgetPerSlot.tsx`) in the sidebar directly below the
+Nomination area. Formula:
 `(manager_budget − 1) / (openSlots − 1)` over the drafter's **actual** roster
 (`draft_picks`, not the budget plan) — the two `−1`s reserve $1 for the DEF slot, which
 should never cost more. Denominator clamps at 1; returns `null` (badge hidden) when the
