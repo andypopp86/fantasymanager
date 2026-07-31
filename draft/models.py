@@ -41,6 +41,10 @@ POSITIONS = (
     (14, 'BENCH6'),
     (15, 'BENCH7'),
 )
+# Slot names in board order, derived from BUDGET_POSITIONS; DraftPlan has one
+# lowercase field per entry (qb1, rb1, ... bench7).
+DRAFT_PLAN_SLOTS = tuple(slot for slot, _ in BUDGET_POSITIONS)
+
 QB_POSITIONS = ('QB',)
 RB_POSITIONS = ('RB',)
 WR_POSITIONS = ('WR',)
@@ -374,6 +378,40 @@ class BudgetPlayer(models.Model):
 
     def __str__(self):
         return '%s - %s - %s' % (self.player.name, self.position, self.price)
+
+
+class DraftPlan(models.Model):
+    """A standalone roster plan — one player per draft slot — not tied to any
+    draft or user, so any draft (owner) can pull it in as a budget template."""
+    name = models.CharField(max_length=100)
+    year = models.IntegerField()
+    qb1 = models.ForeignKey(Player, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    rb1 = models.ForeignKey(Player, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    rb2 = models.ForeignKey(Player, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    wr1 = models.ForeignKey(Player, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    wr2 = models.ForeignKey(Player, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    te1 = models.ForeignKey(Player, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    flex1 = models.ForeignKey(Player, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    flex2 = models.ForeignKey(Player, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    def1 = models.ForeignKey(Player, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    bench1 = models.ForeignKey(Player, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    bench2 = models.ForeignKey(Player, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    bench3 = models.ForeignKey(Player, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    bench4 = models.ForeignKey(Player, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    bench5 = models.ForeignKey(Player, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    bench6 = models.ForeignKey(Player, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    bench7 = models.ForeignKey(Player, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    date_created = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ('-year', 'name')
+
+    def __str__(self):
+        return '%s - %s' % (self.year, self.name)
+
+    def slot_players(self):
+        """Slot name -> Player (or None), in board order."""
+        return {slot: getattr(self, slot.lower()) for slot in DRAFT_PLAN_SLOTS}
 
 
 class PlayerStats(models.Model):

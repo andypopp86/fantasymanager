@@ -144,6 +144,7 @@ guard a `None` pick — otherwise re-drafting a slot 500s, which surfaces on the
 "the pick submitted but the board didn't update" (the optimistic budget change lands, but
 the `draftPickSubmit` promise rejects so `draft_player` never fires).
 
+<<<<<<< HEAD
 **Draft state survives SPA navigation via a singleton actor.** `useDraftState`
 creates ONE module-scope `createActor(draftStateMachine).start()` shared app-wide —
 unmounting `Draft` (navigating to another page) no longer destroys draft state.
@@ -164,6 +165,33 @@ snapshot can never overwrite a server-hydrated session, and the server remains t
 source of truth. A restored session sets `restoredFromSnapshot` / `snapshotSavedAt`
 in context and shows a warning banner; API writes made while offline still fail
 (there is NO offline write-queue/sync).
+=======
+**DraftPlan (`draft/models.py`)** — a standalone, reusable roster plan: `name`,
+`year`, and one nullable Player FK per slot (`qb1` … `bench7`, lowercase of
+`DRAFT_PLAN_SLOTS`). Deliberately NO FK to draft or user, so any draft can pull any
+plan in. Players only, no prices — applying a plan prices players from their
+projected/override price. Created from a mock draft by snapshotting the **drafter's
+actual drafted picks** (`DraftPlanWriteService.create_from_draft`). Endpoints under
+`/api/drafts/draft/`: `plans/` (list, `?year=` filter), `plans/<id>/`,
+`plans/<id>/delete/`, `<draft_id>/create_plan/`. Services in
+`draft/services/draft/draft_plan.py`. Purpose: mid-draft budget pivots — swap a
+predefined plan into the budget panel instead of editing slots under time pressure
+(the `/draft-plan` page consuming this is planned, not yet built).
+
+**Running backend tests**: `.venv/bin/python manage.py test draft` — requires the
+`fantasymanager-db` Docker container running (`docker start fantasymanager-db`,
+Postgres on :5434). `fantasy/settings.py` sets `TESTING = 'test' in sys.argv` and
+strips `debug_toolbar` from apps/middleware under tests (it refuses to run when
+Django forces DEBUG=False).
+**Budget-per-remaining-slot** (`utils/draftHelpers.budgetPerRemainingSlot`): shown as a
+color-coded strip (`features/BudgetPerSlot.tsx`) in the sidebar directly below the
+Nomination area. Formula:
+`(manager_budget − 1) / (openSlots − 1)` over the drafter's **actual** roster
+(`draft_picks`, not the budget plan) — the two `−1`s reserve $1 for the DEF slot, which
+should never cost more. Denominator clamps at 1; returns `null` (badge hidden) when the
+roster is full. Color scale in `utils/colors.getBudgetPerSlotColors`: ≤1 bright red,
+1–2 orange-red, 2–5 yellow, >5 green.
+>>>>>>> master
 
 **Key data shapes** (loose `any` in the code):
 - Budget slot: `{ order, allowed_positions: string[], pick: { player_id, player_name, position, projected_price, actual_price, price, budget_position, status, ... } }`, keyed by slot name. Empty pick ⇒ `player_id === ""`.

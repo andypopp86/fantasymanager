@@ -17,6 +17,12 @@ draft_urlpatterns = [
     path("<int:draft_id>/favorite_player/<int:player_id>/", api_views.DraftFavoritePickAPI.as_view(), name="favorite_player"),
     # /api/drafts/draft/${draft_id}/submit_pick/${manager_id}/${player_id}`
 
+    # draft plans (standalone budget templates, not tied to a draft)
+    path("plans/", api_views.DraftPlanListAPI.as_view(), name="draft_plan_list"),
+    path("plans/<int:plan_id>/", api_views.DraftPlanDetailAPI.as_view(), name="draft_plan_detail"),
+    path("plans/<int:plan_id>/delete/", api_views.DraftPlanDeleteAPI.as_view(), name="draft_plan_delete"),
+    path("<int:draft_id>/create_plan/", api_views.DraftPlanCreateFromDraftAPI.as_view(), name="draft_plan_create"),
+
     # writes
     path("<int:draft_id>/submit_pick/<int:manager_id>/<int:player_id>/", api_views.DraftSubmitPickAPI.as_view(), name="draft_submit_pick"),
     path("<int:draft_id>/unsubmit_pick/<int:manager_id>/<int:player_id>/", api_views.DraftUnsubmitPickAPI.as_view(), name="draft_unsubmit_pick"),
