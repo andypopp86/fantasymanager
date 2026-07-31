@@ -144,6 +144,24 @@ guard a `None` pick — otherwise re-drafting a slot 500s, which surfaces on the
 "the pick submitted but the board didn't update" (the optimistic budget change lands, but
 the `draftPickSubmit` promise rejects so `draft_player` never fires).
 
+**DraftPlan (`draft/models.py`)** — a standalone, reusable roster plan: `name`,
+`year`, and one nullable Player FK per slot (`qb1` … `bench7`, lowercase of
+`DRAFT_PLAN_SLOTS`). Deliberately NO FK to draft or user, so any draft can pull any
+plan in. Players only, no prices — applying a plan prices players from their
+projected/override price. Created from a mock draft by snapshotting the **drafter's
+actual drafted picks** (`DraftPlanWriteService.create_from_draft`). Endpoints under
+`/api/drafts/draft/`: `plans/` (list, `?year=` filter), `plans/<id>/`,
+`plans/<id>/delete/`, `<draft_id>/create_plan/`. Services in
+`draft/services/draft/draft_plan.py`. Purpose: mid-draft budget pivots — swap a
+predefined plan into the budget panel instead of editing slots under time pressure
+(the `/draft-plan` page consuming this is planned, not yet built).
+
+**Running backend tests**: `.venv/bin/python manage.py test draft` — requires the
+`fantasymanager-db` Docker container running (`docker start fantasymanager-db`,
+Postgres on :5434). `fantasy/settings.py` sets `TESTING = 'test' in sys.argv` and
+strips `debug_toolbar` from apps/middleware under tests (it refuses to run when
+Django forces DEBUG=False).
+
 **Key data shapes** (loose `any` in the code):
 - Budget slot: `{ order, allowed_positions: string[], pick: { player_id, player_name, position, projected_price, actual_price, price, budget_position, status, ... } }`, keyed by slot name. Empty pick ⇒ `player_id === ""`.
 - Manager: `{ manager_id, manager_name, manager_position, manager_budget, is_drafter, draft_picks: { [slot]: { allowed_positions, position_slot, pick: {...} } } }`.
