@@ -193,14 +193,15 @@ predefined plan into the budget panel instead of editing slots under time pressu
 Postgres on :5434). `fantasy/settings.py` sets `TESTING = 'test' in sys.argv` and
 strips `debug_toolbar` from apps/middleware under tests (it refuses to run when
 Django forces DEBUG=False).
-**Budget-per-remaining-slot** (`utils/draftHelpers.budgetPerRemainingSlot`): shown as a
-color-coded strip (`features/BudgetPerSlot.tsx`) in the sidebar directly below the
-Nomination area. Formula:
-`(manager_budget − 1) / (openSlots − 1)` over the drafter's **actual** roster
-(`draft_picks`, not the budget plan) — the two `−1`s reserve $1 for the DEF slot, which
-should never cost more. Denominator clamps at 1; returns `null` (badge hidden) when the
-roster is full. Color scale in `utils/colors.getBudgetPerSlotColors`: ≤1 bright red,
-1–2 orange-red, 2–5 yellow, >5 green.
+**Budget-per-remaining-slot** (`utils/draftHelpers`): two color-coded strips
+(`features/BudgetPerSlot.tsx`) in the sidebar directly below the Nomination area.
+Formula: `(remaining − 1) / (openSlots − 1)` — the two `−1`s reserve $1 for the DEF
+slot, which should never cost more; denominator clamps at 1; `null` (strip hidden)
+when there are no open slots. Two scopes: `budgetPerRemainingSlot` over the drafter's
+**actual** roster ("/draft slot"), and `budgetPerRemainingBudgetSlot` over the
+**budget plan** ("/budget slot", remaining = `starting_budget − budgetSpent`). Color
+scale in `utils/colors.getBudgetPerSlotColors`: ≤1 bright red, 1–2 orange-red,
+2–5 yellow, >5 green.
 
 **Key data shapes** — typed in `lib/draft.schemas.ts` (`PickSlot`, `SlotPick`,
 `SlottedManager`, plus the Dexie row types). The projected view shapes:

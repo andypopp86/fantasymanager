@@ -1,22 +1,36 @@
 import React from "react";
-import { budgetPerRemainingSlot } from "../utils/draftHelpers";
+import { budgetPerRemainingSlot, budgetPerRemainingBudgetSlot } from "../utils/draftHelpers";
 import { getBudgetPerSlotColors } from "../utils/colors";
 
-// Dollars per open slot on the drafter's actual team, color-coded by how
-// tight the budget is. Sits under the Nomination area as a bidding aid.
+// Dollars per open slot, color-coded by how tight the money is — one strip
+// for the drafter's actual roster, one for the budget plan. Sits under the
+// Nomination area as a bidding aid.
 export const BudgetPerSlot = ({ draftContext }) => {
     const drafter = draftContext.managers.find(
         (manager) => manager.manager_id === draftContext.drafterId
     );
-    const perSlot = budgetPerRemainingSlot(drafter);
-    if (perSlot === null) return null;
+    const perDraftSlot = budgetPerRemainingSlot(drafter);
+    const perBudgetSlot = budgetPerRemainingBudgetSlot(draftContext);
     return (
-        <div
-            className="text-center text-sm font-bold rounded py-1"
-            style={getBudgetPerSlotColors(perSlot)}
-            title="Remaining budget minus $1 (reserved for DEF), divided by remaining open slots (excluding DEF)"
-        >
-            ${perSlot.toFixed(1)}/slot
+        <div className="flex flex-col gap-1">
+            {perDraftSlot !== null && (
+                <div
+                    className="text-center text-sm font-bold rounded py-1"
+                    style={getBudgetPerSlotColors(perDraftSlot)}
+                    title="Remaining budget minus $1 (reserved for DEF), divided by remaining open roster slots (excluding DEF)"
+                >
+                    ${perDraftSlot.toFixed(1)}/draft slot
+                </div>
+            )}
+            {perBudgetSlot !== null && (
+                <div
+                    className="text-center text-sm font-bold rounded py-1"
+                    style={getBudgetPerSlotColors(perBudgetSlot)}
+                    title="Unbudgeted dollars minus $1 (reserved for DEF), divided by budget slots without a player (excluding DEF)"
+                >
+                    ${perBudgetSlot.toFixed(1)}/budget slot
+                </div>
+            )}
         </div>
     );
 };

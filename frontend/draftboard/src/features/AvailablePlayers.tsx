@@ -24,7 +24,7 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
     const [filteredPlayers, setFilteredPlayers] = useState(draftContext.undraftedPlayers);
 
     const checkName = (player) => {
-        return player.player.name.toLowerCase().includes(nameFilterValue.toLowerCase());
+        return player.player.name.toLowerCase().includes(nameFilterValue.trim().toLowerCase());
     }
     const checkPosition = (player) => {
         return player.player.position.toLowerCase().includes(positionFilterValue.toLowerCase());
@@ -63,20 +63,14 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
         setFilteredPlayers(filtered);
     }
 
+    // Stored raw (trimmed only when filtering) so typing spaces isn't fought
+    // by the controlled input.
     const handleNameFilterChange = (filterValue) => {
-        setNameFilterValue(filterValue.trim());
-    }
-    const handlePositionFilterChange = (filterValue) => {
-        const cleanedValue = filterValue.trim().toUpperCase();
-        if (["QB", "RB", "WR", "TE", "K", "DEF"].includes(cleanedValue)) {
-            setPositionFilterValue(cleanedValue);
-        } else {
-            setPositionFilterValue("");
-        }
+        setNameFilterValue(filterValue);
     }
     const handlePriceFilterChange = (filterValue) => {
         const floatValue = parseFloat(filterValue);
-        setPriceFilterValue(floatValue || 0);
+        setPriceFilterValue(Number.isNaN(floatValue) ? undefined : floatValue);
     }
     const handleBudgetedFilterChange = (filterValue) => {
         const newValue = filterValue === "on" ? "off" : "on";
@@ -90,11 +84,12 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
         setTargetTypeFilterValue(filterValue);
     }
 
+    // Resets every filter input (they're all controlled) and the results.
     const clearFilter = () => {
         setNameFilterValue("");
         setPositionFilterValue("");
-        setPriceFilterValue(0.00);
-        setBudgetedFilterValue(undefined);
+        setPriceFilterValue(undefined);
+        setBudgetedFilterValue("off");
         setFavoriteFilterValue("off");
         setTargetTypeFilterValue("");
         setFilteredPlayers(draftContext.undraftedPlayers);
@@ -140,21 +135,30 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
                     <tr>
                         <td scope="row">Name:</td>
                         <td><input type="text" style={{width: "100px"}}
+                            value={nameFilterValue}
                             onChange={(e) => handleNameFilterChange(e.target.value)}
                             onKeyDown={handleFilterKeyDown} />
                         </td>
                     </tr>
                     <tr>
                         <td scope="row">Position:</td>
-                        <td><input type="text" style={{width: "100px"}}
-                            onChange={(e) => handlePositionFilterChange(e.target.value)}
-                            onKeyDown={handleFilterKeyDown} />
+                        <td>
+                            <select style={{width: "100px"}} value={positionFilterValue}
+                                onChange={(e) => setPositionFilterValue(e.target.value)}>
+                                <option value="">All</option>
+                                <option value="QB">QB</option>
+                                <option value="RB">RB</option>
+                                <option value="WR">WR</option>
+                                <option value="TE">TE</option>
+                                <option value="DEF">DEF</option>
+                            </select>
                         </td>
                     </tr>
                     <tr>
                         <td scope="row">Price:</td>
                         <td><input type="number" style={{width: "100px"}}
                         className="py-1 px-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:border-blue-500"
+                        value={priceFilterValue ?? ""}
                         onChange={(e) => handlePriceFilterChange(e.target.value)}
                         onKeyDown={handleFilterKeyDown} /></td>
                     </tr>
