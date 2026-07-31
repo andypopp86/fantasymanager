@@ -1,5 +1,5 @@
-import React, {useState} from "react";
-import { favoritePlayer } from "../lib/data";
+import React from "react";
+import { setFavorite } from "../lib/mutations";
 import { POSITION_BG_COLORS, POSITION_FG_COLORS } from "../utils/colors";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faHeart as solidHeart } from '@fortawesome/free-solid-svg-icons';
@@ -20,7 +20,7 @@ interface HeartProps {
     );
   };
 
-export default function AvailablePlayer({pick, nominatePlayer, handleDragStart, id, draftContext, statField }) {
+export default function AvailablePlayer({pick, nominatePlayer, handleDragStart, id, draftContext, draftSend, statField }) {
     const handleDrag = (e) => {
         e.preventDefault();
     };
@@ -31,13 +31,13 @@ export default function AvailablePlayer({pick, nominatePlayer, handleDragStart, 
         }
         return 1000;
     }
+    // The mutation updates the Dexie row, so the Favorite filter sees hearts
+    // toggled this session; the row's live query re-renders this component.
     const postFavorite = (player, favorite) => {
-        favoritePlayer(draftContext.draftId, player.player_id, {favorite: favorite}).then((response) => {
-            setIsFavorite(response.data["favorite"]);
-        });
+        setFavorite(draftContext.draftId, player.player_id, favorite);
     }
 
-    const [isFavorite, setIsFavorite] = useState(pick.player.favorite);
+    const isFavorite = !!pick.player.favorite;
 
     const strengthOfSchedule = getStrengthOfSchedule(pick);
     const scheduleBG = strengthOfSchedule > 25 ? "bg-red-900" : strengthOfSchedule <= 5 ? "bg-green-900" : "bg-yellow-200";
@@ -64,12 +64,14 @@ export default function AvailablePlayer({pick, nominatePlayer, handleDragStart, 
                 <td onClick={() => nominatePlayer(pick.player)}>{pick.player.name}</td>
                 <td onClick={() => nominatePlayer(pick.player)}>{pick.player.position}</td>
                 <td onClick={() => nominatePlayer(pick.player)}>{parseInt(pick.projected_price)}</td>
+                {/* Unused for the 2026 draft; matching headers are commented out in AvailablePlayers.tsx
                 <td onClick={() => nominatePlayer(pick.player)}>{parseInt(pick.player.adp_price)}</td>
                 <td onClick={() => nominatePlayer(pick.player)}>{parseInt(pick.player.adp_price)-parseInt(pick.projected_price)}</td>
                 <td className={scheduleBG + " " + scheduleFG}
                     >{strengthOfSchedule}
                 </td>
                 <td>{parseInt(pick[statField])}</td>
+                */}
                 <td className="bg-white" onClick={() => postFavorite(pick.player, !isFavorite)}>
                     <Heart key={`H${pick.player.player_id}`} filled={isFavorite} size="sm"/>
                 </td>

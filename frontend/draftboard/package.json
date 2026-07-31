@@ -20,6 +20,7 @@
     "autoprefixer": "^10.4.19",
     "axios": "^1.7.2",
     "dexie": "^4.4.4",
+    "dexie-react-hooks": "^4.4.0",
     "postcss": "^8.4.38",
     "qs": "^6.10.1",
     "react": "^18.2.0",

@@ -122,6 +122,11 @@ class BudgetPlayerAdmin(admin.ModelAdmin):
     def status_display(self, obj):
         return obj.get_status_display()
 
+class DraftPlanAdmin(admin.ModelAdmin):
+    list_display = ('name', 'year', 'date_created')
+    list_filter = ('year',)
+    search_fields = ('name',)
+
 class NFLTeamAdmin(admin.ModelAdmin):
     list_display = ('code', 'name', 'year', 'playoff_weather_score', 'early_season_schedule', 'playoff_schedule', 'defensive_ranking', 'pass_ranking', 'run_ranking')
     list_filter = ('code', 'year',)
@@ -171,6 +176,7 @@ admin.site.register(d.DraftPick, DraftPickAdmin)
 admin.site.register(d.WatchPick, WatchPickAdmin)
 admin.site.register(d.Matchup, MatchupAdmin)
 admin.site.register(d.BudgetPlayer, BudgetPlayerAdmin)
+admin.site.register(d.DraftPlan, DraftPlanAdmin)
 admin.site.register(d.HistoricalDraftPicks, HistoricalDraftPickAdmin)
 admin.site.register(d.HistoricalPlayerStats, HistoricalPlayerStatsAdmin)
 admin.site.register(d.PlayerStats, PlayerStatsAdmin)

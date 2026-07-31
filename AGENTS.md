@@ -37,8 +37,8 @@ frontend/draftboard/
 └── src/
     ├── main.jsx          # ReactDOM root → <DraftApp csrfToken={window.csrfToken} />
     ├── features/         # UI components (Draft, DraftBoard, AvailablePlayers, …)
-    ├── state_machines/   # XState machines (app-level + draft-level)
-    ├── hooks/            # useDraftAppState, useDraftState, useQueryParams
+    ├── state_machines/   # draftStateMachine (flow-only XState machine)
+    ├── hooks/            # useDraftState, useDraftData, useQueryParams
     ├── lib/              # data.ts (axios API calls), draft.schemas.ts (types)
     └── utils/            # colors, draftHelpers, reordering
 ```
@@ -52,12 +52,14 @@ frontend/draftboard/
   `/draft/:draftId` (the board, deep-linkable — `DraftPage.tsx` resolves the id
   param via the draft detail endpoint). Navigation is `Link`/`useNavigate`; the
   old `appStateMachine`/`useDraftAppState` screen-switcher was deleted with it.
+- **Data: Dexie (IndexedDB) is the client-side database** — see the
+  "Client data layer" section below. React Query fetches from the server and
+  hydrates Dexie; components read Dexie via `useDraftData` (liveQuery); ALL
+  data writes go through `lib/mutations.ts`.
 - **State: XState (v5)**, consumed via `@xstate/react`:
-  - `draftStateMachine` — per-draft board state (players, picks, budgets,
-    watchlist, reordering). Accessed through `useDraftState()` (singleton actor).
-  - UI components dispatch events via the machine's `send(...)`.
-- **Server state: TanStack React Query** (`@tanstack/react-query`) for fetching;
-  fetched data is pushed into the XState machines via events (see `Draft.tsx`).
+  - `draftStateMachine` — FLOW ONLY: nomination, price, drag, slot targeting
+    (`DraftFlowContext`). Accessed through `useDraftState()` (singleton actor,
+    so flow state survives SPA navigation). It holds NO draft data.
 - **HTTP: axios**, all endpoints wrapped in `src/lib/data.ts`. Response/param
   types live in `src/lib/draft.schemas.ts`.
 - **Styling: Tailwind CSS v3** (utility classes) plus `index.css` / `custom.css`.
@@ -130,11 +132,10 @@ budgeted player isn't lost silently.
 new slot **moves** it (no duplicate); the displaced player must be moved or unbudgeted
 or two rows collide on one slot.
 
-**Client-vs-server position gotcha:** budget picks from the server carry the player's
-real `position`, but the client `budget_player` event / `updateBudgetedPlayers` must be
-given `position` explicitly — otherwise a slot budgeted during the session has an empty
-`position` until the next React Query refetch, breaking eligibility checks. Always pass
-`position` when dispatching `budget_player`.
+**Client-vs-server position gotcha:** budget rows must carry the player's real
+`position` — a row budgeted this session with an empty `position` breaks
+eligibility checks until the next refetch. `mutations.budgetPick` takes the whole
+player object for this reason; always pass one that includes `position`.
 
 **Winning-price gotcha:** the nominated-player object (`draftContext.nominatedPlayer`)
 has NO `.price` — the winning bid lives in `draftContext.nominationPrice`, threaded
@@ -149,28 +150,65 @@ guard a `None` pick — otherwise re-drafting a slot 500s, which surfaces on the
 "the pick submitted but the board didn't update" (the optimistic budget change lands, but
 the `draftPickSubmit` promise rejects so `draft_player` never fires).
 
-**Draft state survives SPA navigation via a singleton actor.** `useDraftState`
-creates ONE module-scope `createActor(draftStateMachine).start()` shared app-wide —
-unmounting `Draft` (navigating to another page) no longer destroys draft state.
-Consequently `draft_loaded` is handled in **every** machine state, not just
-`loadingDraft`: server-owned slices (`assignServerSlices` — managers, players,
-budget, watchlist) are always taken wholesale from the event, while client-only
-nomination state is kept when re-loading the *same* draft and reset when a
-different draft loads. `Draft.tsx` renders the board only when
-`draftContext.draftId === draftDetails.id`, so a stale board never shows while
-switching drafts.
+## Client data layer (Dexie/IndexedDB)
 
-**Local draft persistence (Dexie/IndexedDB)** — `lib/db.ts` (`draftboard` DB,
-`draftSnapshots` table keyed by `draftId`). The singleton actor's subscription
-writes a debounced snapshot of the whole context on every transition. Restore is a
-**fallback only**: when a load query in `Draft.tsx` errors (server unreachable), it
-sends `restore_draft`, handled only in the machine's `loadingDraft` state — so a
-snapshot can never overwrite a server-hydrated session, and the server remains the
-source of truth. A restored session sets `restoredFromSnapshot` / `snapshotSavedAt`
-in context and shows a warning banner; API writes made while offline still fail
-(there is NO offline write-queue/sync).
+**Dexie is the client-side database; XState holds flow only.** The pieces:
 
-**Key data shapes** (loose `any` in the code):
+- `lib/db.ts` — the `draftboard` DB. Tables modeled on the SERVER's rows, not
+  the UI's lists: `draft_picks` (one row per draft+player, keyed
+  `[draftId+player_id]`; "available" is just `drafted === false`),
+  `budget_picks`, `watch_picks`, `draft_meta` (details + manager identities +
+  slot template; manager budgets are DERIVED from drafted rows, never stored).
+  Row types live in `lib/draft.schemas.ts` (`DraftPickRow`, `BudgetPickRow`, …).
+- **Hydration**: React Query fetches in `Draft.tsx`; on success `hydrateDraft`
+  replaces that draft's rows wholesale in one transaction — the server stays
+  the source of truth whenever reachable. If the server is down, the queries
+  fail and last session's rows simply remain: offline viewing needs no restore
+  mechanism, just the warning banner in `Draft.tsx`.
+- **Reads**: `hooks/useDraftData.ts` projects the tables (via `useLiveQuery`)
+  into the legacy `draftContext` shapes components consume (`managers` with
+  slot maps, `undraftedPlayers`, `budgetedPlayers`, `watchedPlayers`,
+  `budgetSpent`). Components re-render automatically on any row change.
+- **Writes**: `lib/mutations.ts` is THE mutation seam — every data change is
+  one Dexie transaction paired with its API call. Components never write Dexie
+  or call pick/budget/watch endpoints directly. `submitPick`/`setFavorite` are
+  server-first (server validates / may override); everything else is
+  optimistic. A future offline write-queue replaces the API calls in this one
+  file and nothing else moves.
+- **Flow state** (`draftStateMachine` / `useDraftState`): nomination, price,
+  drag, slot targeting — a module-scope singleton actor so it survives SPA
+  navigation. `Draft.tsx` sends `reset_flow` when the draft id changes.
+- **Schema changes** in `db.ts` APPEND a new `this.version(n)` block (Dexie
+  upgrades browsers sequentially); never edit or remove an existing block.
+
+**DraftPlan (`draft/models.py`)** — a standalone, reusable roster plan: `name`,
+`year`, and one nullable Player FK per slot (`qb1` … `bench7`, lowercase of
+`DRAFT_PLAN_SLOTS`). Deliberately NO FK to draft or user, so any draft can pull any
+plan in. Players only, no prices — applying a plan prices players from their
+projected/override price. Created from a mock draft by snapshotting the **drafter's
+actual drafted picks** (`DraftPlanWriteService.create_from_draft`). Endpoints under
+`/api/drafts/draft/`: `plans/` (list, `?year=` filter), `plans/<id>/`,
+`plans/<id>/delete/`, `<draft_id>/create_plan/`. Services in
+`draft/services/draft/draft_plan.py`. Purpose: mid-draft budget pivots — swap a
+predefined plan into the budget panel instead of editing slots under time pressure
+(the `/draft-plan` page consuming this is planned, not yet built).
+
+**Running backend tests**: `.venv/bin/python manage.py test draft` — requires the
+`fantasymanager-db` Docker container running (`docker start fantasymanager-db`,
+Postgres on :5434). `fantasy/settings.py` sets `TESTING = 'test' in sys.argv` and
+strips `debug_toolbar` from apps/middleware under tests (it refuses to run when
+Django forces DEBUG=False).
+**Budget-per-remaining-slot** (`utils/draftHelpers.budgetPerRemainingSlot`): shown as a
+color-coded strip (`features/BudgetPerSlot.tsx`) in the sidebar directly below the
+Nomination area. Formula:
+`(manager_budget − 1) / (openSlots − 1)` over the drafter's **actual** roster
+(`draft_picks`, not the budget plan) — the two `−1`s reserve $1 for the DEF slot, which
+should never cost more. Denominator clamps at 1; returns `null` (badge hidden) when the
+roster is full. Color scale in `utils/colors.getBudgetPerSlotColors`: ≤1 bright red,
+1–2 orange-red, 2–5 yellow, >5 green.
+
+**Key data shapes** — typed in `lib/draft.schemas.ts` (`PickSlot`, `SlotPick`,
+`SlottedManager`, plus the Dexie row types). The projected view shapes:
 - Budget slot: `{ order, allowed_positions: string[], pick: { player_id, player_name, position, projected_price, actual_price, price, budget_position, status, ... } }`, keyed by slot name. Empty pick ⇒ `player_id === ""`.
 - Manager: `{ manager_id, manager_name, manager_position, manager_budget, is_drafter, draft_picks: { [slot]: { allowed_positions, position_slot, pick: {...} } } }`.
 
@@ -182,8 +220,9 @@ in context and shows a warning banner; API writes made while offline still fail
 `DraftBoard.handleDrop` when the drafter drafts into a budget slot already holding a
 *different* player. Lets the owner keep the displaced player (move to an eligible open
 slot) and drop other budgeted players to fit the remaining budget. Confirm is advisory
-(always enabled). The resolution is applied in one pass via the state machine's
-`apply_budget_resolution` event.
+(always enabled). The resolution is applied by `DraftBoard.resolveConflict` as a
+sequence of `lib/mutations.ts` calls (unbudget drops → move displaced → budget the
+drafted player → submit).
 
 > Note: `features/PlanChanges.tsx`, `features/PlanChangesModal.tsx`, and the
 > `planChanges` context field are an earlier attempt at surfacing budget overwrites in

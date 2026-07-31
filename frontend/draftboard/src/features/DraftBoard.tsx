@@ -3,7 +3,7 @@ import { MANAGER_BG_COLORS, MANAGER_FG_COLORS } from "../utils/colors";
 import { DraftBoardSlot } from "./DraftBoardSlot";
 import { DraftPositions } from "./DraftPositions";
 import BudgetConflictModal from "./BudgetConflictModal";
-import { draftPickSubmit, draftBudgetPick, draftUnbudgetPick, draftReslotPicks } from "../lib/data";
+import * as mutations from "../lib/mutations";
 import { findBudgetedPositionSlotByPlayerId } from "../utils/draftHelpers";
 import { autoSlotAssignments } from "../utils/reordering";
 
@@ -18,16 +18,14 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
     // How many rows to hide from the top of the board, to make room for
     // drag-and-drop into the remaining (lower) slots as the draft fills up.
     const [hiddenRows, setHiddenRows] = useState(0);
-    // Auto-slot one manager's drafted players by price/position: update the UI
-    // immediately via the state machine, and persist the new slots to the server.
+    // Auto-slot one manager's drafted players by price/position.
     const shuffleTeam = (manager: any) => {
         const players = Object.values(manager.draft_picks || {})
             .map((slot: any) => slot.pick)
             .filter((pick: any) => pick.player_id)
             .map((pick: any) => ({ player_id: pick.player_id, position: pick.position, price: Number(pick.price) }));
         const assignments = autoSlotAssignments(players);
-        draftSend({ type: "reslot_manager", managerId: manager.manager_id, assignments });
-        draftReslotPicks(draftContext.draftId, manager.manager_id, { assignments });
+        mutations.reslotPicks(draftContext.draftId, manager.manager_id, assignments);
     };
 
     // Drop the nominated player onto a specific manager's slot to register the DraftPick.
@@ -59,19 +57,6 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
             return;
         }
 
-        const pickSlot = {
-            "pick": {
-                "id": null,
-                "pick_id": null,
-                "name": player.name,
-                "price": price,
-                "position": player.position,
-                "player_id": player.player_id,
-                "slot": positionSlot,
-                "projected_price": player.projected_price,
-            }
-        };
-
         const isDrafter = managerId === draftContext.drafterId;
 
         // Drafting to the owner's team overwrites the matching budget slot. If that
@@ -82,84 +67,64 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
             const conflicts = budgetPick && budgetPick.player_id && budgetPick.player_id !== ""
                 && String(budgetPick.player_id) !== String(player.player_id);
             if (conflicts) {
-                setPendingConflict({ player, price, positionSlot, manager, pickSlot, displaced: budgetPick });
+                setPendingConflict({ player, price, positionSlot, manager, displaced: budgetPick });
                 return;
             }
         }
 
-        finalizeDraft({ player, price, positionSlot, manager, pickSlot, isDrafter });
+        finalizeDraft({ player, price, positionSlot, manager });
     }
 
-    // Mirror a straightforward (non-conflicting) pick into the budget, then submit.
-    const finalizeDraft = ({ player, price, positionSlot, manager, pickSlot, isDrafter }) => {
-        const managerId = manager.manager_id;
-        if (isDrafter) {
-            draftBudgetPick(draftContext.draftId, managerId, player.player_id, {
-                projected_price: price,
-                budget_position: positionSlot,
-            });
-            draftSend({ type: 'budget_player', positionSlot, player_id: player.player_id, player_name: player.name, price, position: player.position });
+    // Straightforward (non-conflicting) pick: the mutation mirrors it into the
+    // budget (or drops a stolen target), submits, and updates the local rows.
+    const finalizeDraft = ({ player, price, positionSlot, manager }) => {
+        const budgetedSlot = findBudgetedPositionSlotByPlayerId(draftContext.budgetedPlayers, player.player_id);
+        mutations.draftPlayer(
+            draftContext.draftId,
+            draftContext.drafterId,
+            manager.manager_id,
+            player,
+            price,
+            positionSlot,
+            budgetedSlot,
+        ).then(handleSubmitResult);
+    }
+
+    // Successful pick clears the nomination (flow state); the board itself
+    // updates via the Dexie live queries.
+    const handleSubmitResult = (errMsg: string | null) => {
+        if (errMsg == null) {
+            draftSend({ type: 'draft_player' });
         } else {
-            const existingBudgetSlot = findBudgetedPositionSlotByPlayerId(draftContext.budgetedPlayers, player.player_id);
-            if (existingBudgetSlot) {
-                draftSend({ type: 'unbudget_player', positionSlot: existingBudgetSlot });
-                draftUnbudgetPick(draftContext.draftId, draftContext.drafterId, player.player_id);
-            }
+            alert(`Error submitting pick = ${errMsg}`);
         }
-        submitPick({ player, price, positionSlot, manager, pickSlot });
-    }
-
-    const submitPick = ({ player, price, positionSlot, manager, pickSlot }) => {
-        draftPickSubmit(draftContext.draftId, manager.manager_id, player.player_id, { price, position_slot: positionSlot }).then((response) => {
-            const errMsg = response.data['error'];
-            if (errMsg == null) {
-                draftSend({ type: 'draft_player', pickSlot, price, managerId: manager.manager_id });
-            } else {
-                alert(`Error submitting pick = ${errMsg}`);
-            }
-        });
     }
 
     // Owner confirmed the conflict modal: persist the budget changes (keep the
     // displaced player in its new slot, drop the chosen picks, move the drafted
-    // player in), mirror them into the state machine, then submit the pick.
-    const resolveConflict = ({ keptSlot, removeSlots }) => {
-        const { player, price, positionSlot, manager, pickSlot, displaced } = pendingConflict;
+    // player in), then submit the pick.
+    const resolveConflict = async ({ keptSlot, removeSlots }) => {
+        const { player, price, positionSlot, manager, displaced } = pendingConflict;
         const { draftId, drafterId, budgetedPlayers } = draftContext;
 
-        removeSlots.forEach((slot) => {
+        for (const slot of removeSlots) {
             const playerId = budgetedPlayers[slot]?.pick?.player_id;
-            if (playerId) draftUnbudgetPick(draftId, drafterId, playerId);
-        });
+            if (playerId) await mutations.unbudgetPick(draftId, drafterId, playerId);
+        }
         if (displaced.player_id) {
             if (keptSlot) {
                 // Move the displaced player to its new slot (one budget row per player).
-                draftBudgetPick(draftId, drafterId, displaced.player_id, {
-                    projected_price: displaced.projected_price,
-                    budget_position: keptSlot,
-                });
+                await mutations.budgetPick(draftId, drafterId, displaced, keptSlot, displaced.projected_price);
             } else {
                 // Not kept: drop it from the budget, else its row still claims this
                 // slot on the server and reappears on the next refetch.
-                draftUnbudgetPick(draftId, drafterId, displaced.player_id);
+                await mutations.unbudgetPick(draftId, drafterId, displaced.player_id);
             }
         }
-        draftBudgetPick(draftId, drafterId, player.player_id, {
-            projected_price: price,
-            budget_position: positionSlot,
-        });
-
-        draftSend({
-            type: 'apply_budget_resolution',
-            draftSlot: positionSlot,
-            draftedPlayer: player,
-            price,
-            keptSlot: keptSlot || null,
-            removeSlots,
-        });
+        await mutations.budgetPick(draftId, drafterId, player, positionSlot, price);
 
         setPendingConflict(null);
-        submitPick({ player, price, positionSlot, manager, pickSlot });
+        mutations.submitPick(draftId, manager.manager_id, player, price, positionSlot).then(handleSubmitResult);
     }
     // Highlight owners who can't cover the current winning price while a player is on the block.
     const nominationActive = !!(draftContext.nominatedPlayer && draftContext.nominatedPlayer.player_id);

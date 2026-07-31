@@ -2,17 +2,13 @@ import React from "react";
 import { useState } from "react";
 import { POSITION_BG_COLORS, POSITION_FG_COLORS } from "../utils/colors";
 
-import { draftUnbudgetPick } from "../lib/data";
+import * as mutations from "../lib/mutations";
 
 export default function BudgetedPick({ positionSlot, pickSlot, handleDrop, draftSend, draftContext }) {
-    
+
     const unbudgetPick = (draftId, drafterId, playerId) => {
         if (pickSlot.pick.player_id) {
-            draftSend({
-                type: 'unbudget_player',
-                positionSlot: positionSlot,
-            });
-            draftUnbudgetPick(draftId, drafterId, playerId);
+            mutations.unbudgetPick(draftId, drafterId, playerId);
         }
     }
     const [isDragOver, setIsDragOver] = useState(false);

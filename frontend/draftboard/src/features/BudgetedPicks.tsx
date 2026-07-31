@@ -1,11 +1,10 @@
 import React from "react";
 import BudgetedPick from "./BudgetedPick.tsx";
-import { draftBudgetPick, draftReslotBudget } from "../lib/data";
+import * as mutations from "../lib/mutations";
 import { autoSlotAssignments } from "../utils/reordering";
 
 export const BudgetedPicks = ({draftContext, draftSend}) => {
-    // Auto-slot the budgeted roster: update the UI immediately via the state
-    // machine, and persist the new slots to the server.
+    // Auto-slot the budgeted roster by price/position.
     const shuffleBudget = () => {
         const players = Object.values(draftContext.budgetedPlayers || {})
             .map((slot: any) => slot.pick)
@@ -16,31 +15,22 @@ export const BudgetedPicks = ({draftContext, draftSend}) => {
                 price: Number(pick.actual_price || pick.projected_price),
             }));
         const assignments = autoSlotAssignments(players);
-        draftSend({ type: "reslot_budget", assignments });
-        draftReslotBudget(draftContext.draftId, draftContext.drafterId, { assignments });
+        mutations.reslotBudget(draftContext.draftId, draftContext.drafterId, assignments);
     };
 
     const handleDrop = (e) => {
         const targetSlot = draftContext.budgetSlotTargeted
         const budgetSlots = draftContext.budgetedPlayers
-        const budgetedPlayerPos = draftContext.draggedPlayer.player.position
+        const draggedPlayer = draftContext.draggedPlayer.player
         const actualSlot = budgetSlots[targetSlot]
         const allowedPositions = actualSlot.allowed_positions
-        if (allowedPositions.includes(budgetedPlayerPos) && !actualSlot.player_id) {
-            draftSend({
-                type: 'budget_player',
-                positionSlot: targetSlot,
-                player_id: draftContext.draggedPlayer.player.player_id,
-                player_name: draftContext.draggedPlayer.player.name,
-                price: draftContext.draggedPlayer.projected_price,  // double check this
-                position: budgetedPlayerPos,
-            });
-            const managerId = draftContext.drafterId;
-            draftBudgetPick(draftContext.draftId, managerId, draftContext.draggedPlayer.player.player_id, 
-                {
-                    projected_price: draftContext.draggedPlayer.projected_price,
-                    budget_position: targetSlot
-                },
+        if (allowedPositions.includes(draggedPlayer.position) && !actualSlot.pick.player_id) {
+            mutations.budgetPick(
+                draftContext.draftId,
+                draftContext.drafterId,
+                draggedPlayer,
+                targetSlot,
+                draftContext.draggedPlayer.projected_price,
             );
         }
     }
