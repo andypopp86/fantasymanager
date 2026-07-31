@@ -1,5 +1,10 @@
 import os
+import sys
 import environ
+
+# The debug toolbar can't run under `manage.py test` (it refuses when Django
+# forces DEBUG=False), so leave it out of the app/middleware lists entirely.
+TESTING = 'test' in sys.argv
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -37,8 +42,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 
 # Application definition
 
-INSTALLED_APPS = [
-    'debug_toolbar',
+INSTALLED_APPS = ([] if TESTING else ['debug_toolbar']) + [
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -60,7 +64,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'debug_toolbar.middleware.DebugToolbarMiddleware',
+] + ([] if TESTING else ['debug_toolbar.middleware.DebugToolbarMiddleware']) + [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
