@@ -19,6 +19,7 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
     const [positionFilterValue, setPositionFilterValue] = useState("");
     const [priceFilterValue, setPriceFilterValue] = useState(undefined);
     const [budgetedFilterValue, setBudgetedFilterValue] = useState("off");
+    const [favoriteFilterValue, setFavoriteFilterValue] = useState("off");
     const [targetTypeFilterValue, setTargetTypeFilterValue] = useState("");
     const [filteredPlayers, setFilteredPlayers] = useState(draftContext.undraftedPlayers);
 
@@ -41,6 +42,9 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
     const checkTargetType = (player) => {
         return player.player.target_type === targetTypeFilterValue;
     }
+    const checkFavorite = (player) => {
+        return !!player.player.favorite;
+    }
     const budgetedPlayerIds = Object.keys(draftContext.budgetedPlayers).map((slot) => {
         const budgetedPlayerId = draftContext.budgetedPlayers[slot].pick.player_id;
         return budgetedPlayerId ;
@@ -51,6 +55,7 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
         if (positionFilterValue !== "") { predicates.push(checkPosition); }
         if (priceFilterValue !== undefined && priceFilterValue > 0) { predicates.push(checkPrice); }
         if (budgetedFilterValue === "on") { predicates.push(checkBudget); }
+        if (favoriteFilterValue === "on") { predicates.push(checkFavorite); }
         if (targetTypeFilterValue !== "") { predicates.push(checkTargetType); }
         if (predicates.length === 0) {
             setFilteredPlayers(draftContext.undraftedPlayers);
@@ -81,6 +86,10 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
         const newValue = filterValue === "on" ? "off" : "on";
         setBudgetedFilterValue(newValue);
     }
+    const handleFavoriteFilterChange = (filterValue) => {
+        const newValue = filterValue === "on" ? "off" : "on";
+        setFavoriteFilterValue(newValue);
+    }
     const handleTargetTypeFilterChange = (filterValue) => {
         setTargetTypeFilterValue(filterValue);
     }
@@ -90,6 +99,7 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
         setPositionFilterValue("");
         setPriceFilterValue(0.00);
         setBudgetedFilterValue(undefined);
+        setFavoriteFilterValue("off");
         setTargetTypeFilterValue("");
         setFilteredPlayers(draftContext.undraftedPlayers);
     }
@@ -158,6 +168,13 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
                         </td>
                     </tr>
                     <tr>
+                        <td scope="row">Favorite:</td>
+                        <td>
+                            <input type="checkbox" style={{width: "100px"}} checked={favoriteFilterValue === "on"}
+                            onChange={(e) => handleFavoriteFilterChange(favoriteFilterValue)} />
+                        </td>
+                    </tr>
+                    <tr>
                         <td scope="row">Target:</td>
                         <td>
                             <select style={{width: "100px"}} value={targetTypeFilterValue}
@@ -214,6 +231,7 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
                             handleDragStart={handleDragStart}
                             id={pick.player.id}
                             draftContext={draftContext}
+                            draftSend={draftSend}
                             statField={statField}
                         />
                     ))}

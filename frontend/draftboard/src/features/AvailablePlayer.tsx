@@ -20,7 +20,7 @@ interface HeartProps {
     );
   };
 
-export default function AvailablePlayer({pick, nominatePlayer, handleDragStart, id, draftContext, statField }) {
+export default function AvailablePlayer({pick, nominatePlayer, handleDragStart, id, draftContext, draftSend, statField }) {
     const handleDrag = (e) => {
         e.preventDefault();
     };
@@ -34,6 +34,9 @@ export default function AvailablePlayer({pick, nominatePlayer, handleDragStart, 
     const postFavorite = (player, favorite) => {
         favoritePlayer(draftContext.draftId, player.player_id, {favorite: favorite}).then((response) => {
             setIsFavorite(response.data["favorite"]);
+            // Keep the machine's copy in sync so the Favorite filter sees
+            // hearts toggled this session, not just server-loaded ones.
+            draftSend({ type: 'set_player_favorite', playerId: player.player_id, favorite: response.data["favorite"] });
         });
     }
 
