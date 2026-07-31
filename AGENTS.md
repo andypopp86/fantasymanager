@@ -157,7 +157,8 @@ different draft loads. `Draft.tsx` renders the board only when
 switching drafts.
 
 **Local draft persistence (Dexie/IndexedDB)** — `lib/db.ts` (`draftboard` DB,
-`draftSnapshots` table keyed by `draftId`). The singleton actor's subscription
+`draftSnapshots` table keyed by `draftId`, `savedAt` indexed for pruning — stale
+snapshots are dropped once per app load). The singleton actor's subscription
 writes a debounced snapshot of the whole context on every transition. Restore is a
 **fallback only**: when a load query in `Draft.tsx` errors (server unreachable), it
 sends `restore_draft`, handled only in the machine's `loadingDraft` state — so a
@@ -165,6 +166,14 @@ snapshot can never overwrite a server-hydrated session, and the server remains t
 source of truth. A restored session sets `restoredFromSnapshot` / `snapshotSavedAt`
 in context and shows a warning banner; API writes made while offline still fail
 (there is NO offline write-queue/sync).
+
+**Dexie schema rules**: the machine context/snapshot shape is typed ONCE as
+`DraftContext` in `lib/draft.schemas.ts` (with the slice types `SlottedManager`,
+`PickSlot`, `SlotPick`, `UndraftedPlayer`, …) — any new machine-context field goes
+in that type too. Schema changes in `db.ts` APPEND a new `this.version(n)` block
+(Dexie upgrades browsers sequentially); never edit or remove an existing version
+block. The snapshot stays ONE atomic blob per draft — split into per-concept
+tables only when a real read/write pattern needs it, not for tidiness.
 =======
 **DraftPlan (`draft/models.py`)** — a standalone, reusable roster plan: `name`,
 `year`, and one nullable Player FK per slot (`qb1` … `bench7`, lowercase of

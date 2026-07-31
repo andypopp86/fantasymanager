@@ -1,7 +1,10 @@
 import { createActor } from "xstate";
 import { draftStateMachine } from "../state_machines/draftStateMachine";
 import { useSelector } from '@xstate/react';
-import { saveDraftSnapshot } from "../lib/db";
+import { saveDraftSnapshot, pruneStaleSnapshots } from "../lib/db";
+
+// Drop snapshots of long-finished drafts once per app load.
+pruneStaleSnapshots().catch((err) => console.error("Failed to prune draft snapshots", err));
 
 // One app-wide actor (not per-component) so draft state — including transient
 // bits like the current nomination — survives SPA navigation between pages.

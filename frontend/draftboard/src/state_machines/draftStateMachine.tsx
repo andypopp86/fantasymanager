@@ -1,5 +1,6 @@
 import { createMachine, assign } from 'xstate';
 import { findBudgetedPositionSlotByPlayerId, checkForPositionLimitHit } from '../utils/draftHelpers';
+import type { DraftContext } from '../lib/draft.schemas';
 
 
 // Server-owned slices, re-assignable from any state: every draft_loaded
@@ -20,27 +21,31 @@ const assignServerSlices = {
     // TODO: implement draftedPlayers (low priority)
 };
 
-export const draftStateMachine = createMachine({
-  context: {
-    draftId: 0 as number,
-    drafterId: 0 as number,
-    draftDetails: {} as any,
-    nominatedPlayer: {} as any,
-    nominationPrice: 0 as number,
-    managers: [] as any[],
-    undraftedPlayers: [] as any[],
-    draftedPlayers: [] as any[],
-    watchedPlayers: [] as any[],
-    budgetedPlayers : [] as any[],
-    draggedPlayer: {} as any,
-    budgetSlotTargeted: {} as any,
-    budgetSpent: 0 as number,
-    planChanges: [] as any[],
+// The context shape (and what Dexie snapshots) is defined once in
+// lib/draft.schemas.ts — keep DraftContext in sync with any field added here.
+const initialDraftContext: DraftContext = {
+    draftId: 0,
+    drafterId: 0,
+    draftDetails: {},
+    nominatedPlayer: {},
+    nominationPrice: 0,
+    managers: [],
+    undraftedPlayers: [],
+    draftedPlayers: [],
+    watchedPlayers: [],
+    budgetedPlayers: {},
+    draggedPlayer: {},
+    budgetSlotTargeted: {},
+    budgetSpent: 0,
+    planChanges: [],
     // True when this session was hydrated from a local Dexie snapshot because
     // the server was unreachable; snapshotSavedAt is when that snapshot was taken.
-    restoredFromSnapshot: false as boolean,
-    snapshotSavedAt: null as string | null,
-  },
+    restoredFromSnapshot: false,
+    snapshotSavedAt: null,
+};
+
+export const draftStateMachine = createMachine({
+  context: initialDraftContext,
   initial: 'loadingDraft',
   states: {
     loadingDraft: {
