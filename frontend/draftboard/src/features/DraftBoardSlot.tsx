@@ -2,8 +2,7 @@ import React from "react";
 import { POSITION_BG_COLORS, POSITION_FG_COLORS } from "../utils/colors";
 import { useState } from "react";
 
-import { draftPickUnsubmit } from "../lib/data";
-import { findBudgetedPositionSlotByPlayerId } from "../utils/draftHelpers";
+import { unsubmitPick } from "../lib/mutations";
 
 type DraftBoardSlotProps = {
     positionSlot: string;
@@ -33,23 +32,11 @@ export const DraftBoardSlot = ({
         setIsDragOver(false);
     }
 
-    const unsubmitPick = async (draftId: number, manager: any, pick: any) => {
+    const undraftPick = async (draftId: number, manager: any, pick: any) => {
         if (!draftId || !manager.manager_id || !pick.player_id) {
             return;
         }
-        const players = manager.is_drafter ? draftContext.budgetedPlayers : manager.draft_picks;
-        const positionSlot = findBudgetedPositionSlotByPlayerId(players, pickSlot.pick.player_id);
-        draftSend({
-            type: 'undraft_player',
-            positionSlot: positionSlot,
-            player_id: pickSlot.pick.player_id,
-            player_name: pickSlot.pick.name,
-            price: 0,
-            draftId: draftId,
-            managerId: manager.manager_id,
-            pickSlot: pickSlot
-        });
-        await draftPickUnsubmit(draftId, manager.manager_id, pickSlot.pick.player_id);
+        await unsubmitPick(draftId, manager.manager_id, pick.player_id);
     }
     const uniqueKey = `${positionSlot}-${column}`;
     return (
@@ -58,7 +45,7 @@ export const DraftBoardSlot = ({
             <li key={uniqueKey} className="draft-slot flex w-full justify-between border border-gray-300 font-small hover:bg-blue-700" style={{
                 color: POSITION_FG_COLORS[pickSlot.pick.position],
                 backgroundColor: isDragOver ? "blue" : POSITION_BG_COLORS[pickSlot.pick.position],
-            }} onClick={() => unsubmitPick(draftContext.draftId, manager, pickSlot.pick)}
+            }} onClick={() => undraftPick(draftContext.draftId, manager, pickSlot.pick)}
             onDragOver={handleDragOver} onDrop={(e) => { handleDrop(e, positionSlot, manager); setIsDragOver(false); }} onDragLeave={handleDragLeave}
             >
                 <span className={"border-r border-gray-300 draft-pick-name w-80 h-full flex items-center justify-center"}>{pickSlot.pick.name}</span>

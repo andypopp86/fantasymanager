@@ -1,5 +1,5 @@
-import React, {useState} from "react";
-import { favoritePlayer } from "../lib/data";
+import React from "react";
+import { setFavorite } from "../lib/mutations";
 import { POSITION_BG_COLORS, POSITION_FG_COLORS } from "../utils/colors";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faHeart as solidHeart } from '@fortawesome/free-solid-svg-icons';
@@ -31,16 +31,13 @@ export default function AvailablePlayer({pick, nominatePlayer, handleDragStart, 
         }
         return 1000;
     }
+    // The mutation updates the Dexie row, so the Favorite filter sees hearts
+    // toggled this session; the row's live query re-renders this component.
     const postFavorite = (player, favorite) => {
-        favoritePlayer(draftContext.draftId, player.player_id, {favorite: favorite}).then((response) => {
-            setIsFavorite(response.data["favorite"]);
-            // Keep the machine's copy in sync so the Favorite filter sees
-            // hearts toggled this session, not just server-loaded ones.
-            draftSend({ type: 'set_player_favorite', playerId: player.player_id, favorite: response.data["favorite"] });
-        });
+        setFavorite(draftContext.draftId, player.player_id, favorite);
     }
 
-    const [isFavorite, setIsFavorite] = useState(pick.player.favorite);
+    const isFavorite = !!pick.player.favorite;
 
     const strengthOfSchedule = getStrengthOfSchedule(pick);
     const scheduleBG = strengthOfSchedule > 25 ? "bg-red-900" : strengthOfSchedule <= 5 ? "bg-green-900" : "bg-yellow-200";

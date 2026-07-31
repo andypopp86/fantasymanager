@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import WatchedPlayer from "./WatchedPlayer.tsx";
-import { draftWatchPick } from "../lib/data";
+import { watchPick } from "../lib/mutations";
 
 // Visibility is owned by Draft.tsx: when hidden, only a small button next to
 // Back renders (out of the way); when shown, the panel sits here in the sidebar.
@@ -26,14 +26,7 @@ export default function WatchedPlayers({draftContext, draftSend, onHide}) {
             (w) => w.player_id === dragged.player.player_id
         );
         if (alreadyWatched) return;
-        const watchedPlayer = {
-            player_id: dragged.player.player_id,
-            name: dragged.player.name,
-            position: dragged.player.position,
-            projected_price: dragged.projected_price,
-        };
-        draftWatchPick(draftContext.draftId, drafter.manager_id, dragged.player.player_id, { watch: true });
-        draftSend({ type: "watch_player", player: watchedPlayer });
+        watchPick(draftContext.draftId, drafter.manager_id, dragged.player, dragged.projected_price);
     };
 
     return (
