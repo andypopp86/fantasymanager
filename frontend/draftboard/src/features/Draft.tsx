@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { draftAvailablePlayersRetrieve, draftManagerPicksRetrieve, draftBudgetedPicksRetrieve, draftWatchedPicksRetrieve } from "../lib/data";
+import { loadDraftSnapshot } from "../lib/db";
 import { DraftBoard } from "../features/DraftBoard";
 import { AvailablePlayers } from "../features/AvailablePlayers";
 import WatchedPlayers from "../features/WatchedPlayers";
@@ -18,7 +19,7 @@ export default function Draft({draftDetails, send}: DraftProps) {
     // Hidden by default: just a button next to Back. Shown: the panel keeps
     // its usual place in the sidebar.
     const [showWatchList, setShowWatchList] = useState(false);
-    const { data: playersData } = useQuery({
+    const { data: playersData, isError: playersError } = useQuery({
         queryKey: ["available_players", draftDetails.id],
         queryFn: () =>
             draftAvailablePlayersRetrieve(draftDetails.id),
@@ -27,7 +28,7 @@ export default function Draft({draftDetails, send}: DraftProps) {
         }
     })
 
-    const { data: managerPicks } = useQuery({
+    const { data: managerPicks, isError: managerPicksError } = useQuery({
         queryKey: ["manager_picks", draftDetails.id],
         queryFn: () =>
             draftManagerPicksRetrieve(draftDetails.id),
@@ -36,7 +37,7 @@ export default function Draft({draftDetails, send}: DraftProps) {
         }
     })
 
-    const { data: budgetedPicks } = useQuery({
+    const { data: budgetedPicks, isError: budgetedPicksError } = useQuery({
         queryKey: ["budgeted_picks", draftDetails.id],
         queryFn: () =>
             draftBudgetedPicksRetrieve(draftDetails.id),
@@ -45,7 +46,7 @@ export default function Draft({draftDetails, send}: DraftProps) {
         }
     })
 
-    const { data: watchedPlayers } = useQuery({
+    const { data: watchedPlayers, isError: watchedPlayersError } = useQuery({
         queryKey: ["watch_picks", draftDetails.id],
         queryFn: () =>
             draftWatchedPicksRetrieve(draftDetails.id),
@@ -69,6 +70,19 @@ export default function Draft({draftDetails, send}: DraftProps) {
     }
     , [playersData, draftDetails.id, managerPicks, budgetedPicks, watchedPlayers, draftSend]);
 
+    // Server unreachable (a load query exhausted its retries): fall back to the
+    // local Dexie snapshot. The machine only accepts restore_draft while still
+    // in loadingDraft, so a snapshot can never stomp a server-hydrated session.
+    const anyLoadError = playersError || managerPicksError || budgetedPicksError || watchedPlayersError;
+    useEffect(() => {
+        if (!draftDetails.id || !anyLoadError) return;
+        loadDraftSnapshot(draftDetails.id).then((snapshot) => {
+            if (snapshot) {
+                draftSend({ type: 'restore_draft', context: snapshot.context, savedAt: snapshot.savedAt });
+            }
+        });
+    }, [anyLoadError, draftDetails.id, draftSend]);
+
 
   return (
     <>
@@ -89,9 +103,16 @@ export default function Draft({draftDetails, send}: DraftProps) {
         <p className="bg-green-200 text-center text-lg font-bold">{draftDetails.draft_name}</p>
       </div>
     </div>
-    {draftContext && draftContext.draftId && (
+    {draftContext && draftContext.restoredFromSnapshot && (
+        <p className="bg-yellow-200 text-center text-sm font-semibold">
+            ⚠️ Server unreachable — showing local snapshot
+            {draftContext.snapshotSavedAt && ` from ${new Date(draftContext.snapshotSavedAt).toLocaleString()}`}.
+            Changes made now may not reach the server.
+        </p>
+    )}
+    {draftContext && draftContext.draftId === draftDetails.id && (
         <div className="draftboard-grid">
-            {playersData && managerPicks && (
+            {((playersData && managerPicks) || draftContext.restoredFromSnapshot) && (
                 <>
                     <div className="draft-sidebar flex gap-2">
                         <AvailablePlayers draftContext={draftContext} draftSend={draftSend} />

@@ -144,6 +144,28 @@ guard a `None` pick — otherwise re-drafting a slot 500s, which surfaces on the
 "the pick submitted but the board didn't update" (the optimistic budget change lands, but
 the `draftPickSubmit` promise rejects so `draft_player` never fires).
 
+<<<<<<< HEAD
+**Draft state survives SPA navigation via a singleton actor.** `useDraftState`
+creates ONE module-scope `createActor(draftStateMachine).start()` shared app-wide —
+unmounting `Draft` (navigating to another page) no longer destroys draft state.
+Consequently `draft_loaded` is handled in **every** machine state, not just
+`loadingDraft`: server-owned slices (`assignServerSlices` — managers, players,
+budget, watchlist) are always taken wholesale from the event, while client-only
+nomination state is kept when re-loading the *same* draft and reset when a
+different draft loads. `Draft.tsx` renders the board only when
+`draftContext.draftId === draftDetails.id`, so a stale board never shows while
+switching drafts.
+
+**Local draft persistence (Dexie/IndexedDB)** — `lib/db.ts` (`draftboard` DB,
+`draftSnapshots` table keyed by `draftId`). The singleton actor's subscription
+writes a debounced snapshot of the whole context on every transition. Restore is a
+**fallback only**: when a load query in `Draft.tsx` errors (server unreachable), it
+sends `restore_draft`, handled only in the machine's `loadingDraft` state — so a
+snapshot can never overwrite a server-hydrated session, and the server remains the
+source of truth. A restored session sets `restoredFromSnapshot` / `snapshotSavedAt`
+in context and shows a warning banner; API writes made while offline still fail
+(there is NO offline write-queue/sync).
+=======
 **DraftPlan (`draft/models.py`)** — a standalone, reusable roster plan: `name`,
 `year`, and one nullable Player FK per slot (`qb1` … `bench7`, lowercase of
 `DRAFT_PLAN_SLOTS`). Deliberately NO FK to draft or user, so any draft can pull any
@@ -169,6 +191,7 @@ Nomination area. Formula:
 should never cost more. Denominator clamps at 1; returns `null` (badge hidden) when the
 roster is full. Color scale in `utils/colors.getBudgetPerSlotColors`: ≤1 bright red,
 1–2 orange-red, 2–5 yellow, >5 green.
+>>>>>>> master
 
 **Key data shapes** (loose `any` in the code):
 - Budget slot: `{ order, allowed_positions: string[], pick: { player_id, player_name, position, projected_price, actual_price, price, budget_position, status, ... } }`, keyed by slot name. Empty pick ⇒ `player_id === ""`.
