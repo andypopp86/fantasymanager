@@ -144,6 +144,16 @@ guard a `None` pick — otherwise re-drafting a slot 500s, which surfaces on the
 "the pick submitted but the board didn't update" (the optimistic budget change lands, but
 the `draftPickSubmit` promise rejects so `draft_player` never fires).
 
+**Local draft persistence (Dexie/IndexedDB)** — `lib/db.ts` (`draftboard` DB,
+`draftSnapshots` table keyed by `draftId`). `useDraftState` subscribes to the draft
+machine and writes a debounced snapshot of the whole context on every transition.
+Restore is a **fallback only**: when a load query in `Draft.tsx` errors (server
+unreachable), it sends `restore_draft`, handled only in the machine's `loadingDraft`
+state — so a snapshot can never overwrite a server-hydrated session, and the server
+remains the source of truth. A restored session sets `restoredFromSnapshot` /
+`snapshotSavedAt` in context and shows a warning banner; API writes made while
+offline still fail (there is NO offline write-queue/sync).
+
 **Key data shapes** (loose `any` in the code):
 - Budget slot: `{ order, allowed_positions: string[], pick: { player_id, player_name, position, projected_price, actual_price, price, budget_position, status, ... } }`, keyed by slot name. Empty pick ⇒ `player_id === ""`.
 - Manager: `{ manager_id, manager_name, manager_position, manager_budget, is_drafter, draft_picks: { [slot]: { allowed_positions, position_slot, pick: {...} } } }`.

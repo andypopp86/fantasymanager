@@ -18,6 +18,10 @@ export const draftStateMachine = createMachine({
     budgetSlotTargeted: {} as any,
     budgetSpent: 0 as number,
     planChanges: [] as any[],
+    // True when this session was hydrated from a local Dexie snapshot because
+    // the server was unreachable; snapshotSavedAt is when that snapshot was taken.
+    restoredFromSnapshot: false as boolean,
+    snapshotSavedAt: null as string | null,
   },
   initial: 'loadingDraft',
   states: {
@@ -32,9 +36,22 @@ export const draftStateMachine = createMachine({
                     undraftedPlayers: ({ event }) => event.undraftedPlayers,
                     watchedPlayers: ({ event }) => event.watchedPlayers,
                     budgetedPlayers: ({ event }) => event.budgetedPicks,
-                    budgetSpent: ({ event }) => calculateBudgetSpent(event.budgetedPicks)
+                    budgetSpent: ({ event }) => calculateBudgetSpent(event.budgetedPicks),
+                    restoredFromSnapshot: () => false,
+                    snapshotSavedAt: () => null,
                     // TODO: implement draftedPlayers (low priority)
                 }),
+                target: 'waiting',
+            },
+            // Server unreachable: hydrate from the local Dexie snapshot instead.
+            'restore_draft': {
+                actions: assign(({ event }) => ({
+                    ...event.context,
+                    draggedPlayer: {},
+                    budgetSlotTargeted: {},
+                    restoredFromSnapshot: true,
+                    snapshotSavedAt: event.savedAt,
+                })),
                 target: 'waiting',
             },
         },
