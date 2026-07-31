@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { draftAvailablePlayersRetrieve, draftManagerPicksRetrieve, draftBudgetedPicksRetrieve, draftWatchedPicksRetrieve } from "../lib/data";
 import { loadDraftSnapshot } from "../lib/db";
@@ -11,10 +12,10 @@ import { NominationArea } from "./NominationArea";
 
 type DraftProps = {
     draftDetails: any
-    send: any
 };
 
-export default function Draft({draftDetails, send}: DraftProps) {
+export default function Draft({draftDetails}: DraftProps) {
+    const navigate = useNavigate();
     const { data: playersData, isError: playersError } = useQuery({
         queryKey: ["available_players", draftDetails.id],
         queryFn: () =>
@@ -84,7 +85,7 @@ export default function Draft({draftDetails, send}: DraftProps) {
     <>
     <div className="grid grid-cols-12 gap-4">
       <div className="col-span-2 sm:col-span-2 md:col-span-2 lg:col-span-2 xl:col-span-2">
-        <button className={"btn border border-gray-400 rounded-md px-2 py-1 hover:bg-gray-100 active:bg-gray-200"} onClick={() => send({type: "draft.back"})}>Back</button>
+        <button className={"btn border border-gray-400 rounded-md px-2 py-1 hover:bg-gray-100 active:bg-gray-200"} onClick={() => navigate("/")}>Back</button>
       </div>
       <div className="col-span-10 sm:col-span-10 md:col-span-10 lg:col-span-10 xl:col-span-10">
         <p className="bg-green-200 text-center text-lg font-bold">{draftDetails.draft_name}</p>

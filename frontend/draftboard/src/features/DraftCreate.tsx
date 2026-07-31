@@ -1,7 +1,11 @@
 import React, {useState} from "react";
+import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { draftCreate } from "../lib/data";
 
-export default function DraftList({ send }) {
+export default function DraftCreate() {
+    const navigate = useNavigate();
+    const queryClient = useQueryClient();
     const [draftName, setDraftName] = useState("Sparks Beta");
     const [managers, setManagers] = useState(`Andy*
 Jake
@@ -49,8 +53,9 @@ Norton`);
             limit_te: limitTE,
             limit_def: limitDEF,
         }
-        draftCreate({ ...draftData }).then((response) => {
-            send({type: "draft.create", draft: response.data});
+        draftCreate({ ...draftData }).then(() => {
+            queryClient.invalidateQueries({ queryKey: ["draft_list"] });
+            navigate("/");
         });
     }
 

@@ -1,22 +1,18 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
+import { Link } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { draftDelete } from "../lib/data";
 
-export default function DraftList({ appContext, send }) {
-    const sendDraftSelected = (draft) => {
-        send({ type: "draft.selected", draft: draft })
-    }
+export default function DraftList({ draftList }) {
+    const queryClient = useQueryClient();
+
     const deleteDraft = (draftId) => {
         draftDelete(draftId).then((response) => {
             if (response.status === 200) {
-                send({ type: "draft.deleted", draftId: draftId })
+                queryClient.invalidateQueries({ queryKey: ["draft_list"] });
             }
         })
     }
-
-    const [draftList, setDraftList] = useState(appContext.draft_list);
-    useEffect(() => {
-        setDraftList(appContext.draft_list);
-    }, [appContext.draft_list])
 
     return (
         <div className={"container mx-auto"}>
@@ -34,7 +30,7 @@ export default function DraftList({ appContext, send }) {
                             <tr key={draft.id}>
                                 <td>{draft.year}</td>
                                 <td>
-                                    <button onClick={() => sendDraftSelected(draft)}>{draft.draft_name}</button>
+                                    <Link to={`/draft/${draft.id}`}>{draft.draft_name}</Link>
                                 </td>
                                 <td>
                                     {

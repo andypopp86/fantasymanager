@@ -1,6 +1,6 @@
 from django.conf.urls import include
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, re_path
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib.auth.views import (
@@ -13,6 +13,7 @@ from django.contrib.auth.views import (
 )
 from fantasy import views as fview
 from users import views as uview
+from draft import views as draft_views
 
 
 urlpatterns = [
@@ -29,6 +30,9 @@ urlpatterns = [
     path('rules/', include('rules.urls', namespace='rules')),
     path('draft/', include('draft.urls', namespace='draft')),
     # path('users/', include('users.urls', namespace='users')),
+    # The React SPA owns every path under /app/ (client-side routing), so any
+    # /app/... URL must serve the same entrypoint for deep links to work.
+    re_path(r'^app/', draft_views.react_draft_entrypoint, name='react_app'),
 ]
 
 api_urlpatterns = [

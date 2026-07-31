@@ -47,11 +47,14 @@ frontend/draftboard/
 
 - **React 18 + Vite 5**, source is **TypeScript** (`.tsx`/`.ts`) except the two
   bootstrap files `main.jsx` / `App.jsx`.
-- **State: XState (v5)** state machines, consumed via `@xstate/react`:
-  - `appStateMachine` — top-level flow: `loading → selecting → creating/drafting`.
-    Accessed through `useDraftAppState()`.
+- **Routing: react-router v6** (`react-router-dom`), set up in `DraftShell.tsx`
+  with `basename="/app"`. Routes: `/` (draft list), `/draft/create`,
+  `/draft/:draftId` (the board, deep-linkable — `DraftPage.tsx` resolves the id
+  param via the draft detail endpoint). Navigation is `Link`/`useNavigate`; the
+  old `appStateMachine`/`useDraftAppState` screen-switcher was deleted with it.
+- **State: XState (v5)**, consumed via `@xstate/react`:
   - `draftStateMachine` — per-draft board state (players, picks, budgets,
-    watchlist, reordering). Accessed through `useDraftState()`.
+    watchlist, reordering). Accessed through `useDraftState()` (singleton actor).
   - UI components dispatch events via the machine's `send(...)`.
 - **Server state: TanStack React Query** (`@tanstack/react-query`) for fetching;
   fetched data is pushed into the XState machines via events (see `Draft.tsx`).
@@ -62,10 +65,12 @@ frontend/draftboard/
 
 ## Backend integration
 
-- Django serves the app through **`django-vite`**. The entrypoint view is
-  `draft.views.react_draft_entrypoint` (URL name `react_draft_entrypoint`),
-  rendering `templates/draft/index.html` — the **only** live template tied to
-  the React app.
+- Django serves the app through **`django-vite`**. The SPA lives at **`/app/`**:
+  `fantasy/urls.py` has `re_path(r'^app/', react_draft_entrypoint)` so EVERY path
+  under /app/ serves the same entrypoint (client-side routing needs this for deep
+  links — add new SPA pages as React routes, never as new Django paths). The view
+  renders `templates/draft/index.html` — the **only** live template tied to the
+  React app. The old `/draft/react_draft_entrypoint/` URL 302s to `/app/`.
 - `index.html` sets `window.csrfToken = "{{ csrf_token }}"` and loads the bundle
   via `{% vite_asset "src/main.jsx" app="draftboard" %}`.
 - The React app calls the DRF API under **`/api/drafts/draft/...`** (see the
