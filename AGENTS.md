@@ -100,6 +100,39 @@ Conventions:
   machine event fits.
 - Prefer TypeScript for new files.
 
+## Auth & roles
+
+**Everything requires login.** The SPA entrypoint (`react_draft_entrypoint`)
+is `@login_required` and DRF's default permission is `IsAuthenticated`
+(`fantasy/settings.py`). Login lives at `/login/` (`LOGIN_URL` points there —
+it used to point at a nonexistent `/accounts/login/`), signup at `/signup/`.
+The registration templates render via crispy-forms and NEED the
+`crispy-bootstrap3` package (crispy 2.x split the template packs out; without
+it every registration page 500s).
+
+**Two tiers, keyed on `is_staff`** (managed in /admin): staff = drafter (full
+access), non-staff = spectator. `draft/api/permissions.py::IsDrafter` gates
+every write plus the drafter-private reads (available_players, budgeted_picks,
+watched_picks, favorite, plans, create/delete draft). Spectator-reachable
+endpoints: draft list, detail, managers, picks, board detail, manager_picks,
+`/api/me/`.
+
+**`/api/me/`** (`users/api.py`) returns `{email, username, is_staff}`;
+`DraftShell.tsx` uses it to pick routes — spectators get only the dashboard
+(read-only `DraftList` → `/board/:id`) and `SpectatorBoard`. Client gating is
+UX only; the server enforces the boundary. Authz tests live in
+`draft/tests.py::ApiAuthorizationTests`.
+
+**CSRF:** DRF's `SessionAuthentication` enforces CSRF only on authenticated
+requests, so logged-in POSTs 403 unless the token is sent — `lib/data.ts`
+configures axios globally (`xsrfCookieName = "csrftoken"`) and every call
+inherits it. The `window.csrfToken` snapshot in `index.html` predates this and
+is no longer read by API calls. `data.ts` also has a response interceptor that
+redirects to `/login/?next=…` when a session expires mid-use.
+
+**Draft day:** the spectator laptop must log in once (any non-staff account)
+before opening the board URL; sessions last two weeks by default.
+
 ## Domain concepts (draft & budget)
 
 This is an **auction fantasy-football draft board**. One manager is the **drafter**
@@ -213,7 +246,8 @@ $env:VITE_DEV_HOST = "<this-machine's-LAN-IP>" # terminal 2, repo root
 .venv\Scripts\python manage.py runserver 0.0.0.0:8100
 ```
 
-Spectator laptop needs only a browser → `http://<LAN-IP>:8100/app/board/<draft_id>`.
+Spectator laptop needs only a browser → `http://<LAN-IP>:8100/app/board/<draft_id>`
+(logged in with a spectator account — see "Auth & roles").
 
 `VITE_DEV_HOST` matters: django-vite writes that host into the dev script tags,
 and `localhost` would point the second laptop at itself (page loads, stays

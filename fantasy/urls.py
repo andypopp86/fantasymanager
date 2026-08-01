@@ -13,6 +13,7 @@ from django.contrib.auth.views import (
 )
 from fantasy import views as fview
 from users import views as uview
+from users import api as uapi
 from draft import views as draft_views
 
 
@@ -37,6 +38,7 @@ urlpatterns = [
 
 api_urlpatterns = [
     path("drafts/", include(("draft.api.urls", "drafts"), namespace="drafts")),
+    path("me/", uapi.MeAPI.as_view(), name="me"),
 ]
 
 urlpatterns += [

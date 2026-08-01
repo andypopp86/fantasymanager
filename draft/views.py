@@ -1,5 +1,6 @@
 import json
 
+from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.db.models import F, DecimalField, ExpressionWrapper, Sum
@@ -144,6 +145,7 @@ def skepticism_rating(request, draft_id, player_id):
     response = JsonResponse(json.dumps(data), safe=False)
     return response
 
+@login_required
 def react_draft_entrypoint(request):
     context = {}
     return render(request, "draft/index.html", context)

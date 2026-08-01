@@ -18,6 +18,13 @@ export type Draft = {
 export interface DraftListRetrieveOutput {
     drafts: Draft[]
 }
+
+// /api/me/ — is_staff is the role flag: staff = drafter, non-staff = spectator
+export interface CurrentUserOutput {
+    email: string,
+    username: string,
+    is_staff: boolean,
+}
 export interface DraftRetrieveOutput {
 
 }

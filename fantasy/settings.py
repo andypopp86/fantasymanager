@@ -59,6 +59,7 @@ INSTALLED_APPS = ([] if TESTING else ['debug_toolbar']) + [
     'bootstrap3',
     'mathfilters',
     'crispy_forms',
+    'crispy_bootstrap3',
     'django_vite',
 
     'users',
@@ -161,7 +162,7 @@ STATICFILES_DIRS = [
 ]
 STATIC_ROOT = "static_root"
 
-LOGIN_URL = "/accounts/login/"
+LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/login/"
 
@@ -196,6 +197,9 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
     'PAGE_SIZE': 10,
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    # Baseline: no anonymous API access. Drafter-only endpoints additionally
+    # require is_staff via draft.api.permissions.IsDrafter.
+    'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticated'],
 }
 
 # VITE_DEV_MODE=false serves the built bundle (npm run build) instead of the

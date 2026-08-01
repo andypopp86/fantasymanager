@@ -7,6 +7,7 @@ from rest_framework.pagination import PageNumberPagination
 from drf_spectacular.utils import extend_schema
 
 from core.api.serializers.base import BaseSerializer, BaseInputSerializer
+from draft.api.permissions import IsDrafter
 from draft.services.draft.draft import DraftReadService, DraftManagersReadService, DraftBoardReadService, DraftWriteService
 
 class LargeResultsSetPagination(PageNumberPagination):
@@ -251,6 +252,8 @@ class DraftPicksOutputSerializer(BaseSerializer):
 
 
 class DraftAvailablePlayersAPI(APIView):
+    permission_classes = [IsDrafter]
+
     def get(self, request, draft_id):
         players = DraftReadService(
             user=request.user
@@ -288,6 +291,8 @@ class ManagerDraftedPlayersAPI(APIView):
         return Response(manager_picks, status=status.HTTP_200_OK)
 
 class DraftBudgetedPicksAPI(APIView):
+    permission_classes = [IsDrafter]
+
     def get(self, request, draft_id):
         budgeted_picks = DraftReadService(
             user=request.user
@@ -303,6 +308,8 @@ class WatchPlayersOutputSerializer(BaseSerializer):
 
 
 class DraftWatchedPicksAPI(APIView):
+    permission_classes = [IsDrafter]
+
     def get(self, request, draft_id):
         budgeted_picks = DraftReadService(
             user=request.user
@@ -332,6 +339,7 @@ class DraftBoardAPI(APIView):
 
 
 class DraftSubmitPickAPI(APIView):
+    permission_classes = [IsDrafter]
 
     class DraftPickCreateSerializer(BaseInputSerializer):
         price = serializers.IntegerField()
@@ -373,6 +381,8 @@ class DraftSubmitPickAPI(APIView):
         return response
 
 class DraftUnsubmitPickAPI(APIView):
+    permission_classes = [IsDrafter]
+
     def post(self, request, draft_id, manager_id, player_id):
         DraftWriteService(
             user=request.user
@@ -384,6 +394,8 @@ class DraftUnsubmitPickAPI(APIView):
         return Response(status=status.HTTP_200_OK)
     
 class DraftBudgetPickAPI(APIView):
+    permission_classes = [IsDrafter]
+
     def post(self, request, draft_id, manager_id, player_id):
         DraftWriteService(
             user=request.user
@@ -397,6 +409,8 @@ class DraftBudgetPickAPI(APIView):
         return Response(status=status.HTTP_200_OK)
 
 class DraftUnbudgetPickAPI(APIView):
+    permission_classes = [IsDrafter]
+
     def post(self, request, draft_id, manager_id, player_id):
         DraftWriteService(
             user=request.user
@@ -408,6 +422,8 @@ class DraftUnbudgetPickAPI(APIView):
         return Response(status=status.HTTP_200_OK)
 
 class DraftReslotPicksAPI(APIView):
+    permission_classes = [IsDrafter]
+
     def post(self, request, draft_id, manager_id):
         DraftWriteService(
             user=request.user
@@ -420,6 +436,8 @@ class DraftReslotPicksAPI(APIView):
 
 
 class DraftReslotBudgetAPI(APIView):
+    permission_classes = [IsDrafter]
+
     def post(self, request, draft_id, manager_id):
         DraftWriteService(
             user=request.user
@@ -432,6 +450,8 @@ class DraftReslotBudgetAPI(APIView):
 
 
 class DraftWatchPickAPI(APIView):
+    permission_classes = [IsDrafter]
+
     def post(self, request, draft_id, manager_id, player_id):
         DraftWriteService(
             user=request.user
@@ -444,6 +464,8 @@ class DraftWatchPickAPI(APIView):
         return Response(status=status.HTTP_200_OK)
     
 class DraftCreateAPI(APIView):
+    permission_classes = [IsDrafter]
+
     class DraftCreateSerializer(BaseInputSerializer):
         draft_name = serializers.CharField()
         managers = serializers.CharField()
@@ -481,6 +503,8 @@ class DraftCreateAPI(APIView):
         return response
     
 class DraftDeleteAPI(APIView):
+    permission_classes = [IsDrafter]
+
     def post(self, request, draft_id):
         DraftWriteService(
             user=request.user
@@ -488,6 +512,8 @@ class DraftDeleteAPI(APIView):
         return Response(status=status.HTTP_200_OK)
 
 class DraftFavoritePickAPI(APIView):
+    permission_classes = [IsDrafter]
+
     def post(self, request, draft_id, player_id):
         player = DraftWriteService(
             user=request.user

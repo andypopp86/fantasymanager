@@ -11,8 +11,50 @@ import type { DraftRetrieveOutput,
     DraftBudgetPickParams,
     DraftCreateParams,
     FavoritePlayerParams,
-    DraftPlanOutput
+    DraftPlanOutput,
+    CurrentUserOutput
 } from "./draft.schemas";
+
+// DRF's SessionAuthentication enforces CSRF only on authenticated requests,
+// so every write must carry the token now that the app requires login.
+// Django's csrftoken cookie is the source (it survives login rotations,
+// unlike the window.csrfToken snapshot rendered into index.html).
+axios.default.defaults.xsrfCookieName = "csrftoken";
+axios.default.defaults.xsrfHeaderName = "X-CSRFToken";
+
+// An expired session mid-use answers 403 "credentials were not provided" on
+// every call; bounce to login rather than silently showing stale data. Other
+// 403s (e.g. a spectator poking a drafter endpoint) pass through untouched.
+axios.default.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        const detail = error?.response?.data?.detail;
+        if (
+            error?.response?.status === 403 &&
+            typeof detail === "string" &&
+            detail.includes("credentials were not provided")
+        ) {
+            window.location.assign(
+                `/login/?next=${encodeURIComponent(window.location.pathname)}`
+            );
+        }
+        return Promise.reject(error);
+    }
+);
+
+export const meRetrieve = <
+  TData = AxiosResponse<CurrentUserOutput>,
+  >(
+    options?: AxiosRequestConfig,
+  ): Promise<TData> => {
+    return axios.default.get(`/api/me/`, options)
+  }
+
+export const logout = (): Promise<void> => {
+    return axios.default.post(`/logout/`).then(() => {
+        window.location.assign("/login/");
+    })
+  }
 
 export const draftListRetrieve = <
   TData = AxiosResponse<DraftListRetrieveOutput>,
