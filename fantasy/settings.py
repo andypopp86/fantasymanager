@@ -41,6 +41,10 @@ if DEBUG:
     # Dev only: lets other devices on the LAN reach the app (e.g. the
     # spectator board on a second laptop during the live draft).
     ALLOWED_HOSTS.append('*')
+# Hosted deploys (Railway) add their public hostname via env, e.g.
+# ALLOWED_HOSTS=myapp.up.railway.app  CSRF_TRUSTED_ORIGINS=https://myapp.up.railway.app
+ALLOWED_HOSTS += env.list('ALLOWED_HOSTS', default=[])
+CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[])
 
 DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 
@@ -67,6 +71,9 @@ INSTALLED_APPS = ([] if TESTING else ['debug_toolbar']) + [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # WhiteNoise serves collected static files in production (gunicorn has no
+    # static handling); harmless no-op under runserver in dev.
+    'whitenoise.middleware.WhiteNoiseMiddleware',
 ] + ([] if TESTING else ['debug_toolbar.middleware.DebugToolbarMiddleware']) + [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -105,16 +112,21 @@ WSGI_APPLICATION = 'fantasy.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/3.0/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql_psycopg2',
-        'NAME': env('DB_NAME'),
-        'USER': env('DB_USER'),
-        'PASSWORD': env('DB_PASSWORD'),
-        'HOST': env('DB_HOST'),
-        'PORT': env('DB_PORT'),
+# Hosted platforms (Railway) inject a single DATABASE_URL; local dev keeps
+# the discrete DB_* vars from .env.
+if env.str('DATABASE_URL', default=''):
+    DATABASES = {'default': env.db('DATABASE_URL')}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql_psycopg2',
+            'NAME': env('DB_NAME'),
+            'USER': env('DB_USER'),
+            'PASSWORD': env('DB_PASSWORD'),
+            'HOST': env('DB_HOST'),
+            'PORT': env('DB_PORT'),
+        }
     }
-}
 
 
 # Password validation
@@ -148,6 +160,13 @@ STATICFILES_DIRS = [
     os.path.join(BASE_DIR, "frontend/draftboard/dist"),
 ]
 STATIC_ROOT = "static_root"
+
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    # Compressed but NOT manifest storage: the Vite bundle is already
+    # content-hashed, and manifest hashing would break django-vite's URLs.
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
+}
 
 LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "/"

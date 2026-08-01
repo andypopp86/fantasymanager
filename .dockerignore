@@ -1,0 +1,12 @@
+.git
+.venv
+node_modules
+frontend/draftboard/node_modules
+frontend/draftboard/dist
+static_root
+__pycache__
+*.pyc
+.env
+data
+auto_configs
+.vscode

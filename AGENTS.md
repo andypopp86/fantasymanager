@@ -145,6 +145,18 @@ redirects to `/login/?next=…` when a session expires mid-use.
 **Draft day:** the spectator laptop must log in once (any non-staff account)
 before opening the board URL; sessions last two weeks by default.
 
+## Hosted deploy (Railway)
+
+`Dockerfile` builds the React bundle and serves via gunicorn + WhiteNoise
+(`STORAGES` uses compressed, NON-manifest storage — the Vite bundle is already
+content-hashed and manifest hashing would break django-vite's URLs).
+Settings are env-driven for hosting: `DATABASE_URL` (takes precedence over the
+local `DB_*` vars), `ALLOWED_HOSTS` / `CSRF_TRUSTED_ORIGINS` (appended from
+env), `DEBUG=false`, `VITE_DEV_MODE=false`. Migrations run at container boot.
+Platform-side steps, data load/pull, and off-season teardown:
+[`RAILWAY_RUNBOOK.md`](./RAILWAY_RUNBOOK.md). The hosted instance is a copy —
+the Windows laptop's DB remains the system of record.
+
 ## Domain concepts (draft & budget)
 
 This is an **auction fantasy-football draft board**. One manager is the **drafter**
