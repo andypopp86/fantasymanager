@@ -252,6 +252,17 @@ export type WatchPickRow = {
     projected_price: number | string,
 }
 
+// One queued API write, recorded when the server was unreachable (or while
+// older writes were still queued, to preserve ordering). Flushed FIFO by
+// lib/writeQueue.ts; `op` names an entry in its OP_SENDERS registry.
+export type PendingWriteRow = {
+    id?: number, // auto-increment
+    draftId: number,
+    op: string,
+    args: Record<string, any>,
+    createdAt: string,
+}
+
 // Per-draft singleton row: details, managers (identity only — budgets are
 // DERIVED from drafted rows, never stored), and the slot template.
 export type DraftMetaRow = {

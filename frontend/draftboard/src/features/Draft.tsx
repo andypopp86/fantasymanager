@@ -20,13 +20,14 @@ type DraftProps = {
 // rows → useDraftData projects them live into the shapes components consume.
 // The XState machine contributes only flow state (nomination, drag). If the
 // server is unreachable, the queries fail but last session's rows are still
-// in Dexie — the board renders local data with a warning banner.
+// in Dexie — the board keeps working, and queued writes surface via the
+// waiting-to-sync counter in the title row.
 export default function Draft({draftDetails}: DraftProps) {
     const navigate = useNavigate();
     // Hidden by default: just a button next to Back. Shown: the panel keeps
     // its usual place in the sidebar.
     const [showWatchList, setShowWatchList] = useState(false);
-    const { data: playersData, isError: playersError } = useQuery({
+    const { data: playersData } = useQuery({
         queryKey: ["available_players", draftDetails.id],
         queryFn: () =>
             draftAvailablePlayersRetrieve(draftDetails.id),
@@ -35,7 +36,7 @@ export default function Draft({draftDetails}: DraftProps) {
         }
     })
 
-    const { data: managerPicks, isError: managerPicksError } = useQuery({
+    const { data: managerPicks } = useQuery({
         queryKey: ["manager_picks", draftDetails.id],
         queryFn: () =>
             draftManagerPicksRetrieve(draftDetails.id),
@@ -44,7 +45,7 @@ export default function Draft({draftDetails}: DraftProps) {
         }
     })
 
-    const { data: budgetedPicks, isError: budgetedPicksError } = useQuery({
+    const { data: budgetedPicks } = useQuery({
         queryKey: ["budgeted_picks", draftDetails.id],
         queryFn: () =>
             draftBudgetedPicksRetrieve(draftDetails.id),
@@ -53,7 +54,7 @@ export default function Draft({draftDetails}: DraftProps) {
         }
     })
 
-    const { data: watchedPlayers, isError: watchedPlayersError } = useQuery({
+    const { data: watchedPlayers } = useQuery({
         queryKey: ["watch_picks", draftDetails.id],
         queryFn: () =>
             draftWatchedPicksRetrieve(draftDetails.id),
@@ -85,8 +86,6 @@ export default function Draft({draftDetails}: DraftProps) {
         draftSend({ type: "reset_flow" });
     }, [draftDetails.id, draftSend]);
 
-    const anyLoadError = playersError || managerPicksError || budgetedPicksError || watchedPlayersError;
-
     const draftContext = {
         ...data,
         ...flowContext,
@@ -97,7 +96,7 @@ export default function Draft({draftDetails}: DraftProps) {
   return (
     <>
     <div className="grid grid-cols-12 gap-4">
-      <div className="col-span-2 sm:col-span-2 md:col-span-2 lg:col-span-2 xl:col-span-2 flex gap-2">
+      <div className="col-span-3 sm:col-span-3 md:col-span-3 lg:col-span-3 xl:col-span-3 flex gap-2">
         <button className={"btn border border-gray-400 rounded-md px-2 py-1 hover:bg-gray-100 active:bg-gray-200"} onClick={() => navigate("/")}>Back</button>
         {!showWatchList && (
             <button
@@ -116,15 +115,15 @@ export default function Draft({draftDetails}: DraftProps) {
             Plans
         </button>
       </div>
-      <div className="col-span-10 sm:col-span-10 md:col-span-10 lg:col-span-10 xl:col-span-10">
-        <p className="bg-green-200 text-center text-lg font-bold">{draftDetails.draft_name}</p>
+      <div className="col-span-9 sm:col-span-9 md:col-span-9 lg:col-span-9 xl:col-span-9 flex">
+        {data.pendingWrites > 0 && (
+            <p className="w-1/3 bg-orange-200 text-center text-sm font-semibold flex items-center justify-center">
+                ⏳ {data.pendingWrites} change{data.pendingWrites === 1 ? "" : "s"} waiting to sync
+            </p>
+        )}
+        <p className="flex-1 bg-green-200 text-center text-lg font-bold">{draftDetails.draft_name}</p>
       </div>
     </div>
-    {anyLoadError && data.hydrated && (
-        <p className="bg-yellow-200 text-center text-sm font-semibold">
-            ⚠️ Server unreachable — showing locally saved data. Changes made now may not reach the server.
-        </p>
-    )}
     {data.hydrated && (
         <div className="draftboard-grid">
             <div className="draft-sidebar flex gap-2">

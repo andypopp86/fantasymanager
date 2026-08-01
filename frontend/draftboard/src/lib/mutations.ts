@@ -1,25 +1,19 @@
 import { db } from "./db";
-import {
-    draftPickSubmit,
-    draftPickUnsubmit,
-    draftBudgetPick,
-    draftUnbudgetPick,
-    draftWatchPick,
-    draftReslotPicks,
-    draftReslotBudget,
-    favoritePlayer,
-} from "./data";
+import { sendOrQueue, sendOrQueueWithResponse } from "./writeQueue";
 import type { PlayerDetail, SlotName } from "./draft.schemas";
 
 // THE mutation seam: every local data change goes through here as one Dexie
 // transaction paired with its API call. Components never write Dexie or call
-// pick/budget/watch endpoints directly. A future offline write-queue replaces
-// the direct API calls in this file (enqueue + flush) and nothing else moves.
+// pick/budget/watch endpoints directly. API calls route through the
+// writeQueue: sent directly when the server is reachable, queued in the
+// pending_writes log and replayed FIFO when it isn't.
 //
 // Ordering semantics preserved from the pre-Dexie code:
-// - submitPick is SERVER-FIRST (the server validates slots/limits; the local
-//   rows only change once it accepts, and the caller alerts on error).
-// - everything else is OPTIMISTIC (local rows first, API fired after).
+// - submitPick is SERVER-FIRST (the server validates slots/limits and the
+//   caller alerts on rejection) — but if the server is UNREACHABLE the pick
+//   is accepted optimistically and queued: losing picks mid-draft is worse
+//   than a rare replay rejection (hydration reconciles those).
+// - everything else is OPTIMISTIC (local rows first, API sent/queued after).
 
 // Register a pick with the server, then flip the local row to drafted (they
 // leave the available list by definition) and drop them from the watchlist.
@@ -33,12 +27,17 @@ export const submitPick = async (
     price: number,
     slot: SlotName,
 ): Promise<string | null> => {
-    const response = await draftPickSubmit(draftId, managerId, player.player_id, {
+    const result = await sendOrQueueWithResponse(draftId, "submit_pick", {
+        draftId,
+        managerId,
+        playerId: player.player_id,
         price,
-        position_slot: slot,
+        slot,
     });
-    const errMsg = response.data["error"];
-    if (errMsg != null) return errMsg;
+    if ("response" in result) {
+        const errMsg = result.response.data["error"];
+        if (errMsg != null) return errMsg;
+    }
 
     await db.transaction("rw", db.draft_picks, db.watch_picks, async () => {
         await db.draft_picks.update([draftId, player.player_id], {
@@ -82,7 +81,7 @@ export const unsubmitPick = async (draftId: number, managerId: number, playerId:
         price: null,
         slot: null,
     });
-    draftPickUnsubmit(draftId, managerId, playerId);
+    sendOrQueue(draftId, "unsubmit_pick", { draftId, managerId, playerId });
 };
 
 // Budget a player at a slot. One budget row per player (server semantics:
@@ -108,15 +107,18 @@ export const budgetPick = async (
             status: "budgeted",
         });
     });
-    draftBudgetPick(draftId, drafterId, player.player_id, {
-        projected_price: projectedPrice,
-        budget_position: slot,
+    await sendOrQueue(draftId, "budget_pick", {
+        draftId,
+        managerId: drafterId,
+        playerId: player.player_id,
+        projectedPrice,
+        slot,
     });
 };
 
 export const unbudgetPick = async (draftId: number, drafterId: number, playerId: number | string) => {
     await db.budget_picks.delete([draftId, playerId]);
-    draftUnbudgetPick(draftId, drafterId, playerId);
+    await sendOrQueue(draftId, "unbudget_pick", { draftId, managerId: drafterId, playerId });
 };
 
 // Merge a DraftPlan into the budget: for each slot the user checked, drop the
@@ -154,19 +156,20 @@ export const watchPick = async (
         position: player.position,
         projected_price: projectedPrice,
     });
-    draftWatchPick(draftId, managerId, player.player_id, { watch: true });
+    sendOrQueue(draftId, "watch", { draftId, managerId, playerId: player.player_id, watch: true });
 };
 
 export const unwatchPick = async (draftId: number, managerId: number, playerId: number | string) => {
     await db.watch_picks.delete([draftId, playerId]);
-    draftWatchPick(draftId, managerId, playerId, { watch: false });
+    sendOrQueue(draftId, "watch", { draftId, managerId, playerId, watch: false });
 };
 
 // Server-first like submitPick: the server may override the requested value,
-// so the row is updated with what it actually returns.
+// so the row takes what it actually returns — unless the write got queued,
+// in which case the requested value applies optimistically.
 export const setFavorite = async (draftId: number, playerId: number | string, favorite: boolean) => {
-    const response = await favoritePlayer(draftId, playerId, { favorite });
-    const confirmed = response.data["favorite"];
+    const result = await sendOrQueueWithResponse(draftId, "favorite", { draftId, playerId, favorite });
+    const confirmed = "response" in result ? result.response.data["favorite"] : favorite;
     const row = await db.draft_picks.get([draftId, playerId]);
     if (row) {
         await db.draft_picks.update([draftId, playerId], {
@@ -189,7 +192,7 @@ export const reslotPicks = async (draftId: number, managerId: number, assignment
             })
         ));
     });
-    draftReslotPicks(draftId, managerId, { assignments });
+    sendOrQueue(draftId, "reslot_picks", { draftId, managerId, assignments });
 };
 
 export const reslotBudget = async (draftId: number, drafterId: number, assignments: Record<string, number | string>) => {
@@ -204,5 +207,5 @@ export const reslotBudget = async (draftId: number, drafterId: number, assignmen
             })
         ));
     });
-    draftReslotBudget(draftId, drafterId, { assignments });
+    sendOrQueue(draftId, "reslot_budget", { draftId, managerId: drafterId, assignments });
 };
