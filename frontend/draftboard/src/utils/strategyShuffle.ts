@@ -86,6 +86,27 @@ export const computeRungs = (
     return rungs.sort((a, b) => b - a);
 };
 
+// Default lock heuristic. The common reason to shuffle mid-draft is "I just
+// paid more than planned and must downgrade someone expensive" — so when the
+// planned budget is OVER (budgetSpent > startingBudget), auto-unlock the
+// priciest budgeted players until their planned dollars cover the overage.
+// At/under budget nothing is auto-unlocked; empty slots are always shuffle-
+// eligible and drafted slots always locked (handled by the caller).
+export const defaultUnlockedSlots = (
+    budgeted: { slot: SlotName, price: number }[],
+    overage: number,
+): Set<SlotName> => {
+    const unlocked = new Set<SlotName>();
+    if (overage <= 0) return unlocked;
+    let freed = 0;
+    for (const { slot, price } of [...budgeted].sort((a, b) => b.price - a.price)) {
+        unlocked.add(slot);
+        freed += price;
+        if (freed >= overage) break;
+    }
+    return unlocked;
+};
+
 export const shuffleFavorites = (
     openSlots: OpenSlot[],
     rungs: number[],
