@@ -1,40 +1,45 @@
+"""Single settings file for all environments, driven by environment
+variables (see AGENTS.md "Hosted deploy"). Local dev reads them from .env;
+Railway injects them as service variables. The env-controlled knobs:
+
+    DEBUG                 bool, default False (local .env sets True)
+    SECRET_KEY            required
+    DATABASE_URL          hosted DB (takes precedence over the DB_* vars)
+    DB_NAME/USER/PASSWORD/HOST/PORT   local Postgres (used when no DATABASE_URL)
+    ALLOWED_HOSTS         extra hostnames, comma-separated (hosted domain)
+    CSRF_TRUSTED_ORIGINS  scheme+host origins, comma-separated (hosted domain)
+    VITE_DEV_MODE         bool, default DEBUG — false serves the built bundle
+    VITE_DEV_HOST         host written into dev script tags (LAN serving)
+"""
+
 import os
 import sys
+
 import environ
 
-# The debug toolbar can't run under `manage.py test` (it refuses when Django
-# forces DEBUG=False), so leave it out of the app/middleware lists entirely.
-TESTING = 'test' in sys.argv
+# ---------------------------------------------------------------------------
+# Paths & environment
+# ---------------------------------------------------------------------------
 
-# Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 env = environ.Env(
     DEBUG=(bool, False)
 )
-
 env_file = os.path.join(BASE_DIR, '.env')
 if os.path.exists(env_file):
     environ.Env.read_env(env_file)
 
-
-DEBUG = True
-INTERNAL_IPS = [
-    'localhost',
-    '127.0.0.1'
-]
-
-READ_DOT_ENV_FILE = env.bool('READ_DOT_ENV_FILE', default=False)
-
-if READ_DOT_ENV_FILE:
-    environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
-
 DEBUG = env('DEBUG')
 SECRET_KEY = env('SECRET_KEY')
 
+# The debug toolbar can't run under `manage.py test` (it refuses when Django
+# forces DEBUG=False), so leave it out of the app/middleware lists entirely.
+TESTING = 'test' in sys.argv
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/3.0/howto/deployment/checklist/
+# ---------------------------------------------------------------------------
+# Hosts & CSRF
+# ---------------------------------------------------------------------------
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]']
 if DEBUG:
@@ -46,9 +51,11 @@ if DEBUG:
 ALLOWED_HOSTS += env.list('ALLOWED_HOSTS', default=[])
 CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[])
 
-DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
+INTERNAL_IPS = ['localhost', '127.0.0.1']  # debug toolbar
 
-# Application definition
+# ---------------------------------------------------------------------------
+# Apps & middleware
+# ---------------------------------------------------------------------------
 
 INSTALLED_APPS = ([] if TESTING else ['debug_toolbar']) + [
     'django.contrib.admin',
@@ -83,17 +90,17 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-AUTH_USER_MODEL = "users.FUser" 
+# ---------------------------------------------------------------------------
+# URLs, templates, WSGI
+# ---------------------------------------------------------------------------
 
 ROOT_URLCONF = 'fantasy.urls'
+WSGI_APPLICATION = 'fantasy.wsgi.application'
 
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [ 
-            BASE_DIR + "/templates",
-            BASE_DIR + "\\templates"
-             ],
+        'DIRS': [os.path.join(BASE_DIR, "templates")],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -106,11 +113,9 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'fantasy.wsgi.application'
-
-
+# ---------------------------------------------------------------------------
 # Database
-# https://docs.djangoproject.com/en/3.0/ref/settings/#databases
+# ---------------------------------------------------------------------------
 
 # Hosted platforms (Railway) inject a single DATABASE_URL; local dev keeps
 # the discrete DB_* vars from .env.
@@ -128,38 +133,41 @@ else:
         }
     }
 
+DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 
-# Password validation
-# https://docs.djangoproject.com/en/3.0/ref/settings/#auth-password-validators
+# ---------------------------------------------------------------------------
+# Auth
+# ---------------------------------------------------------------------------
+
+AUTH_USER_MODEL = "users.FUser"
+
+LOGIN_URL = "/login/"
+LOGIN_REDIRECT_URL = "/"
+LOGOUT_REDIRECT_URL = "/login/"
 
 # Deliberately minimal: accounts are admin-created for a handful of friends
 # (see AGENTS.md "Auth & roles"), so any non-empty password is accepted.
 AUTH_PASSWORD_VALIDATORS = []
 
-
+# ---------------------------------------------------------------------------
 # Internationalization
-# https://docs.djangoproject.com/en/3.0/topics/i18n/
+# ---------------------------------------------------------------------------
 
 LANGUAGE_CODE = 'en-us'
-
 TIME_ZONE = 'UTC'
-
 USE_I18N = True
-
-USE_L10N = True
-
 USE_TZ = True
 
-
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/3.0/howto/static-files/
+# ---------------------------------------------------------------------------
+# Static files (collected by collectstatic, served by WhiteNoise in prod)
+# ---------------------------------------------------------------------------
 
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, "static"),
     os.path.join(BASE_DIR, "frontend/draftboard/dist"),
 ]
-STATIC_ROOT = "static_root"
+STATIC_ROOT = os.path.join(BASE_DIR, "static_root")
 
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
@@ -168,33 +176,9 @@ STORAGES = {
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
 }
 
-LOGIN_URL = "/login/"
-LOGIN_REDIRECT_URL = "/"
-LOGOUT_REDIRECT_URL = "/login/"
-
-if not DEBUG:
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    SECURE_SSL_REDIRECT = True
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
-    SECURE_BROWSER_XSS_FILTER = True
-    SECURE_CONTENT_TYPE_NOSNIFF = True
-    SECURE_HSTS_SECONDS = 31536000  # 1 year
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_HSTS_PRELOAD = True
-    X_FRAME_OPTIONS = "DENY"
-
-    # ALLOWED_HOSTS = ["ap-exercise-competition.herokuapp.com"]
-
-    # EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-    # EMAIL_HOST = env("EMAIL_HOST")
-    # EMAIL_HOST_USER = env("EMAIL_HOST_USER")
-    # EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD")
-    # EMAIL_USE_TLS = True
-    # EMAIL_PORT = env("EMAIL_PORT")
-    # DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL")
-
-# django_heroku.settings(locals())
+# ---------------------------------------------------------------------------
+# DRF
+# ---------------------------------------------------------------------------
 
 REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
@@ -204,6 +188,10 @@ REST_FRAMEWORK = {
     # require is_staff via draft.api.permissions.IsDrafter.
     'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticated'],
 }
+
+# ---------------------------------------------------------------------------
+# django-vite (React bundle serving — see AGENTS.md)
+# ---------------------------------------------------------------------------
 
 # VITE_DEV_MODE=false serves the built bundle (npm run build) instead of the
 # Vite dev server, independent of DEBUG. Required when remote viewers can't
@@ -226,3 +214,18 @@ DJANGO_VITE = {
         ),
     }
 }
+
+# ---------------------------------------------------------------------------
+# Production security (hosted deploys run DEBUG=false)
+# ---------------------------------------------------------------------------
+
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    X_FRAME_OPTIONS = "DENY"
