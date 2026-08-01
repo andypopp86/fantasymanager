@@ -2,20 +2,22 @@ import React, { useMemo, useState } from "react";
 import { applyPlanSelections } from "../lib/mutations";
 import {
     STRATEGY_LABELS,
-    computeAllocations,
+    computeRungs,
     shuffleFavorites,
 } from "../utils/strategyShuffle";
-import type { ShuffleStrategy, OpenSlot, FavoriteCandidate, SlotProposal } from "../utils/strategyShuffle";
+import type { ShuffleStrategy, OpenSlot, FavoriteCandidate, RungProposal } from "../utils/strategyShuffle";
 
 // Strategy-based budget shuffle (see utils/strategyShuffle.ts). Reads the
 // live draftContext, proposes a random favorites-only budget per the chosen
 // strategy, and applies through the same mutation sequence as the plan page.
-// Slots with no fitting favorite stay empty on purpose — re-roll or favorite
-// more players at that price point.
+// Rungs are slot-agnostic: the slot column shows where each picked player
+// landed. Rungs with no fitting favorite stay empty on purpose — re-roll,
+// widen the ± variation, or favorite more players at that price point.
 export default function StrategyShuffleModal({ draftContext, onClose }) {
     const { draftId, drafterId, managers, budgetedPlayers, undraftedPlayers } = draftContext;
     const [strategy, setStrategy] = useState<ShuffleStrategy>("laddered");
-    const [proposals, setProposals] = useState<SlotProposal[] | null>(null);
+    const [variation, setVariation] = useState(2);
+    const [proposals, setProposals] = useState<RungProposal[] | null>(null);
     const [applying, setApplying] = useState(false);
 
     const drafter = managers.find((manager) => manager.is_drafter);
@@ -37,11 +39,11 @@ export default function StrategyShuffleModal({ draftContext, onClose }) {
         [undraftedPlayers]);
 
     const shuffle = () => {
-        const allocations = computeAllocations(strategy, openSlots, remainingBudget);
-        setProposals(shuffleFavorites(openSlots, allocations, favorites));
+        const rungs = computeRungs(strategy, openSlots, remainingBudget);
+        setProposals(shuffleFavorites(openSlots, rungs, favorites, variation));
     };
 
-    const filled = proposals?.filter((p) => p.player) ?? [];
+    const filled = proposals?.filter((p) => p.player && p.slot) ?? [];
     const proposedSpend = filled.reduce((acc, p) => acc + p.price, 0);
 
     const apply = async () => {
@@ -67,7 +69,7 @@ export default function StrategyShuffleModal({ draftContext, onClose }) {
                     <button className="text-gray-500 hover:text-gray-800" onClick={onClose}>✕</button>
                 </div>
 
-                <div className="flex gap-2 items-center mb-3">
+                <div className="flex gap-2 items-center mb-3 flex-wrap">
                     <select
                         className="border rounded px-2 py-1 bg-gray-100"
                         value={strategy}
@@ -77,6 +79,15 @@ export default function StrategyShuffleModal({ draftContext, onClose }) {
                             <option key={value} value={value}>{label}</option>
                         ))}
                     </select>
+                    <label className="text-sm text-gray-600 flex items-center gap-1" title="A player fits a rung when priced within ± this many dollars of it">
+                        ±$
+                        <input
+                            type="number" min={0} max={50}
+                            className="border rounded px-1 py-1 w-14 bg-gray-100"
+                            value={variation}
+                            onChange={(e) => setVariation(Math.max(0, parseInt(e.target.value) || 0))}
+                        />
+                    </label>
                     <button className="btn bg-blue-500 text-white rounded px-3 py-1" onClick={shuffle}>
                         {proposals ? "Re-shuffle" : "Shuffle"}
                     </button>
@@ -96,32 +107,32 @@ export default function StrategyShuffleModal({ draftContext, onClose }) {
                         <table className="min-w-full text-sm mb-3">
                             <thead>
                                 <tr className="bg-gray-200 text-gray-600 text-left">
-                                    <th className="px-2 py-1">Slot</th>
                                     <th className="px-2 py-1 text-right">Target $</th>
                                     <th className="px-2 py-1">Player</th>
                                     <th className="px-2 py-1 text-right">Price $</th>
+                                    <th className="px-2 py-1">Slot</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {proposals.map(({ slot, allocation, player, price }) => (
-                                    <tr key={slot} className="border-b">
-                                        <td className="px-2 py-1 font-semibold">{slot}</td>
+                                {proposals.map(({ allocation, player, price, slot }, i) => (
+                                    <tr key={i} className="border-b">
                                         <td className="px-2 py-1 text-right">{allocation}</td>
                                         <td className={"px-2 py-1 " + (player ? "" : "text-gray-400 italic")}>
                                             {player ? `${player.name} (${player.position})` : "no fitting favorite"}
                                         </td>
                                         <td className="px-2 py-1 text-right">{player ? price : "—"}</td>
+                                        <td className="px-2 py-1 font-semibold">{slot ?? "—"}</td>
                                     </tr>
                                 ))}
                             </tbody>
                             <tfoot>
                                 <tr className="font-bold">
-                                    <td className="px-2 py-1">Total</td>
                                     <td className="px-2 py-1 text-right">
                                         {proposals.reduce((acc, p) => acc + p.allocation, 0)}
                                     </td>
-                                    <td className="px-2 py-1">{filled.length}/{proposals.length} slots</td>
+                                    <td className="px-2 py-1">{filled.length}/{proposals.length} rungs</td>
                                     <td className="px-2 py-1 text-right">{proposedSpend}</td>
+                                    <td className="px-2 py-1"></td>
                                 </tr>
                             </tfoot>
                         </table>

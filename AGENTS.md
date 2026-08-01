@@ -329,15 +329,17 @@ OUR logic, or that Django works?" — skip the latter.
 **Strategy Shuffle** (`utils/strategyShuffle.ts` + `features/StrategyShuffleModal.tsx`,
 "Shuffle" button on the board): proposes a budget from FAVORITED undrafted
 players only. Pure client-side — computes the drafter's open slots (no actual
-drafted player) and remaining real budget, allocates per strategy
-(cheap-bench / even / laddered ≈ 73% geometric decay), then randomly picks
-favorites whose price fits a band around each rung (0.55×–1.25×, or ≤$3 for
-cheap rungs). Expensive rungs draft from the pool first; slots with no
-fitting favorite stay EMPTY by design (signal to re-roll or favorite more
-players). DEF is pinned to $1 in every strategy (same convention as
-BudgetPerSlot). Apply reuses `mutations.applyPlanSelections`; budget rows get
-the PLAYER's price, not the rung target (user's choice — totals approximate
-the strategy).
+drafted player) and remaining real budget, builds a ladder of dollar RUNGS
+per strategy (cheap-bench / even / laddered ≈ 73% geometric decay), then
+biggest-rung-first randomly picks a favorite priced within ±variation
+(user-set, default $2) of the rung. Rungs are SLOT-AGNOSTIC: the slot is an
+outcome, chosen after the player — most-specific eligible slot first (TE1
+before FLEX before BENCH) so flex/bench stay open for later rungs. Rungs
+with no fitting favorite stay EMPTY by design (signal to re-roll, widen ±$,
+or favorite more players). DEF contributes a $1 rung in every strategy (same
+convention as BudgetPerSlot). Apply reuses `mutations.applyPlanSelections`;
+budget rows get the PLAYER's price, not the rung target (user's choice —
+totals approximate the strategy).
 
 **Budget-per-remaining-slot** (`utils/draftHelpers`): two color-coded strips
 (`features/BudgetPerSlot.tsx`) in the sidebar directly below the Nomination area.

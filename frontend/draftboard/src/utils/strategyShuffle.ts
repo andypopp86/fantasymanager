@@ -2,9 +2,12 @@ import type { PlayerDetail, SlotName } from "../lib/draft.schemas";
 
 // Strategy-based budget shuffle: given the drafter's OPEN slots (no actual
 // drafted player), their remaining real budget, and the favorited player
-// pool, produce a per-slot dollar target by strategy and randomly pick
-// favorites whose market price plausibly fits each target. Pure functions —
-// the modal re-rolls by calling shuffleFavorites again.
+// pool, produce a ladder of dollar RUNGS by strategy, then — biggest rung
+// first — randomly pick a favorite priced within ±variation of the rung and
+// slot them into whichever eligible open slot remains. Rungs are
+// slot-agnostic: slots are chosen by the picked player's position, never
+// pre-assigned an amount. Pure functions — the modal re-rolls by calling
+// shuffleFavorites again.
 
 export type ShuffleStrategy = "cheap_bench" | "even_all" | "laddered";
 
@@ -25,12 +28,11 @@ export type FavoriteCandidate = {
     price: number,
 };
 
-export type SlotProposal = {
-    slot: SlotName,
-    order: number,
+export type RungProposal = {
     allocation: number,
     player: PlayerDetail | null,
     price: number,
+    slot: SlotName | null,
 };
 
 const isBench = (slot: string) => slot.startsWith("BENCH");
@@ -40,87 +42,91 @@ const isDef = (slot: string) => slot.startsWith("DEF");
 // 55/40/30/25/20/… shape of a $200 full-roster ladder.
 const LADDER_DECAY = 0.73;
 
-// Spread `budget` over `slots` proportionally to `weights`, $1 floor per
-// slot, and push rounding drift into the largest rung so totals match.
-const distribute = (slots: OpenSlot[], weights: number[], budget: number): Map<SlotName, number> => {
+// Spread `budget` proportionally to `weights`, $1 floor per rung, pushing
+// rounding drift into the largest rung so the total matches exactly.
+const distribute = (weights: number[], budget: number): number[] => {
     const total = weights.reduce((a, b) => a + b, 0) || 1;
     const amounts = weights.map((w) => Math.max(1, Math.round((budget * w) / total)));
-    let drift = budget - amounts.reduce((a, b) => a + b, 0);
-    // Largest rung absorbs the drift (never below the $1 floor).
+    const drift = budget - amounts.reduce((a, b) => a + b, 0);
     if (amounts.length > 0 && drift !== 0) {
         const i = amounts.indexOf(Math.max(...amounts));
         amounts[i] = Math.max(1, amounts[i] + drift);
     }
-    return new Map(slots.map(({ slot }, i) => [slot, amounts[i]]));
+    return amounts;
 };
 
-export const computeAllocations = (
+// The rung ladder for the strategy, sorted descending. One rung per open
+// slot. DEF contributes a $1 rung in every strategy (league convention —
+// the budget-per-slot strips reserve $1 for it too).
+export const computeRungs = (
     strategy: ShuffleStrategy,
     openSlots: OpenSlot[],
     remainingBudget: number,
-): Map<SlotName, number> => {
-    const ordered = [...openSlots].sort((a, b) => a.order - b.order);
-    // DEF is pinned to $1 in every strategy (league convention — the
-    // budget-per-slot strips reserve $1 for it too).
-    const def = ordered.filter(({ slot }) => isDef(slot));
-    const rest = ordered.filter(({ slot }) => !isDef(slot));
-    const budget = Math.max(rest.length, remainingBudget - def.length);
+): number[] => {
+    const defCount = openSlots.filter(({ slot }) => isDef(slot)).length;
+    const benchCount = openSlots.filter(({ slot }) => isBench(slot)).length;
+    const restCount = openSlots.length - defCount;
+    const budget = Math.max(restCount, remainingBudget - defCount);
 
-    let allocations: Map<SlotName, number>;
+    let rungs: number[];
     if (strategy === "cheap_bench") {
-        const starters = rest.filter(({ slot }) => !isBench(slot));
-        const bench = rest.filter(({ slot }) => isBench(slot));
-        const starterBudget = Math.max(starters.length, budget - bench.length);
-        allocations = distribute(starters, starters.map(() => 1), starterBudget);
-        bench.forEach(({ slot }) => allocations.set(slot, 1));
+        const starterCount = restCount - benchCount;
+        const starterBudget = Math.max(starterCount, budget - benchCount);
+        rungs = [
+            ...distribute(Array(starterCount).fill(1), starterBudget),
+            ...Array(benchCount).fill(1),
+        ];
     } else if (strategy === "even_all") {
-        allocations = distribute(rest, rest.map(() => 1), budget);
+        rungs = distribute(Array(restCount).fill(1), budget);
     } else {
-        // laddered: biggest rung to the earliest open slot, decaying down
-        // through the bench.
-        allocations = distribute(rest, rest.map((_, i) => LADDER_DECAY ** i), budget);
+        rungs = distribute(
+            Array.from({ length: restCount }, (_, i) => LADDER_DECAY ** i), budget);
     }
-    def.forEach(({ slot }) => allocations.set(slot, 1));
-    return allocations;
-};
-
-// A favorite "fits" a rung when its market price is in a band around the
-// target. Cheap rungs (≤ $3) just need a cheap player.
-const fits = (price: number, allocation: number): boolean => {
-    if (allocation <= 3) return price <= 3;
-    return price >= allocation * 0.55 && price <= allocation * 1.25;
+    rungs.push(...Array(defCount).fill(1));
+    return rungs.sort((a, b) => b - a);
 };
 
 export const shuffleFavorites = (
     openSlots: OpenSlot[],
-    allocations: Map<SlotName, number>,
+    rungs: number[],
     favorites: FavoriteCandidate[],
+    variation: number = 2,
     rng: () => number = Math.random,
-): SlotProposal[] => {
+): RungProposal[] => {
     const pool = [...favorites];
-    const proposals: SlotProposal[] = [];
-    // Fill the expensive rungs first so big-money slots get first pick of
-    // the pool.
-    const byAllocationDesc = [...openSlots].sort(
-        (a, b) => (allocations.get(b.slot) ?? 0) - (allocations.get(a.slot) ?? 0));
+    const slotsLeft = [...openSlots];
 
-    byAllocationDesc.forEach(({ slot, order, allowed_positions }) => {
-        const allocation = allocations.get(slot) ?? 1;
+    // Where a picked player lands: the most SPECIFIC eligible slot first
+    // (TE1 before FLEX1 before BENCH), so flex/bench stay open for later
+    // rungs.
+    const takeSlotFor = (player: PlayerDetail): OpenSlot | null => {
+        const eligible = slotsLeft
+            .filter(({ allowed_positions }) => allowed_positions.includes(player.position))
+            .sort((a, b) =>
+                a.allowed_positions.length - b.allowed_positions.length || a.order - b.order);
+        if (eligible.length === 0) return null;
+        slotsLeft.splice(slotsLeft.indexOf(eligible[0]), 1);
+        return eligible[0];
+    };
+
+    return rungs.map((allocation) => {
+        const lo = Math.max(1, allocation - variation);
+        const hi = allocation + variation;
         const candidates = pool.filter(({ player, price }) =>
-            allowed_positions.includes(player.position) && fits(price, allocation));
-        let picked: FavoriteCandidate | null = null;
-        if (candidates.length > 0) {
-            picked = candidates[Math.floor(rng() * candidates.length)];
-            pool.splice(pool.indexOf(picked), 1);
-        }
-        proposals.push({
-            slot,
-            order,
-            allocation,
-            player: picked?.player ?? null,
-            price: picked?.price ?? 0,
-        });
-    });
+            price >= lo && price <= hi &&
+            slotsLeft.some(({ allowed_positions }) => allowed_positions.includes(player.position)));
 
-    return proposals.sort((a, b) => a.order - b.order);
+        if (candidates.length === 0) {
+            return { allocation, player: null, price: 0, slot: null };
+        }
+        const picked = candidates[Math.floor(rng() * candidates.length)];
+        pool.splice(pool.indexOf(picked), 1);
+        const slot = takeSlotFor(picked.player);
+        return {
+            allocation,
+            player: picked.player,
+            price: picked.price,
+            slot: slot?.slot ?? null,
+        };
+    });
 };
