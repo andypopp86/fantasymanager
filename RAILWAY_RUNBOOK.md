@@ -42,7 +42,7 @@ a dump from the laptop:
 ```powershell
 # 1. Dump local (adjust connection to your local Postgres; if it runs in
 #    Docker, prefix with: docker exec fantasymanager-db ...)
-pg_dump -h localhost -p 5434 -U fantasy_user -Fc --no-owner --no-acl fantasydb -f draft.dump
+pg_dump -h localhost -p 5434 -U fantasy_user -Fc --no-owner --no-acl -f draft.dump fantasydb
 
 # 2. Restore to Railway — copy DATABASE_PUBLIC_URL from the Postgres
 #    service's Variables tab (the public one; plain DATABASE_URL is
