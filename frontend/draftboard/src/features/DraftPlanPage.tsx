@@ -179,9 +179,27 @@ export default function DraftPlanPage() {
                     >＋ Save draft as plan</button>
                 </div>
 
-                {!selectedPlan && (
-                    <p className="px-6 py-3 text-sm text-gray-500 bg-blue-50 border-b border-blue-100">
-                        Select a plan to compare it against your current budget and pick which slots to merge in.
+                <div className="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center gap-6">
+                    <div className="text-sm text-gray-600">
+                        <span className="font-semibold text-gray-800">Current:</span> ${data.budgetSpent} of ${startingBudget}
+                    </div>
+                    <div className="text-sm text-gray-600">
+                        <span className="font-semibold text-gray-800">After merge:</span>{" "}
+                        <span className={mergedSpent > startingBudget ? "text-red-600 font-bold" : ""}>${mergedSpent}</span> of ${startingBudget}
+                    </div>
+                    <span className="flex-1" />
+                    <button
+                        className="bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-md px-5 py-2 shadow-sm disabled:opacity-40 disabled:hover:bg-blue-500"
+                        disabled={!canApply}
+                        onClick={applyPlan}
+                    >
+                        {applying ? "Applying…" : "Apply selected"}
+                    </button>
+                </div>
+
+                {selectedPlan && mergedSpent > startingBudget && (
+                    <p className="px-6 py-2 bg-yellow-100 text-center text-sm font-semibold text-yellow-800">
+                        ⚠️ Merged plan totals ${mergedSpent}, over the ${startingBudget} budget — uncheck some slots or adjust after applying.
                     </p>
                 )}
 
@@ -249,30 +267,6 @@ export default function DraftPlanPage() {
                         ))}
                     </tbody>
                 </table>
-
-                {selectedPlan && mergedSpent > startingBudget && (
-                    <p className="px-6 py-2 bg-yellow-100 text-center text-sm font-semibold text-yellow-800">
-                        ⚠️ Merged plan totals ${mergedSpent}, over the ${startingBudget} budget — uncheck some slots or adjust after applying.
-                    </p>
-                )}
-
-                <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center gap-6">
-                    <div className="text-sm text-gray-600">
-                        <span className="font-semibold text-gray-800">Current:</span> ${data.budgetSpent} of ${startingBudget}
-                    </div>
-                    <div className="text-sm text-gray-600">
-                        <span className="font-semibold text-gray-800">After merge:</span>{" "}
-                        <span className={mergedSpent > startingBudget ? "text-red-600 font-bold" : ""}>${mergedSpent}</span> of ${startingBudget}
-                    </div>
-                    <span className="flex-1" />
-                    <button
-                        className="bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-md px-5 py-2 shadow-sm disabled:opacity-40 disabled:hover:bg-blue-500"
-                        disabled={!canApply}
-                        onClick={applyPlan}
-                    >
-                        {applying ? "Applying…" : "Apply selected"}
-                    </button>
-                </div>
 
             </div>
         </div>
