@@ -116,18 +116,18 @@ export default function Draft({draftDetails}: DraftProps) {
             Plans
         </button>
       </div>
-      <div className="col-span-10 sm:col-span-10 md:col-span-10 lg:col-span-10 xl:col-span-10">
-        <p className="bg-green-200 text-center text-lg font-bold">{draftDetails.draft_name}</p>
+      <div className="col-span-10 sm:col-span-10 md:col-span-10 lg:col-span-10 xl:col-span-10 flex">
+        {data.pendingWrites > 0 && (
+            <p className="w-1/3 bg-orange-200 text-center text-sm font-semibold flex items-center justify-center">
+                ⏳ {data.pendingWrites} change{data.pendingWrites === 1 ? "" : "s"} waiting to sync
+            </p>
+        )}
+        <p className="flex-1 bg-green-200 text-center text-lg font-bold">{draftDetails.draft_name}</p>
       </div>
     </div>
     {anyLoadError && data.hydrated && (
         <p className="bg-yellow-200 text-center text-sm font-semibold">
             ⚠️ Server unreachable — showing locally saved data. Changes are being queued and will sync automatically.
-        </p>
-    )}
-    {data.pendingWrites > 0 && (
-        <p className="bg-orange-200 text-center text-sm font-semibold">
-            ⏳ {data.pendingWrites} change{data.pendingWrites === 1 ? "" : "s"} waiting to sync — will send automatically when the server is reachable.
         </p>
     )}
     {data.hydrated && (
