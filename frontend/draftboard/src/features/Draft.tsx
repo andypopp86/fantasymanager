@@ -11,6 +11,7 @@ import { useDraftData } from "../hooks/useDraftData";
 import { BudgetedPicks } from "./BudgetedPicks";
 import { NominationArea } from "./NominationArea";
 import { BudgetPerSlot } from "./BudgetPerSlot";
+import RebudgetModal from "./RebudgetModal";
 
 type DraftProps = {
     draftDetails: any
@@ -27,6 +28,7 @@ export default function Draft({draftDetails}: DraftProps) {
     // Hidden by default: just a button next to Back. Shown: the panel keeps
     // its usual place in the sidebar.
     const [showWatchList, setShowWatchList] = useState(false);
+    const [showRebudget, setShowRebudget] = useState(false);
     const { data: playersData } = useQuery({
         queryKey: ["available_players", draftDetails.id],
         queryFn: () =>
@@ -114,6 +116,13 @@ export default function Draft({draftDetails}: DraftProps) {
         >
             Plans
         </button>
+        <button
+            className={"btn border border-gray-400 rounded-md px-2 py-1 hover:bg-gray-100 active:bg-gray-200"}
+            onClick={() => setShowRebudget(true)}
+            title="Suggest a budget from favorited players by strategy"
+        >
+            Rebudget
+        </button>
       </div>
       <div className="col-span-9 sm:col-span-9 md:col-span-9 lg:col-span-9 xl:col-span-9 flex">
         {data.pendingWrites > 0 && (
@@ -124,6 +133,9 @@ export default function Draft({draftDetails}: DraftProps) {
         <p className="flex-1 bg-green-200 text-center text-lg font-bold">{draftDetails.draft_name}</p>
       </div>
     </div>
+    {showRebudget && data.hydrated && (
+        <RebudgetModal draftContext={draftContext} onClose={() => setShowRebudget(false)} />
+    )}
     {data.hydrated && (
         <div className="draftboard-grid">
             <div className="draft-sidebar flex gap-2">
