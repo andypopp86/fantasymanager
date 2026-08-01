@@ -10,7 +10,7 @@ export default defineConfig(() => {
         base: "/static/js/draftboard",
         plugins: [react()],
         build: {
-          outDir: "/static/js/draftboard/",
+          outDir: "dist",
           emptyOutDir: true,
           rollupOptions: {
             input: resolve("./src/main.jsx"),

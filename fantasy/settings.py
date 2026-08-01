@@ -37,6 +37,10 @@ SECRET_KEY = env('SECRET_KEY')
 # See https://docs.djangoproject.com/en/3.0/howto/deployment/checklist/
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]']
+if DEBUG:
+    # Dev only: lets other devices on the LAN reach the app (e.g. the
+    # spectator board on a second laptop during the live draft).
+    ALLOWED_HOSTS.append('*')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 
@@ -196,5 +200,14 @@ REST_FRAMEWORK = {
 
 DJANGO_VITE = {
     "default": {"dev_mode": DEBUG},
-    "draftboard": {"static_url_prefix": "js/draftboard/", "dev_server_port": 3001, "dev_mode": DEBUG}
+    # dev_server_host: in dev mode django-vite writes this host into the
+    # script tags. It must be an address OTHER devices can reach when serving
+    # the app over the LAN — set VITE_DEV_HOST to this machine's LAN IP
+    # (Vite itself already binds 0.0.0.0).
+    "draftboard": {
+        "static_url_prefix": "js/draftboard/",
+        "dev_server_port": 3001,
+        "dev_mode": DEBUG,
+        "dev_server_host": env.str("VITE_DEV_HOST", default="localhost"),
+    }
 }

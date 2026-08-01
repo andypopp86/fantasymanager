@@ -50,8 +50,10 @@ frontend/draftboard/
 - **Routing: react-router v6** (`react-router-dom`), set up in `DraftShell.tsx`
   with `basename="/app"`. Routes: `/` (draft list), `/draft/create`,
   `/draft/:draftId` (the board, deep-linkable — `DraftPage.tsx` resolves the id
-  param via the draft detail endpoint). Navigation is `Link`/`useNavigate`; the
-  old `appStateMachine`/`useDraftAppState` screen-switcher was deleted with it.
+  param via the draft detail endpoint), `/draft/:draftId/plan` (plan merge),
+  `/board/:draftId` (read-only spectator board). Navigation is
+  `Link`/`useNavigate`; the old `appStateMachine`/`useDraftAppState`
+  screen-switcher was deleted with it.
 - **Data: Dexie (IndexedDB) is the client-side database** — see the
   "Client data layer" section below. React Query fetches from the server and
   hydrates Dexie; components read Dexie via `useDraftData` (liveQuery); ALL
@@ -191,6 +193,24 @@ the `draftPickSubmit` promise rejects so `draft_player` never fires).
   navigation. `Draft.tsx` sends `reset_flow` when the draft id changes.
 - **Schema changes** in `db.ts` APPEND a new `this.version(n)` block (Dexie
   upgrades browsers sequentially); never edit or remove an existing block.
+
+**Spectator board & LAN serving (draft day)** — `features/SpectatorBoard.tsx` at
+`/board/:draftId`: read-only board grid polling every 5s; intentionally hides
+available players / budget / watchlist (don't forecast the drafter's targets) and
+intentionally reads straight from its queries, NOT the Dexie pipeline (passive
+viewer, usually a different machine, never writes). To serve to a second laptop:
+
+```bash
+cd frontend/draftboard && npm run dev          # Vite already binds 0.0.0.0
+VITE_DEV_HOST=<this-machine's-LAN-IP> .venv/bin/python manage.py runserver 0.0.0.0:8100
+# laptop 2 → http://<LAN-IP>:8100/app/board/<draft_id>
+```
+
+`VITE_DEV_HOST` matters: django-vite writes that host into the dev script tags,
+and `localhost` would point the second laptop at itself. `ALLOWED_HOSTS` is
+wildcarded only under DEBUG. (`vite build` outputs to `dist/` — which
+`STATICFILES_DIRS` expects — but true production django-vite serving would still
+need a manifest setup; LAN serving uses dev mode.)
 
 **DraftPlan (`draft/models.py`)** — a standalone, reusable roster plan: `name`,
 `year`, and one nullable Player FK per slot (`qb1` … `bench7`, lowercase of

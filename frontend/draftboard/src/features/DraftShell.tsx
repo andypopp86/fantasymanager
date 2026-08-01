@@ -5,6 +5,7 @@ import { DraftDashboard } from "./DraftDashboard";
 import DraftCreatePage from "./DraftCreatePage";
 import DraftPage from "./DraftPage";
 import DraftPlanPage from "./DraftPlanPage";
+import SpectatorBoard from "./SpectatorBoard";
 
 const FIVE_MINUTES = 1000 * 6 * 5
 
@@ -25,6 +26,7 @@ export const DraftApp = () => {
                     <Route path="/draft/create" element={<DraftCreatePage />} />
                     <Route path="/draft/:draftId" element={<DraftPage />} />
                     <Route path="/draft/:draftId/plan" element={<DraftPlanPage />} />
+                    <Route path="/board/:draftId" element={<SpectatorBoard />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
             </BrowserRouter>
