@@ -194,6 +194,26 @@ export type WatchedPlayer = {
     projected_price: number | string,
 }
 
+// ---- DraftPlan (standalone budget templates, /api/drafts/draft/plans/) ----
+
+export type DraftPlanPlayer = {
+    id: number,
+    player_id: number | string,
+    name: string,
+    position: string,
+    projected_price: number | string,
+    override_price: number | string | null,
+}
+
+export type DraftPlanOutput = {
+    id: number,
+    name: string,
+    year: number,
+    date_created: string,
+    // Slot name -> planned player (null for slots the plan leaves open).
+    slots: Record<SlotName, DraftPlanPlayer | null>,
+}
+
 // ---- Dexie table rows (lib/db.ts) -----------------------------------------
 // Modeled on the SERVER's rows, not the UI's lists: a DraftPickRow mirrors
 // DraftPick (one row per draft+player; "available" is just drafted=false),

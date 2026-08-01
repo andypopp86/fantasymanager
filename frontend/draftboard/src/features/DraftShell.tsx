@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DraftDashboard } from "./DraftDashboard";
 import DraftCreatePage from "./DraftCreatePage";
 import DraftPage from "./DraftPage";
+import DraftPlanPage from "./DraftPlanPage";
 
 const FIVE_MINUTES = 1000 * 6 * 5
 
@@ -23,6 +24,7 @@ export const DraftApp = () => {
                     <Route path="/" element={<DraftDashboard />} />
                     <Route path="/draft/create" element={<DraftCreatePage />} />
                     <Route path="/draft/:draftId" element={<DraftPage />} />
+                    <Route path="/draft/:draftId/plan" element={<DraftPlanPage />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
             </BrowserRouter>

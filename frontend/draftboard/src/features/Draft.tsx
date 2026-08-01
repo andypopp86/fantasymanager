@@ -108,6 +108,13 @@ export default function Draft({draftDetails}: DraftProps) {
                 WatchList ▸
             </button>
         )}
+        <button
+            className={"btn border border-gray-400 rounded-md px-2 py-1 hover:bg-gray-100 active:bg-gray-200"}
+            onClick={() => navigate(`/draft/${draftDetails.id}/plan`)}
+            title="Merge a saved plan into the budget"
+        >
+            Plans
+        </button>
       </div>
       <div className="col-span-10 sm:col-span-10 md:col-span-10 lg:col-span-10 xl:col-span-10">
         <p className="bg-green-200 text-center text-lg font-bold">{draftDetails.draft_name}</p>

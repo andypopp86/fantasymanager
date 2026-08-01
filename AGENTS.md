@@ -191,7 +191,16 @@ actual drafted picks** (`DraftPlanWriteService.create_from_draft`). Endpoints un
 `plans/<id>/delete/`, `<draft_id>/create_plan/`. Services in
 `draft/services/draft/draft_plan.py`. Purpose: mid-draft budget pivots — swap a
 predefined plan into the budget panel instead of editing slots under time pressure
-(the `/draft-plan` page consuming this is planned, not yet built).
+The consuming UI is `features/DraftPlanPage.tsx` at route `/draft/:draftId/plan`
+("Plans" button on the board): select a plan, then a per-slot checkbox picker
+merges it into the budget — mergeable slots default CHECKED; slots whose budget
+row is an actually-drafted player default UNCHECKED (protected but overridable);
+plan players already drafted by anyone are disabled. Apply goes through
+`mutations.applyPlanSelections` (unbudget displaced occupant → budget plan player,
+per slot — the unbudget matters or the displaced server row reclaims the slot on
+refetch). Plan players are priced `override_price || projected_price`. The page
+reads the draft via `useDraftData`, so the board must have been opened once to
+hydrate Dexie.
 
 **Running backend tests**: `.venv/bin/python manage.py test draft` — requires the
 `fantasymanager-db` Docker container running (`docker start fantasymanager-db`,

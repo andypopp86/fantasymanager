@@ -119,6 +119,28 @@ export const unbudgetPick = async (draftId: number, drafterId: number, playerId:
     draftUnbudgetPick(draftId, drafterId, playerId);
 };
 
+// Merge a DraftPlan into the budget: for each slot the user checked, drop the
+// current occupant (its server row would otherwise still claim the slot and
+// reappear on refetch) and budget the plan's player there. Sequential so the
+// unbudget lands before the replacement for the same slot.
+export const applyPlanSelections = async (
+    draftId: number,
+    drafterId: number,
+    selections: {
+        slot: SlotName,
+        player: { player_id: number | string, name: string, position: string },
+        projectedPrice: number | string,
+    }[],
+) => {
+    for (const { slot, player, projectedPrice } of selections) {
+        const occupant = await db.budget_picks.where("[draftId+slot]").equals([draftId, slot]).first();
+        if (occupant && String(occupant.player_id) !== String(player.player_id)) {
+            await unbudgetPick(draftId, drafterId, occupant.player_id);
+        }
+        await budgetPick(draftId, drafterId, player, slot, projectedPrice);
+    }
+};
+
 export const watchPick = async (
     draftId: number,
     managerId: number,
