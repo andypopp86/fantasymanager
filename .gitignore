@@ -9,6 +9,9 @@ node_modules/
 *.csv
 *.pyc
 *.txt
+# ...but these txt files are real project files, not data dumps
+!requirements.txt
+!managerlist.txt
 
 data/*
 env/*
