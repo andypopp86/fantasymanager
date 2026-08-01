@@ -326,6 +326,19 @@ testing: this repo's services (draft/budget/plan rules), custom permission
 classes (the drafter/spectator boundary), and any hand-written passthrough
 where a field could silently get dropped. When in doubt, ask "does this assert
 OUR logic, or that Django works?" — skip the latter.
+**Strategy Shuffle** (`utils/strategyShuffle.ts` + `features/StrategyShuffleModal.tsx`,
+"Shuffle" button on the board): proposes a budget from FAVORITED undrafted
+players only. Pure client-side — computes the drafter's open slots (no actual
+drafted player) and remaining real budget, allocates per strategy
+(cheap-bench / even / laddered ≈ 73% geometric decay), then randomly picks
+favorites whose price fits a band around each rung (0.55×–1.25×, or ≤$3 for
+cheap rungs). Expensive rungs draft from the pool first; slots with no
+fitting favorite stay EMPTY by design (signal to re-roll or favorite more
+players). DEF is pinned to $1 in every strategy (same convention as
+BudgetPerSlot). Apply reuses `mutations.applyPlanSelections`; budget rows get
+the PLAYER's price, not the rung target (user's choice — totals approximate
+the strategy).
+
 **Budget-per-remaining-slot** (`utils/draftHelpers`): two color-coded strips
 (`features/BudgetPerSlot.tsx`) in the sidebar directly below the Nomination area.
 Formula: `(remaining − 1) / (openSlots − 1)` — the two `−1`s reserve $1 for the DEF
