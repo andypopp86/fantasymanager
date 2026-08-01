@@ -201,16 +201,38 @@ intentionally reads straight from its queries, NOT the Dexie pipeline (passive
 viewer, usually a different machine, never writes). To serve to a second laptop:
 
 ```bash
+# macOS/Linux host (LAN IP: `ipconfig getifaddr en0` on Mac)
 cd frontend/draftboard && npm run dev          # Vite already binds 0.0.0.0
 VITE_DEV_HOST=<this-machine's-LAN-IP> .venv/bin/python manage.py runserver 0.0.0.0:8100
-# laptop 2 → http://<LAN-IP>:8100/app/board/<draft_id>
 ```
 
+```powershell
+# Windows host — the ACTUAL draft-day machine (LAN IP: `ipconfig` → Wi-Fi IPv4)
+cd frontend\draftboard ; npm run dev           # terminal 1
+$env:VITE_DEV_HOST = "<this-machine's-LAN-IP>" # terminal 2, repo root
+.venv\Scripts\python manage.py runserver 0.0.0.0:8100
+```
+
+Spectator laptop needs only a browser → `http://<LAN-IP>:8100/app/board/<draft_id>`.
+
 `VITE_DEV_HOST` matters: django-vite writes that host into the dev script tags,
-and `localhost` would point the second laptop at itself. `ALLOWED_HOSTS` is
-wildcarded only under DEBUG. (`vite build` outputs to `dist/` — which
-`STATICFILES_DIRS` expects — but true production django-vite serving would still
-need a manifest setup; LAN serving uses dev mode.)
+and `localhost` would point the second laptop at itself (page loads, stays
+blank). `ALLOWED_HOSTS` is wildcarded only under DEBUG.
+
+**Built-bundle mode (`VITE_DEV_MODE=false`)**: `npm run build` outputs to
+`dist/js/draftboard/` (with a Vite manifest at `.vite/manifest.json`, wired up
+via `manifest_path` in `DJANGO_VITE`), and running Django with
+`VITE_DEV_MODE=false` serves that bundle instead of pointing browsers at the
+Vite dev server — no Vite terminal, no `VITE_DEV_HOST`. This is REQUIRED when
+viewers can't reach port 3001, e.g. serving remote spectators through a
+Cloudflare quick tunnel — see [`TUNNEL_RUNBOOK.md`](./TUNNEL_RUNBOOK.md) for
+the Windows draft-day steps — and also works for plain LAN serving. Rebuild
+after frontend changes; dev mode (HMR) is unchanged and remains the default.
+
+Draft-day gotchas: allow Python AND Node through Windows Firewall on Private
+networks (the prompt appears on first listen); venue wifi may isolate devices —
+fallback is Windows Mobile hotspot on the host with the spectator joining it.
+Dress-rehearse the two-laptop setup before the draft.
 
 **DraftPlan (`draft/models.py`)** — a standalone, reusable roster plan: `name`,
 `year`, and one nullable Player FK per slot (`qb1` … `bench7`, lowercase of

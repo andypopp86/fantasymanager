@@ -198,8 +198,13 @@ REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
+# VITE_DEV_MODE=false serves the built bundle (npm run build) instead of the
+# Vite dev server, independent of DEBUG. Required when remote viewers can't
+# reach port 3001 (e.g. serving through a tunnel — see TUNNEL_RUNBOOK.md).
+VITE_DEV_MODE = env.bool('VITE_DEV_MODE', default=DEBUG)
+
 DJANGO_VITE = {
-    "default": {"dev_mode": DEBUG},
+    "default": {"dev_mode": VITE_DEV_MODE},
     # dev_server_host: in dev mode django-vite writes this host into the
     # script tags. It must be an address OTHER devices can reach when serving
     # the app over the LAN — set VITE_DEV_HOST to this machine's LAN IP
@@ -207,7 +212,10 @@ DJANGO_VITE = {
     "draftboard": {
         "static_url_prefix": "js/draftboard/",
         "dev_server_port": 3001,
-        "dev_mode": DEBUG,
+        "dev_mode": VITE_DEV_MODE,
         "dev_server_host": env.str("VITE_DEV_HOST", default="localhost"),
+        "manifest_path": os.path.join(
+            BASE_DIR, "frontend/draftboard/dist/js/draftboard/.vite/manifest.json"
+        ),
     }
 }
