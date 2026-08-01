@@ -105,9 +105,9 @@ Conventions:
 **Everything requires login.** The SPA entrypoint (`react_draft_entrypoint`)
 is `@login_required` and DRF's default permission is `IsAuthenticated`
 (`fantasy/settings.py`). Login lives at `/login/` (`LOGIN_URL` points there —
-it used to point at a nonexistent `/accounts/login/`). The login template
-renders via crispy-forms and NEEDS the `crispy-bootstrap3` package (crispy 2.x
-split the template packs out; without it the page 500s).
+it used to point at a nonexistent `/accounts/login/`). The login form is
+hand-rendered Tailwind HTML (`templates/registration/login.html`) — crispy-forms
+was removed once this became its only consumer; don't reintroduce it.
 
 **No self-service signup or password reset** — deliberately removed; accounts
 are created and passwords set only in /admin. `users/admin.py::FUserAdmin`

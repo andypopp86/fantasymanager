@@ -58,8 +58,6 @@ INSTALLED_APPS = ([] if TESTING else ['debug_toolbar']) + [
     'drf_spectacular',
     'bootstrap3',
     'mathfilters',
-    'crispy_forms',
-    'crispy_bootstrap3',
     'django_vite',
 
     'users',
@@ -154,9 +152,6 @@ STATIC_ROOT = "static_root"
 LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/login/"
-
-CRISPY_TEMPLATE_PACK = "bootstrap3"
-CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap3"
 
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
