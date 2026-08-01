@@ -116,10 +116,13 @@ class DraftPlanAPITests(TestCase):
 
 class ApiAuthorizationTests(TestCase):
     """The two-tier permission model: anonymous → nothing, spectator
-    (non-staff) → board reads only, drafter (staff) → everything."""
+    (non-staff) → board reads only, and only on drafts flagged
+    available_to_spectators; drafter (staff) → everything."""
 
     def setUp(self):
-        self.draft = Draft.objects.create(year=2026, draft_name="authz")
+        self.draft = Draft.objects.create(
+            year=2026, draft_name="authz", available_to_spectators=True)
+        self.hidden_draft = Draft.objects.create(year=2026, draft_name="mockup")
         self.spectator = make_spectator_user()
 
     def test_anonymous_is_rejected_everywhere(self):
@@ -146,6 +149,39 @@ class ApiAuthorizationTests(TestCase):
         self.assertEqual(self.client.get("/api/drafts/draft/plans/").status_code, 403)
         self.assertEqual(
             self.client.post(f"/api/drafts/draft/delete/{self.draft.id}/").status_code, 403)
+
+    def test_spectator_cannot_see_unflagged_drafts(self):
+        self.client.force_login(self.spectator)
+        listed = self.client.get("/api/drafts/draft/drafts")
+        self.assertEqual(
+            [row["draft_name"] for row in listed.data], ["authz"])
+        self.assertEqual(
+            self.client.get(f"/api/drafts/draft/{self.hidden_draft.id}/detail/").status_code, 403)
+        self.assertEqual(
+            self.client.get(f"/api/drafts/draft/{self.hidden_draft.id}/manager_picks/").status_code, 403)
+
+    def test_create_draft_with_spectator_flag(self):
+        self.client.force_login(make_drafter_user())
+        response = self.client.post(
+            "/api/drafts/draft/create/",
+            {"params": {"draft_name": "real one", "managers": "me*\nthem",
+                        "starting_budget": 200, "limit_qb": 3, "limit_rb": 8,
+                        "limit_wr": 8, "limit_te": 3, "limit_def": 2,
+                        "available_to_spectators": True}},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["available_to_spectators"])
+        self.assertTrue(
+            Draft.objects.get(id=response.data["id"]).available_to_spectators)
+
+    def test_staff_sees_all_drafts(self):
+        self.client.force_login(make_drafter_user())
+        listed = self.client.get("/api/drafts/draft/drafts")
+        self.assertEqual(
+            {row["draft_name"] for row in listed.data}, {"authz", "mockup"})
+        self.assertEqual(
+            self.client.get(f"/api/drafts/draft/{self.hidden_draft.id}/detail/").status_code, 200)
 
     def test_spa_entrypoint_requires_login(self):
         response = self.client.get("/app/")

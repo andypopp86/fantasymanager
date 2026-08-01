@@ -24,6 +24,7 @@ Norton`);
     const [limitWR, setLimitWR] = useState(8);
     const [limitTE, setLimitTE] = useState(3);
     const [limitDEF, setLimitDEF] = useState(2);
+    const [availableToSpectators, setAvailableToSpectators] = useState(false);
 
     const handleDraftCreateSubmit = () => {
         if (draftName === "") {
@@ -52,6 +53,7 @@ Norton`);
             limit_wr: limitWR,
             limit_te: limitTE,
             limit_def: limitDEF,
+            available_to_spectators: availableToSpectators,
         }
         draftCreate({ ...draftData }).then(() => {
             queryClient.invalidateQueries({ queryKey: ["draft_list"] });
@@ -106,6 +108,15 @@ Norton`);
                                 Rounds
                             </label>
                             <input className={inputStyle} id="rounds" placeholder="Amount of Rounds" onChange={(e) => setRounds(parseInt(e.target.value))} value={rounds}></input>
+                        </div>
+                    </div>
+                    <div className={"flex flex-wrap -mx-3 mb-6"}>
+                        <div className={"w-full md:w-full px-3 mb-6 md:mb-0"}>
+                            <label className={"block uppercase tracking-wide text-gray-700 text-xs font-bold mb-2"} htmlFor="available_to_spectators">
+                                Visible to Spectators
+                            </label>
+                            <input id="available_to_spectators" type="checkbox" className={"h-5 w-5"}
+                                onChange={(e) => setAvailableToSpectators(e.target.checked)} checked={availableToSpectators}></input>
                         </div>
                     </div>
                     <div className={"flex flex-wrap -mx-3 mb-6"}>

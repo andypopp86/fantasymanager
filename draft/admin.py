@@ -42,10 +42,14 @@ class PlayerAdmin(admin.ModelAdmin):
     fields = ('player_id', 'notes', 'team', 'year',  'name', 'nickname', 'position',  'adp_formatted',  'projected_price', 'adp_price', 'override_price', 'skepticism', 'favorite', )
     
 class DraftAdmin(admin.ModelAdmin):
-    list_display = ('draft_name', 'year', 'drafter', 'projected_draft', 'date_created')
+    list_display = ('draft_name', 'year', 'drafter', 'projected_draft', 'available_to_spectators', 'date_created')
+    list_editable = ('available_to_spectators',)
     # search_fields = ('draft_name', 'drafter', )
-    list_filter = ('locked', 'draft_name', 'drafter',)
-    fields = ('draft_name', 'year', 'drafter', 'projected_draft', 'saved_slots', 'locked', 'date_created' )
+    list_filter = ('locked', 'available_to_spectators', 'draft_name', 'drafter',)
+    fields = ('draft_name', 'year', 'drafter', 'projected_draft', 'saved_slots', 'locked', 'available_to_spectators', 'date_created' )
+    # date_created is auto_now_add (non-editable); without this the edit form
+    # 500s with FieldError.
+    readonly_fields = ('date_created',)
 
 class PositionADPAdmin(admin.ModelAdmin):
     list_display = ('position', 'adp', 'average_price')

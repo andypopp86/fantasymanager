@@ -22,6 +22,11 @@ export const DraftDashboard = ({ me }: { me: CurrentUserOutput }) => {
         <>
             <div className="flex justify-end items-center gap-2 text-sm text-gray-600 p-2">
                 <span>{me.email}{me.is_staff ? "" : " (spectator)"}</span>
+                {me.is_staff && (
+                    <a className="btn bg-blue-500 text-white px-2" href="/admin/">
+                        Admin
+                    </a>
+                )}
                 <button className="btn bg-gray-400 text-white px-2" onClick={() => logout()}>
                     Log Out
                 </button>

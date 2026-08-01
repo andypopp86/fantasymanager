@@ -75,6 +75,7 @@ export interface DraftCreateParams {
     limit_wr: number;
     limit_te: number;
     limit_def: number;
+    available_to_spectators: boolean;
 }
 
 export interface FavoritePlayerParams {
