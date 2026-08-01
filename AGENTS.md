@@ -217,9 +217,17 @@ Spectator laptop needs only a browser → `http://<LAN-IP>:8100/app/board/<draft
 
 `VITE_DEV_HOST` matters: django-vite writes that host into the dev script tags,
 and `localhost` would point the second laptop at itself (page loads, stays
-blank). `ALLOWED_HOSTS` is wildcarded only under DEBUG. (`vite build` outputs to
-`dist/` — which `STATICFILES_DIRS` expects — but true production django-vite
-serving would still need a manifest setup; LAN serving uses dev mode.)
+blank). `ALLOWED_HOSTS` is wildcarded only under DEBUG.
+
+**Built-bundle mode (`VITE_DEV_MODE=false`)**: `npm run build` outputs to
+`dist/js/draftboard/` (with a Vite manifest at `.vite/manifest.json`, wired up
+via `manifest_path` in `DJANGO_VITE`), and running Django with
+`VITE_DEV_MODE=false` serves that bundle instead of pointing browsers at the
+Vite dev server — no Vite terminal, no `VITE_DEV_HOST`. This is REQUIRED when
+viewers can't reach port 3001, e.g. serving remote spectators through a
+Cloudflare quick tunnel — see [`TUNNEL_RUNBOOK.md`](./TUNNEL_RUNBOOK.md) for
+the Windows draft-day steps — and also works for plain LAN serving. Rebuild
+after frontend changes; dev mode (HMR) is unchanged and remains the default.
 
 Draft-day gotchas: allow Python AND Node through Windows Firewall on Private
 networks (the prompt appears on first listen); venue wifi may isolate devices —
