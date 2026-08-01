@@ -14,7 +14,8 @@ import type { ShuffleStrategy, OpenSlot, FavoriteCandidate, RungProposal } from 
 // landed. Rungs with no fitting favorite stay empty on purpose — re-roll,
 // widen the ± variation, or favorite more players at that price point.
 export default function StrategyShuffleModal({ draftContext, onClose }) {
-    const { draftId, drafterId, managers, budgetedPlayers, undraftedPlayers } = draftContext;
+    const { draftId, drafterId, managers, budgetedPlayers, undraftedPlayers, draftDetails } = draftContext;
+    const startingBudget = Number(draftDetails?.starting_budget) || 0;
     const [strategy, setStrategy] = useState<ShuffleStrategy>("laddered");
     const [variation, setVariation] = useState(2);
     const [proposals, setProposals] = useState<RungProposal[] | null>(null);
@@ -45,6 +46,39 @@ export default function StrategyShuffleModal({ draftContext, onClose }) {
 
     const filled = proposals?.filter((p) => p.player && p.slot) ?? [];
     const proposedSpend = filled.reduce((acc, p) => acc + p.price, 0);
+    const draftedSpend = startingBudget - remainingBudget;
+
+    // Display rows: the drafter's actually-drafted players (visual context,
+    // not part of the proposal) interleaved with filled rungs, ordered by
+    // slot; rungs that found no player sink to the bottom.
+    const displayRows = useMemo(() => {
+        if (!proposals || !drafter) return [];
+        const slotOrder = Object.fromEntries(
+            Object.entries(budgetedPlayers).map(([slot, { order }]: [string, any]) => [slot, order]));
+        const draftedRows = Object.entries(drafter.draft_picks)
+            .filter(([, { pick }]: [string, any]) => pick.player_id)
+            .map(([slot, { pick }]: [string, any]) => ({
+                key: `drafted-${slot}`,
+                order: slotOrder[slot] ?? 99,
+                drafted: true,
+                allocation: null,
+                name: pick.name,
+                position: pick.position,
+                price: Number(pick.price) || 0,
+                slot,
+            }));
+        const proposalRows = proposals.map((p, i) => ({
+            key: `rung-${i}`,
+            order: p.slot ? (slotOrder[p.slot] ?? 99) : 999,
+            drafted: false,
+            allocation: p.allocation,
+            name: p.player?.name ?? null,
+            position: p.player?.position ?? null,
+            price: p.price,
+            slot: p.slot,
+        }));
+        return [...draftedRows, ...proposalRows].sort((a, b) => a.order - b.order);
+    }, [proposals, drafter, budgetedPlayers]);
 
     const apply = async () => {
         if (filled.length === 0) return;
@@ -114,24 +148,29 @@ export default function StrategyShuffleModal({ draftContext, onClose }) {
                                 </tr>
                             </thead>
                             <tbody>
-                                {proposals.map(({ allocation, player, price, slot }, i) => (
-                                    <tr key={i} className="border-b">
-                                        <td className="px-2 py-1 text-right">{allocation}</td>
-                                        <td className={"px-2 py-1 " + (player ? "" : "text-gray-400 italic")}>
-                                            {player ? `${player.name} (${player.position})` : "no fitting favorite"}
+                                {displayRows.map(({ key, drafted, allocation, name, position, price, slot }) => (
+                                    <tr key={key} className={"border-b " + (drafted ? "bg-gray-100 text-gray-500" : "")}>
+                                        <td className="px-2 py-1 text-right">{allocation ?? "—"}</td>
+                                        <td className={"px-2 py-1 " + (name ? "" : "text-gray-400 italic")}>
+                                            {name ? `${name} (${position})` : "no fitting favorite"}
+                                            {drafted && (
+                                                <span className="ml-2 text-xs bg-gray-300 text-gray-700 rounded px-1">✓ drafted</span>
+                                            )}
                                         </td>
-                                        <td className="px-2 py-1 text-right">{player ? price : "—"}</td>
+                                        <td className="px-2 py-1 text-right">{name ? price : "—"}</td>
                                         <td className="px-2 py-1 font-semibold">{slot ?? "—"}</td>
                                     </tr>
                                 ))}
                             </tbody>
                             <tfoot>
-                                <tr className="font-bold">
+                                <tr className="font-bold border-t-2">
                                     <td className="px-2 py-1 text-right">
                                         {proposals.reduce((acc, p) => acc + p.allocation, 0)}
                                     </td>
-                                    <td className="px-2 py-1">{filled.length}/{proposals.length} rungs</td>
-                                    <td className="px-2 py-1 text-right">{proposedSpend}</td>
+                                    <td className="px-2 py-1">{filled.length}/{proposals.length} rungs filled</td>
+                                    <td className="px-2 py-1 text-right" title={`$${draftedSpend} drafted + $${proposedSpend} proposed`}>
+                                        {draftedSpend + proposedSpend} / {startingBudget}
+                                    </td>
                                     <td className="px-2 py-1"></td>
                                 </tr>
                             </tfoot>
