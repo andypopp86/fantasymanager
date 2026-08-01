@@ -16,10 +16,12 @@ export const useDraftData = (draftId: number) => {
     const pickRows = useLiveQuery(() => db.draft_picks.where("draftId").equals(draftId).toArray(), [draftId]);
     const budgetRows = useLiveQuery(() => db.budget_picks.where("draftId").equals(draftId).toArray(), [draftId]);
     const watchRows = useLiveQuery(() => db.watch_picks.where("draftId").equals(draftId).toArray(), [draftId]);
+    // Writes waiting for the server to come back (lib/writeQueue.ts).
+    const pendingWrites = useLiveQuery(() => db.pending_writes.where("draftId").equals(draftId).count(), [draftId]) ?? 0;
 
     return useMemo(() => {
         if (!meta || !pickRows || !budgetRows || !watchRows) {
-            return { hydrated: false, drafterId: 0, managers: [], undraftedPlayers: [], budgetedPlayers: {}, watchedPlayers: [], budgetSpent: 0 };
+            return { hydrated: false, drafterId: 0, managers: [], undraftedPlayers: [], budgetedPlayers: {}, watchedPlayers: [], budgetSpent: 0, pendingWrites };
         }
 
         const undraftedPlayers = pickRows
@@ -84,6 +86,7 @@ export const useDraftData = (draftId: number) => {
             budgetedPlayers,
             watchedPlayers,
             budgetSpent,
+            pendingWrites,
         };
-    }, [meta, pickRows, budgetRows, watchRows]);
+    }, [meta, pickRows, budgetRows, watchRows, pendingWrites]);
 };

@@ -1,5 +1,5 @@
 import Dexie, { type Table } from "dexie";
-import type { BudgetPickRow, DraftMetaRow, DraftPickRow, WatchPickRow } from "./draft.schemas";
+import type { BudgetPickRow, DraftMetaRow, DraftPickRow, PendingWriteRow, WatchPickRow } from "./draft.schemas";
 
 // Dexie is the client-side database. Server fetches hydrate these tables
 // (hydrateDraft below), components read them live via useDraftData, and all
@@ -15,11 +15,13 @@ import type { BudgetPickRow, DraftMetaRow, DraftPickRow, WatchPickRow } from "./
 //   v2: + savedAt index on draftSnapshots
 //   v3: server-modeled tables (draft_picks/budget_picks/watch_picks/draft_meta);
 //       draftSnapshots dropped — Dexie is now the data layer, not a crash dump
+//   v4: pending_writes op log (offline write-queue, flushed by lib/writeQueue.ts)
 class DraftboardDB extends Dexie {
     draft_picks!: Table<DraftPickRow, [number, number | string]>;
     budget_picks!: Table<BudgetPickRow, [number, number | string]>;
     watch_picks!: Table<WatchPickRow, [number, number | string]>;
     draft_meta!: Table<DraftMetaRow, number>;
+    pending_writes!: Table<PendingWriteRow, number>;
 
     constructor() {
         super("draftboard");
@@ -35,6 +37,9 @@ class DraftboardDB extends Dexie {
             budget_picks: "[draftId+player_id], draftId, [draftId+slot]",
             watch_picks: "[draftId+player_id], draftId",
             draft_meta: "draftId",
+        });
+        this.version(4).stores({
+            pending_writes: "++id, draftId",
         });
     }
 }
@@ -56,6 +61,12 @@ export const hydrateDraft = async (
     },
 ) => {
     const { draftDetails, availablePlayers, managerPicks, budgetedPicks, watchedPlayers } = payloads;
+
+    // Unsynced local writes exist: the server data is BEHIND our local rows,
+    // so replacing them would silently undo queued changes. Skip — the next
+    // refetch after the queue flushes will reconcile.
+    const pendingCount = await db.pending_writes.where("draftId").equals(draftId).count();
+    if (pendingCount > 0) return;
 
     const STAT_FIELDS = ["points", "yards", "tds", "first_downs", "rush_attempts", "receptions", "targets"];
     const pickRows: DraftPickRow[] = availablePlayers.map((item) => ({

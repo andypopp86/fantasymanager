@@ -122,7 +122,12 @@ export default function Draft({draftDetails}: DraftProps) {
     </div>
     {anyLoadError && data.hydrated && (
         <p className="bg-yellow-200 text-center text-sm font-semibold">
-            ⚠️ Server unreachable — showing locally saved data. Changes made now may not reach the server.
+            ⚠️ Server unreachable — showing locally saved data. Changes are being queued and will sync automatically.
+        </p>
+    )}
+    {data.pendingWrites > 0 && (
+        <p className="bg-orange-200 text-center text-sm font-semibold">
+            ⏳ {data.pendingWrites} change{data.pendingWrites === 1 ? "" : "s"} waiting to sync — will send automatically when the server is reachable.
         </p>
     )}
     {data.hydrated && (
