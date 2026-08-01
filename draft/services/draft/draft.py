@@ -42,7 +42,7 @@ class DraftBoardReadService(BaseService):
 
 
 class DraftWriteService(BaseService):
-    def create_draft(self, draft_name, managers, starting_budget, limit_qb, limit_rb, limit_wr, limit_te, limit_def):
+    def create_draft(self, draft_name, managers, starting_budget, limit_qb, limit_rb, limit_wr, limit_te, limit_def, available_to_spectators=False):
         year = timezone.now().year
         draft = d.Draft(
             year=year,
@@ -52,7 +52,8 @@ class DraftWriteService(BaseService):
             limit_rb=limit_rb,
             limit_wr=limit_wr,
             limit_te=limit_te,
-            limit_def=limit_def
+            limit_def=limit_def,
+            available_to_spectators=available_to_spectators
         )
         draft_managers = []
         for idx, manager_name in enumerate(managers.split("\n")):
@@ -237,6 +238,9 @@ class DraftReadService(BaseService):
     
     def get_drafts(self):
         drafts = d.Draft.objects.all().order_by("-year", "-date_created", "draft_name")
+        # Spectators (non-staff) only see drafts explicitly flagged for them.
+        if not (self.user and getattr(self.user, "is_staff", False)):
+            drafts = drafts.filter(available_to_spectators=True)
         return drafts
     
     def get_picks(self, draft_id):

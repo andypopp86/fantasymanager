@@ -3,7 +3,9 @@ import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { draftDelete } from "../lib/data";
 
-export default function DraftList({ draftList }) {
+// readOnly: spectator accounts — rows link to the read-only board and the
+// delete button is hidden (the server rejects their writes regardless).
+export default function DraftList({ draftList, readOnly = false }) {
     const queryClient = useQueryClient();
 
     const deleteDraft = (draftId) => {
@@ -30,14 +32,14 @@ export default function DraftList({ draftList }) {
                             <tr key={draft.id}>
                                 <td>{draft.year}</td>
                                 <td>
-                                    <Link to={`/draft/${draft.id}`}>{draft.draft_name}</Link>
+                                    <Link to={readOnly ? `/board/${draft.id}` : `/draft/${draft.id}`}>{draft.draft_name}</Link>
                                 </td>
                                 <td>
                                     {
                                     draft.locked ?
                                         <span>Locked</span>
                                         :
-                                        <button className="bg-red-400 text-white" onClick={() => deleteDraft(draft.id)}>X</button>
+                                        !readOnly && <button className="bg-red-400 text-white" onClick={() => deleteDraft(draft.id)}>X</button>
                                     }
                                 </td>
                             </tr>

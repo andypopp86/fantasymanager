@@ -164,6 +164,9 @@ class Draft(models.Model):
     projected_draft = models.TextField(blank=True)
     saved_slots = models.TextField(blank=True)
     locked = models.BooleanField(default=False)
+    # Spectator accounts only ever see drafts flagged here (mockups stay
+    # hidden); enforced in DraftReadService.get_drafts + IsSpectatorVisible.
+    available_to_spectators = models.BooleanField(default=False)
     starting_budget = models.IntegerField(default=200)
     rounds = models.IntegerField(default=19)
     limit_qb = models.IntegerField(default=3)

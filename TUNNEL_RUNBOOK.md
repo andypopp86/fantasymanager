@@ -94,10 +94,11 @@ laptop anymore.
 
 ## Caveats / security
 
-- **Anyone with the URL can reach the whole app**, including the endpoints
-  that write picks — not just the read-only board. The random URL is the only
-  gate, so share it only with your league, don't post it publicly, and kill
-  the tunnel when you're done.
+- The app requires login, and non-staff accounts are read-only spectators
+  (see "Auth & roles" in `AGENTS.md`) — so a leaked URL no longer exposes the
+  write endpoints. Create a shared spectator account for the league (any
+  non-staff user), send its credentials with the URL, and still kill the
+  tunnel when you're done.
 - Quick tunnels are free/best-effort with no uptime guarantee. Fine for
   spectators; the actual drafting never depends on it because you drive from
   `localhost`.

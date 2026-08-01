@@ -58,7 +58,6 @@ INSTALLED_APPS = ([] if TESTING else ['debug_toolbar']) + [
     'drf_spectacular',
     'bootstrap3',
     'mathfilters',
-    'crispy_forms',
     'django_vite',
 
     'users',
@@ -121,20 +120,9 @@ DATABASES = {
 # Password validation
 # https://docs.djangoproject.com/en/3.0/ref/settings/#auth-password-validators
 
-AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
-]
+# Deliberately minimal: accounts are admin-created for a handful of friends
+# (see AGENTS.md "Auth & roles"), so any non-empty password is accepted.
+AUTH_PASSWORD_VALIDATORS = []
 
 
 # Internationalization
@@ -161,12 +149,9 @@ STATICFILES_DIRS = [
 ]
 STATIC_ROOT = "static_root"
 
-LOGIN_URL = "/accounts/login/"
+LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/login/"
-
-CRISPY_TEMPLATE_PACK = "bootstrap3"
-CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap3"
 
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
@@ -196,6 +181,9 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
     'PAGE_SIZE': 10,
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    # Baseline: no anonymous API access. Drafter-only endpoints additionally
+    # require is_staff via draft.api.permissions.IsDrafter.
+    'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticated'],
 }
 
 # VITE_DEV_MODE=false serves the built bundle (npm run build) instead of the

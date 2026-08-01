@@ -100,6 +100,51 @@ Conventions:
   machine event fits.
 - Prefer TypeScript for new files.
 
+## Auth & roles
+
+**Everything requires login.** The SPA entrypoint (`react_draft_entrypoint`)
+is `@login_required` and DRF's default permission is `IsAuthenticated`
+(`fantasy/settings.py`). Login lives at `/login/` (`LOGIN_URL` points there —
+it used to point at a nonexistent `/accounts/login/`). The login form is
+hand-rendered Tailwind HTML (`templates/registration/login.html`) — crispy-forms
+was removed once this became its only consumer; don't reintroduce it.
+
+**No self-service signup or password reset** — deliberately removed; accounts
+are created and passwords set only in /admin. `users/admin.py::FUserAdmin`
+MUST extend auth's `UserAdmin` (a plain `ModelAdmin` renders the password
+column as an editable text field and stores whatever is typed UNHASHED, which
+silently breaks login for that account).
+
+**Two tiers, keyed on `is_staff`** (managed in /admin): staff = drafter (full
+access), non-staff = spectator. `draft/api/permissions.py::IsDrafter` gates
+every write plus the drafter-private reads (available_players, budgeted_picks,
+watched_picks, favorite, plans, create/delete draft). Spectator-reachable
+endpoints: draft list, detail, managers, picks, board detail, manager_picks,
+`/api/me/`.
+
+**Spectators only see flagged drafts.** `Draft.available_to_spectators`
+(default False, toggled in the /admin draft list) keeps mockups private:
+`DraftReadService.get_drafts` filters the list for non-staff, and
+`IsSpectatorVisible` (on every per-draft read view) blocks direct URL/ID
+access to unflagged drafts. Flag the real draft before draft day or
+spectators see an empty list.
+
+**`/api/me/`** (`users/api.py`) returns `{email, username, is_staff}`;
+`DraftShell.tsx` uses it to pick routes — spectators get only the dashboard
+(read-only `DraftList` → `/board/:id`) and `SpectatorBoard`. Client gating is
+UX only; the server enforces the boundary. Authz tests live in
+`draft/tests.py::ApiAuthorizationTests`.
+
+**CSRF:** DRF's `SessionAuthentication` enforces CSRF only on authenticated
+requests, so logged-in POSTs 403 unless the token is sent — `lib/data.ts`
+configures axios globally (`xsrfCookieName = "csrftoken"`) and every call
+inherits it. The `window.csrfToken` snapshot in `index.html` predates this and
+is no longer read by API calls. `data.ts` also has a response interceptor that
+redirects to `/login/?next=…` when a session expires mid-use.
+
+**Draft day:** the spectator laptop must log in once (any non-staff account)
+before opening the board URL; sessions last two weeks by default.
+
 ## Domain concepts (draft & budget)
 
 This is an **auction fantasy-football draft board**. One manager is the **drafter**
@@ -213,7 +258,8 @@ $env:VITE_DEV_HOST = "<this-machine's-LAN-IP>" # terminal 2, repo root
 .venv\Scripts\python manage.py runserver 0.0.0.0:8100
 ```
 
-Spectator laptop needs only a browser → `http://<LAN-IP>:8100/app/board/<draft_id>`.
+Spectator laptop needs only a browser → `http://<LAN-IP>:8100/app/board/<draft_id>`
+(logged in with a spectator account — see "Auth & roles").
 
 `VITE_DEV_HOST` matters: django-vite writes that host into the dev script tags,
 and `localhost` would point the second laptop at itself (page loads, stays
@@ -260,6 +306,14 @@ hydrate Dexie.
 Postgres on :5434). `fantasy/settings.py` sets `TESTING = 'test' in sys.argv` and
 strips `debug_toolbar` from apps/middleware under tests (it refuses to run when
 Django forces DEBUG=False).
+
+**Testing philosophy (standing rule): test business logic only.** Do NOT write
+tests that exercise well-established framework behavior — DRF
+serialization/routing, Django ORM CRUD, admin plumbing, auth machinery. Worth
+testing: this repo's services (draft/budget/plan rules), custom permission
+classes (the drafter/spectator boundary), and any hand-written passthrough
+where a field could silently get dropped. When in doubt, ask "does this assert
+OUR logic, or that Django works?" — skip the latter.
 **Budget-per-remaining-slot** (`utils/draftHelpers`): two color-coded strips
 (`features/BudgetPerSlot.tsx`) in the sidebar directly below the Nomination area.
 Formula: `(remaining − 1) / (openSlots − 1)` — the two `−1`s reserve $1 for the DEF

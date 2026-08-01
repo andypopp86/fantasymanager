@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema
 
 from core.api.serializers.base import BaseSerializer, BaseInputSerializer
+from draft.api.permissions import IsDrafter
 from draft.services.draft.draft_plan import DraftPlanReadService, DraftPlanWriteService
 
 
@@ -32,6 +33,7 @@ class DraftPlanOutputSerializer(BaseSerializer):
 
 
 class DraftPlanListAPI(APIView):
+    permission_classes = [IsDrafter]
 
     def get(self, request):
         plans = DraftPlanReadService(
@@ -42,6 +44,7 @@ class DraftPlanListAPI(APIView):
 
 
 class DraftPlanDetailAPI(APIView):
+    permission_classes = [IsDrafter]
 
     def get(self, request, plan_id):
         plan = DraftPlanReadService(
@@ -52,6 +55,7 @@ class DraftPlanDetailAPI(APIView):
 
 
 class DraftPlanCreateFromDraftAPI(APIView):
+    permission_classes = [IsDrafter]
 
     class DraftPlanCreateSerializer(BaseInputSerializer):
         name = serializers.CharField()
@@ -74,6 +78,7 @@ class DraftPlanCreateFromDraftAPI(APIView):
 
 
 class DraftPlanDeleteAPI(APIView):
+    permission_classes = [IsDrafter]
 
     def post(self, request, plan_id):
         DraftPlanWriteService(

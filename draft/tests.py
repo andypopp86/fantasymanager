@@ -1,7 +1,20 @@
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from draft.models import DRAFT_PLAN_SLOTS, Draft, DraftPick, DraftPlan, Manager, Player
 from draft.services.draft.draft_plan import DraftPlanWriteService
+
+
+def make_drafter_user():
+    return get_user_model().objects.create_user(
+        email="drafter@test.com", password="pw", is_staff=True,
+    )
+
+
+def make_spectator_user():
+    return get_user_model().objects.create_user(
+        email="friend@test.com", password="pw",
+    )
 
 
 def make_player(name, position, year=2026, player_id=None):
@@ -67,6 +80,7 @@ class DraftPlanTests(TestCase):
 class DraftPlanAPITests(TestCase):
 
     def setUp(self):
+        self.client.force_login(make_drafter_user())
         self.draft = Draft.objects.create(year=2026, draft_name="mock api")
         self.drafter = Manager.objects.create(draft=self.draft, name="me", drafter=True, position=0)
         self.qb = make_player("API QB", "QB")
@@ -98,3 +112,80 @@ class DraftPlanAPITests(TestCase):
         response = self.client.post(f"/api/drafts/draft/plans/{plan.id}/delete/")
         self.assertEqual(response.status_code, 200)
         self.assertFalse(DraftPlan.objects.filter(id=plan.id).exists())
+
+
+class ApiAuthorizationTests(TestCase):
+    """The two-tier permission model: anonymous → nothing, spectator
+    (non-staff) → board reads only, and only on drafts flagged
+    available_to_spectators; drafter (staff) → everything."""
+
+    def setUp(self):
+        self.draft = Draft.objects.create(
+            year=2026, draft_name="authz", available_to_spectators=True)
+        self.hidden_draft = Draft.objects.create(year=2026, draft_name="mockup")
+        self.spectator = make_spectator_user()
+
+    def test_anonymous_is_rejected_everywhere(self):
+        self.assertEqual(
+            self.client.get(f"/api/drafts/draft/{self.draft.id}/detail/").status_code, 403)
+        self.assertEqual(
+            self.client.post(f"/api/drafts/draft/delete/{self.draft.id}/").status_code, 403)
+
+    def test_spectator_can_read_board_endpoints(self):
+        self.client.force_login(self.spectator)
+        self.assertEqual(
+            self.client.get(f"/api/drafts/draft/{self.draft.id}/detail/").status_code, 200)
+        self.assertEqual(
+            self.client.get(f"/api/drafts/draft/{self.draft.id}/manager_picks/").status_code, 200)
+        self.assertEqual(self.client.get("/api/drafts/draft/drafts").status_code, 200)
+        self.assertEqual(self.client.get("/api/me/").status_code, 200)
+
+    def test_spectator_blocked_from_drafter_endpoints(self):
+        self.client.force_login(self.spectator)
+        self.assertEqual(
+            self.client.get(f"/api/drafts/draft/{self.draft.id}/available_players/").status_code, 403)
+        self.assertEqual(
+            self.client.get(f"/api/drafts/draft/{self.draft.id}/budgeted_picks/").status_code, 403)
+        self.assertEqual(self.client.get("/api/drafts/draft/plans/").status_code, 403)
+        self.assertEqual(
+            self.client.post(f"/api/drafts/draft/delete/{self.draft.id}/").status_code, 403)
+
+    def test_spectator_cannot_see_unflagged_drafts(self):
+        self.client.force_login(self.spectator)
+        listed = self.client.get("/api/drafts/draft/drafts")
+        self.assertEqual(
+            [row["draft_name"] for row in listed.data], ["authz"])
+        self.assertEqual(
+            self.client.get(f"/api/drafts/draft/{self.hidden_draft.id}/detail/").status_code, 403)
+        self.assertEqual(
+            self.client.get(f"/api/drafts/draft/{self.hidden_draft.id}/manager_picks/").status_code, 403)
+
+    def test_create_draft_with_spectator_flag(self):
+        self.client.force_login(make_drafter_user())
+        response = self.client.post(
+            "/api/drafts/draft/create/",
+            {"params": {"draft_name": "real one", "managers": "me*\nthem",
+                        "starting_budget": 200, "limit_qb": 3, "limit_rb": 8,
+                        "limit_wr": 8, "limit_te": 3, "limit_def": 2,
+                        "available_to_spectators": True}},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["available_to_spectators"])
+        self.assertTrue(
+            Draft.objects.get(id=response.data["id"]).available_to_spectators)
+
+    def test_staff_sees_all_drafts(self):
+        self.client.force_login(make_drafter_user())
+        listed = self.client.get("/api/drafts/draft/drafts")
+        self.assertEqual(
+            {row["draft_name"] for row in listed.data}, {"authz", "mockup"})
+        self.assertEqual(
+            self.client.get(f"/api/drafts/draft/{self.hidden_draft.id}/detail/").status_code, 200)
+
+    def test_spa_entrypoint_requires_login(self):
+        response = self.client.get("/app/")
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.url.startswith("/login/"))
+        self.client.force_login(self.spectator)
+        self.assertEqual(self.client.get("/app/").status_code, 200)
