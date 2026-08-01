@@ -37,8 +37,8 @@ frontend/draftboard/
 └── src/
     ├── main.jsx          # ReactDOM root → <DraftApp csrfToken={window.csrfToken} />
     ├── features/         # UI components (Draft, DraftBoard, AvailablePlayers, …)
-    ├── state_machines/   # XState machines (app-level + draft-level)
-    ├── hooks/            # useDraftAppState, useDraftState, useQueryParams
+    ├── state_machines/   # draftStateMachine (flow-only XState machine)
+    ├── hooks/            # useDraftState, useDraftData, useQueryParams
     ├── lib/              # data.ts (axios API calls), draft.schemas.ts (types)
     └── utils/            # colors, draftHelpers, reordering
 ```
@@ -47,13 +47,16 @@ frontend/draftboard/
 
 - **React 18 + Vite 5**, source is **TypeScript** (`.tsx`/`.ts`) except the two
   bootstrap files `main.jsx` / `App.jsx`.
+- **Routing: react-router v6** (`react-router-dom`), set up in `DraftShell.tsx`
+  with `basename="/app"`. Routes: `/` (draft list), `/draft/create`,
+  `/draft/:draftId` (the board, deep-linkable — `DraftPage.tsx` resolves the id
+  param via the draft detail endpoint). Navigation is `Link`/`useNavigate`; the
+  old `appStateMachine`/`useDraftAppState` screen-switcher was deleted with it.
 - **Data: Dexie (IndexedDB) is the client-side database** — see the
   "Client data layer" section below. React Query fetches from the server and
   hydrates Dexie; components read Dexie via `useDraftData` (liveQuery); ALL
   data writes go through `lib/mutations.ts`.
-- **State: XState (v5)** state machines, consumed via `@xstate/react`:
-  - `appStateMachine` — top-level flow: `loading → selecting → creating/drafting`.
-    Accessed through `useDraftAppState()`.
+- **State: XState (v5)**, consumed via `@xstate/react`:
   - `draftStateMachine` — FLOW ONLY: nomination, price, drag, slot targeting
     (`DraftFlowContext`). Accessed through `useDraftState()` (singleton actor,
     so flow state survives SPA navigation). It holds NO draft data.
@@ -64,10 +67,12 @@ frontend/draftboard/
 
 ## Backend integration
 
-- Django serves the app through **`django-vite`**. The entrypoint view is
-  `draft.views.react_draft_entrypoint` (URL name `react_draft_entrypoint`),
-  rendering `templates/draft/index.html` — the **only** live template tied to
-  the React app.
+- Django serves the app through **`django-vite`**. The SPA lives at **`/app/`**:
+  `fantasy/urls.py` has `re_path(r'^app/', react_draft_entrypoint)` so EVERY path
+  under /app/ serves the same entrypoint (client-side routing needs this for deep
+  links — add new SPA pages as React routes, never as new Django paths). The view
+  renders `templates/draft/index.html` — the **only** live template tied to the
+  React app. The old `/draft/react_draft_entrypoint/` URL 302s to `/app/`.
 - `index.html` sets `window.csrfToken = "{{ csrf_token }}"` and loads the bundle
   via `{% vite_asset "src/main.jsx" app="draftboard" %}`.
 - The React app calls the DRF API under **`/api/drafts/draft/...`** (see the

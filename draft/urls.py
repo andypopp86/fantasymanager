@@ -1,4 +1,5 @@
 from django.urls import path, include
+from django.views.generic import RedirectView
 
 from draft import views as d
 
@@ -7,7 +8,8 @@ from draft import views as d
 app_name = 'Rule'
 
 urlpatterns = [
-	path(r'react_draft_entrypoint/', d.react_draft_entrypoint, name='react_draft_entrypoint'),
+	# The React SPA moved to /app/ (see fantasy/urls.py); keep old bookmarks working.
+	path(r'react_draft_entrypoint/', RedirectView.as_view(url='/app/'), name='react_draft_entrypoint'),
 	path(r'unbudget_player/<int:draft_id>/<int:player_id>/', d.unbudget_player, name='unbudget_player'),
 	path(r'watch_player/<int:draft_id>/<int:player_id>/', d.watch_player, name='watch_player'),
 	path(r'unwatch_player/<int:draft_id>/<int:player_id>/', d.unwatch_player, name='unwatch_player'),

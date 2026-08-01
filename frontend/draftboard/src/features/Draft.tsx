@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { draftAvailablePlayersRetrieve, draftManagerPicksRetrieve, draftBudgetedPicksRetrieve, draftWatchedPicksRetrieve } from "../lib/data";
 import { hydrateDraft } from "../lib/db";
@@ -13,7 +14,6 @@ import { BudgetPerSlot } from "./BudgetPerSlot";
 
 type DraftProps = {
     draftDetails: any
-    send: any
 };
 
 // Data flow: React Query fetches → hydrateDraft replaces this draft's Dexie
@@ -21,7 +21,8 @@ type DraftProps = {
 // The XState machine contributes only flow state (nomination, drag). If the
 // server is unreachable, the queries fail but last session's rows are still
 // in Dexie — the board renders local data with a warning banner.
-export default function Draft({draftDetails, send}: DraftProps) {
+export default function Draft({draftDetails}: DraftProps) {
+    const navigate = useNavigate();
     // Hidden by default: just a button next to Back. Shown: the panel keeps
     // its usual place in the sidebar.
     const [showWatchList, setShowWatchList] = useState(false);
@@ -97,7 +98,7 @@ export default function Draft({draftDetails, send}: DraftProps) {
     <>
     <div className="grid grid-cols-12 gap-4">
       <div className="col-span-2 sm:col-span-2 md:col-span-2 lg:col-span-2 xl:col-span-2 flex gap-2">
-        <button className={"btn border border-gray-400 rounded-md px-2 py-1 hover:bg-gray-100 active:bg-gray-200"} onClick={() => send({type: "draft.back"})}>Back</button>
+        <button className={"btn border border-gray-400 rounded-md px-2 py-1 hover:bg-gray-100 active:bg-gray-200"} onClick={() => navigate("/")}>Back</button>
         {!showWatchList && (
             <button
                 className={"btn border border-gray-400 rounded-md px-2 py-1 hover:bg-gray-100 active:bg-gray-200"}
