@@ -164,7 +164,7 @@ the `draftPickSubmit` promise rejects so `draft_player` never fires).
   replaces that draft's rows wholesale in one transaction — the server stays
   the source of truth whenever reachable. If the server is down, the queries
   fail and last session's rows simply remain: offline viewing needs no restore
-  mechanism, just the warning banner in `Draft.tsx`.
+  mechanism (the only offline signal is the waiting-to-sync counter below).
 - **Reads**: `hooks/useDraftData.ts` projects the tables (via `useLiveQuery`)
   into the legacy `draftContext` shapes components consume (`managers` with
   slot maps, `undraftedPlayers`, `budgetedPlayers`, `watchedPlayers`,
@@ -182,7 +182,8 @@ the `draftPickSubmit` promise rejects so `draft_player` never fires).
   network failure stops the flush (retry later); a server REJECTION drops the
   op (hydration reconciles). While a draft has pending writes, `hydrateDraft`
   SKIPS that draft (server data is behind the local rows) and `Draft.tsx`
-  shows an orange "N changes waiting to sync" banner (`data.pendingWrites`).
+  shows an orange "N changes waiting to sync" strip in the title row
+  (`data.pendingWrites`).
   Offline, `submitPick` accepts picks optimistically instead of failing —
   losing picks mid-draft is worse than a rare replay rejection.
 - **Flow state** (`draftStateMachine` / `useDraftState`): nomination, price,
