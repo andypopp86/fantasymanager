@@ -123,131 +123,158 @@ export default function DraftPlanPage() {
 
     if (!data.hydrated) {
         return (
-            <div className="p-4">
-                <p>No local data for this draft yet — open the board first so it loads.</p>
-                <Link className="text-blue-600 underline" to={`/draft/${draftId}`}>Go to the draft board</Link>
+            <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+                <div className="bg-white rounded-lg shadow-md p-8 text-center">
+                    <p className="text-gray-700 mb-4">No local data for this draft yet — open the board first so it loads.</p>
+                    <Link className="inline-block bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md" to={`/draft/${draftId}`}>Go to the draft board</Link>
+                </div>
             </div>
         );
     }
 
+    const canApply = selectedPlan && !applying && rows.some(({ slot, disabled }) => !disabled && checkedSlots[slot]);
+
     return (
-        <>
-        <div className="grid grid-cols-12 gap-4">
-            <div className="col-span-2 flex gap-2">
-                <button className={"btn border border-gray-400 rounded-md px-2 py-1 hover:bg-gray-100 active:bg-gray-200"} onClick={() => navigate(`/draft/${draftId}`)}>Back</button>
-            </div>
-            <div className="col-span-10">
-                <p className="bg-green-200 text-center text-lg font-bold">Draft Plans — {data.draftDetails?.draft_name || `draft ${draftId}`}</p>
-            </div>
-        </div>
+        <div className="min-h-screen bg-gray-100 py-8 px-4">
+            <div className="max-w-3xl mx-auto bg-white rounded-lg shadow-md overflow-hidden">
 
-        <div className="max-w-3xl mx-auto mt-4 flex flex-col gap-3">
-            <div className="flex items-center gap-2 flex-wrap">
-                <label className="text-sm font-semibold">Plan:</label>
-                <select
-                    className="border border-gray-300 rounded px-2 py-1"
-                    value={selectedPlanId ?? ""}
-                    onChange={(e) => setSelectedPlanId(e.target.value ? Number(e.target.value) : null)}
-                >
-                    <option value="">— select a plan —</option>
-                    {plans?.map((plan) => (
-                        <option key={plan.id} value={plan.id}>{plan.year} — {plan.name}</option>
-                    ))}
-                </select>
-                {selectedPlan && (
+                <div className="bg-green-200 px-6 py-4 flex items-center gap-4">
                     <button
-                        className="text-xs border border-gray-400 rounded px-1 py-0.5 hover:bg-red-100"
-                        title="Delete this plan"
-                        onClick={() => deletePlan(selectedPlan.id)}
-                    >Delete plan</button>
-                )}
-                <span className="flex-1" />
-                <button
-                    className="btn border border-gray-400 rounded-md px-2 py-1 hover:bg-gray-100"
-                    title="Snapshot this draft's drafted results as a new plan"
-                    onClick={savePlanFromDraft}
-                >Save draft as plan</button>
-            </div>
+                        className="bg-white border border-gray-300 rounded-md px-3 py-1.5 text-sm hover:bg-gray-50 active:bg-gray-100 shadow-sm"
+                        onClick={() => navigate(`/draft/${draftId}`)}
+                    >
+                        ← Back to board
+                    </button>
+                    <div className="flex-1 text-center">
+                        <h1 className="text-xl font-bold text-gray-800">Draft Plans</h1>
+                        <p className="text-sm text-gray-600">{data.draftDetails?.draft_name || `Draft ${draftId}`}</p>
+                    </div>
+                    <span className="w-28" />
+                </div>
 
-            <table className="w-full text-sm">
-                <thead>
-                    <tr className="component-subheader">
-                        <th className="text-left">Slot</th>
-                        <th className="text-left">Current budget</th>
-                        <th className="text-left">Plan</th>
-                        <th>Merge</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {rows.map(({ slot, current, currentIsDrafted, planPlayer, planTakenBy, samePlayer, disabled }) => (
-                        <tr key={slot} className="border-b border-gray-200">
-                            <td className="font-semibold">{slot}</td>
-                            <td>
-                                {current.player_id ? (
-                                    <span
-                                        className="px-1 rounded"
-                                        style={{ background: POSITION_BG_COLORS[current.position], color: POSITION_FG_COLORS[current.position] }}
-                                    >
-                                        {current.player_name} (${currentPrice(current)})
-                                        {currentIsDrafted && " 🔒 drafted"}
-                                    </span>
-                                ) : (
-                                    <span className="text-gray-400">—</span>
-                                )}
-                            </td>
-                            <td>
-                                {planPlayer ? (
-                                    <span
-                                        className="px-1 rounded"
-                                        style={{ background: POSITION_BG_COLORS[planPlayer.position], color: POSITION_FG_COLORS[planPlayer.position] }}
-                                    >
-                                        {planPlayer.name} (${planPrice(planPlayer)})
-                                        {planTakenBy && ` — drafted by ${planTakenBy}`}
-                                        {samePlayer && !planTakenBy && " — already budgeted here"}
-                                    </span>
-                                ) : (
-                                    <span className="text-gray-400">—</span>
-                                )}
-                            </td>
-                            <td className="text-center">
-                                <input
-                                    type="checkbox"
-                                    disabled={disabled}
-                                    checked={!!checkedSlots[slot]}
-                                    onChange={() => toggleSlot(slot)}
-                                    title={
-                                        disabled
-                                            ? "Nothing to merge for this slot"
-                                            : currentIsDrafted
-                                                ? "Checking this overwrites the budget row of a player you already drafted"
-                                                : "Take the plan's player for this slot"
-                                    }
-                                />
-                            </td>
+                <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-3 flex-wrap bg-gray-50">
+                    <label className="text-sm font-semibold text-gray-700">Plan:</label>
+                    <select
+                        className="border border-gray-300 rounded-md px-3 py-1.5 text-sm bg-white focus:outline-none focus:border-blue-500 min-w-48"
+                        value={selectedPlanId ?? ""}
+                        onChange={(e) => setSelectedPlanId(e.target.value ? Number(e.target.value) : null)}
+                    >
+                        <option value="">— select a plan —</option>
+                        {plans?.map((plan) => (
+                            <option key={plan.id} value={plan.id}>{plan.year} — {plan.name}</option>
+                        ))}
+                    </select>
+                    {selectedPlan && (
+                        <button
+                            className="text-xs text-red-600 border border-red-200 rounded-md px-2 py-1 hover:bg-red-50"
+                            title="Delete this plan"
+                            onClick={() => deletePlan(selectedPlan.id)}
+                        >Delete plan</button>
+                    )}
+                    <span className="flex-1" />
+                    <button
+                        className="text-sm border border-gray-300 rounded-md px-3 py-1.5 bg-white hover:bg-gray-50 shadow-sm"
+                        title="Snapshot this draft's drafted results as a new plan"
+                        onClick={savePlanFromDraft}
+                    >＋ Save draft as plan</button>
+                </div>
+
+                {!selectedPlan && (
+                    <p className="px-6 py-3 text-sm text-gray-500 bg-blue-50 border-b border-blue-100">
+                        Select a plan to compare it against your current budget and pick which slots to merge in.
+                    </p>
+                )}
+
+                <table className="w-full text-sm">
+                    <thead>
+                        <tr className="bg-gray-200 text-gray-600 text-xs uppercase tracking-wide">
+                            <th className="text-left px-6 py-2">Slot</th>
+                            <th className="text-left px-3 py-2">Current budget</th>
+                            <th className="text-left px-3 py-2">Plan</th>
+                            <th className="px-6 py-2">Merge</th>
                         </tr>
-                    ))}
-                    <tr className="bg-gray-100 font-semibold">
-                        <td>Total</td>
-                        <td>${data.budgetSpent} of ${startingBudget}</td>
-                        <td>${mergedSpent} of ${startingBudget} after merge</td>
-                        <td className="text-center">
-                            <button
-                                className="btn bg-blue-500 text-white rounded-md px-2 py-1 disabled:opacity-40"
-                                disabled={!selectedPlan || applying || rows.every(({ slot, disabled }) => disabled || !checkedSlots[slot])}
-                                onClick={applyPlan}
-                            >
-                                {applying ? "Applying…" : "Apply"}
-                            </button>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-            {selectedPlan && mergedSpent > startingBudget && (
-                <p className="bg-yellow-200 text-center text-sm font-semibold">
-                    ⚠️ Merged plan totals ${mergedSpent}, over the ${startingBudget} budget — uncheck some slots or adjust after applying.
-                </p>
-            )}
+                    </thead>
+                    <tbody>
+                        {rows.map(({ slot, current, currentIsDrafted, planPlayer, planTakenBy, samePlayer, disabled }) => (
+                            <tr key={slot} className="border-b border-gray-100 hover:bg-gray-50">
+                                <td className="px-6 py-2 font-semibold text-gray-700">{slot}</td>
+                                <td className="px-3 py-2">
+                                    {current.player_id ? (
+                                        <span className="inline-flex items-center gap-1.5">
+                                            <span
+                                                className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold"
+                                                style={{ background: POSITION_BG_COLORS[current.position], color: POSITION_FG_COLORS[current.position] }}
+                                            >
+                                                {current.player_name} · ${currentPrice(current)}
+                                            </span>
+                                            {currentIsDrafted && <span className="text-xs text-gray-500">🔒 drafted</span>}
+                                        </span>
+                                    ) : (
+                                        <span className="text-gray-300">—</span>
+                                    )}
+                                </td>
+                                <td className="px-3 py-2">
+                                    {planPlayer ? (
+                                        <span className="inline-flex items-center gap-1.5">
+                                            <span
+                                                className={"inline-block px-2 py-0.5 rounded-full text-xs font-semibold" + (disabled ? " opacity-50" : "")}
+                                                style={{ background: POSITION_BG_COLORS[planPlayer.position], color: POSITION_FG_COLORS[planPlayer.position] }}
+                                            >
+                                                {planPlayer.name} · ${planPrice(planPlayer)}
+                                            </span>
+                                            {planTakenBy && <span className="text-xs text-gray-500">drafted by {planTakenBy}</span>}
+                                            {samePlayer && !planTakenBy && <span className="text-xs text-gray-500">already budgeted here</span>}
+                                        </span>
+                                    ) : (
+                                        <span className="text-gray-300">—</span>
+                                    )}
+                                </td>
+                                <td className="px-6 py-2 text-center">
+                                    <input
+                                        type="checkbox"
+                                        className="w-4 h-4 accent-blue-600 disabled:opacity-30 cursor-pointer disabled:cursor-default"
+                                        disabled={disabled}
+                                        checked={!!checkedSlots[slot]}
+                                        onChange={() => toggleSlot(slot)}
+                                        title={
+                                            disabled
+                                                ? "Nothing to merge for this slot"
+                                                : currentIsDrafted
+                                                    ? "Checking this overwrites the budget row of a player you already drafted"
+                                                    : "Take the plan's player for this slot"
+                                        }
+                                    />
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+
+                {selectedPlan && mergedSpent > startingBudget && (
+                    <p className="px-6 py-2 bg-yellow-100 text-center text-sm font-semibold text-yellow-800">
+                        ⚠️ Merged plan totals ${mergedSpent}, over the ${startingBudget} budget — uncheck some slots or adjust after applying.
+                    </p>
+                )}
+
+                <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center gap-6">
+                    <div className="text-sm text-gray-600">
+                        <span className="font-semibold text-gray-800">Current:</span> ${data.budgetSpent} of ${startingBudget}
+                    </div>
+                    <div className="text-sm text-gray-600">
+                        <span className="font-semibold text-gray-800">After merge:</span>{" "}
+                        <span className={mergedSpent > startingBudget ? "text-red-600 font-bold" : ""}>${mergedSpent}</span> of ${startingBudget}
+                    </div>
+                    <span className="flex-1" />
+                    <button
+                        className="bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-md px-5 py-2 shadow-sm disabled:opacity-40 disabled:hover:bg-blue-500"
+                        disabled={!canApply}
+                        onClick={applyPlan}
+                    >
+                        {applying ? "Applying…" : "Apply selected"}
+                    </button>
+                </div>
+
+            </div>
         </div>
-        </>
     );
 }
