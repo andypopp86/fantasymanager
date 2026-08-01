@@ -84,6 +84,32 @@ Cheapest-to-fullest teardown, pick one:
 Hobby plan: $5/month, includes $5 of usage — this app plus Postgres fits
 comfortably inside that while active. Sleeping/off-season: storage pennies.
 
+## Gotchas learned from the first deploy (2026-08-01)
+
+The first instance lives at `https://app-production-ff9c.up.railway.app`
+(project `fantasymanager`, services `app` + `Postgres`). Set up entirely via
+CLI; the equivalent commands:
+
+```bash
+railway init --name fantasymanager
+railway add --database postgres
+railway add --service app
+railway variables --service app --set "SECRET_KEY=..." --set "DEBUG=false" \
+  --set 'DATABASE_URL=${{Postgres.DATABASE_URL}}' --skip-deploys
+railway domain --service app --port 8000
+railway variables --service app --set "ALLOWED_HOSTS=<domain>" \
+  --set "CSRF_TRUSTED_ORIGINS=https://<domain>" --set "PORT=8000"
+railway up --service app --detach
+```
+
+- **Set `PORT=8000` explicitly.** Railway injects its own PORT (8080) that
+  won't match the domain's target port → 502 despite a healthy deploy.
+- **`DATABASE_PUBLIC_URL` is hostless until a TCP proxy exists.** For
+  pg_dump/pg_restore from outside:
+  `railway tcp-proxy create --port 5432 --service Postgres`
+- **`railway up` honors `.gitignore`.** The repo's `*.txt` rule silently
+  excluded `requirements.txt` from the upload until negated (`!requirements.txt`).
+
 ## Gotchas
 
 - `DEBUG=false` means `ALLOWED_HOSTS`/`CSRF_TRUSTED_ORIGINS` must be right or
