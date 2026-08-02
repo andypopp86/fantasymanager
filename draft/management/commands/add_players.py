@@ -27,7 +27,58 @@ def get_data(year, strategy="api"):
         return json.load(f)
 
 
+def get_or_create_team(code, year):
+    """FFC rows carry a team code; create the year's NFLTeam row on first
+    sight so imports never silently link team=None on a fresh DB. The
+    year filter matters on the historical DB — an unfiltered lookup can
+    return another season's row. Rankings/schedule attrs stay null until
+    the add_team_* commands backfill them."""
+    if not code:
+        return None
+    team, _ = d.NFLTeam.objects.get_or_create(code=code, year=year)
+    return team
+
+
+def compute_average_adp_prices():
+    """Average historical auction price by overall draft position — the
+    basis for projected_price at each ADP rank."""
+    yearly_prices = {}
+    years = d.HistoricalDraftPicks.objects.all().distinct('year')
+    for year in years:
+        yearly_prices[year.year] = []
+    historical_picks = d.HistoricalDraftPicks.objects.all().order_by('year', '-price')
+    for pick in historical_picks:
+        if pick.player:
+            yearly_prices[pick.year].append(pick.price)
+
+    loops = 0
+    stop_pricing = False
+    average_adp_prices = []
+    while loops < 300 and not stop_pricing:
+        draft_pos_prices = []
+        for year in yearly_prices.keys():
+            try:
+                draft_pos_prices.append(yearly_prices[year][loops])
+            except:
+                pass
+        if len(draft_pos_prices) == 0:
+            stop_pricing = True
+        else:
+            average_adp_prices.append(sum(draft_pos_prices) / len(draft_pos_prices))
+        loops += 1
+    return average_adp_prices
+
+
 def load_ffc_json(average_adp_prices, this_year, data):
+    # Prices come from historical auction results; without them a refresh
+    # would flatten every projected_price to the fallback. Keep existing
+    # prices instead (a DB without HistoricalDraftPicks can use
+    # add_default_prices for the curve).
+    have_price_basis = len(average_adp_prices) > 0
+    if not have_price_basis:
+        logger.warning(
+            'no HistoricalDraftPicks in this DB - leaving projected_price '
+            'untouched (run add_default_prices for a fallback curve)')
     player_ct = 0
     for player_json in data['players']:
         if player_json['position'] != 'PK':
@@ -36,7 +87,7 @@ def load_ffc_json(average_adp_prices, this_year, data):
             except:
                 projected_price = 0.00
             logger.info('updating player %s (%s) with price %s' % (player_json['name'], player_json['player_id'], projected_price))
-            nfl_team = d.NFLTeam.objects.filter(code=player_json['team']).first()
+            nfl_team = get_or_create_team(player_json['team'], this_year)
             player, created = d.Player.objects.get_or_create(
                 player_id=player_json['player_id'],
                 year=this_year,
@@ -48,9 +99,14 @@ def load_ffc_json(average_adp_prices, this_year, data):
                     'team': nfl_team
                 }
             )
-            player.projected_price = projected_price
+            if have_price_basis:
+                player.projected_price = projected_price
             if not created:
                 player.team = nfl_team
+                # The point of a refresh: ADP moves in the weeks before the
+                # draft, and stale ranks would corrupt every ADP-ordered
+                # consumer (add_default_prices, UI sorts).
+                player.adp_formatted = player_json['adp_formatted']
             player.save()
             player_ct += 1
 
@@ -155,31 +211,7 @@ class Command(BaseCommand):
 
         kickers = d.Player.objects.filter(position='PK')
         kickers.delete()
-        yearly_prices = {}
-        years = d.HistoricalDraftPicks.objects.all().distinct('year')
-        for year in years:
-            yearly_prices[year.year] = []
-        historical_picks = d.HistoricalDraftPicks.objects.all().order_by('year', '-price')
-        for pick in historical_picks:
-            if pick.player:
-                yearly_prices[pick.year].append(pick.price)
-        
-        loops = 0
-        stop_pricing = False
-        average_adp_prices = []
-        while loops < 300 and not stop_pricing:
-            draft_pos_prices = []
-            for year in yearly_prices.keys():
-                try:
-                    draft_pos_prices.append(yearly_prices[year][loops])
-                except:
-                    pass 
-            if len(draft_pos_prices) == 0:
-                stop_pricing = True
-            else:
-                average_adp_prices.append(sum(draft_pos_prices) / len(draft_pos_prices))
-            loops += 1
-
+        average_adp_prices = compute_average_adp_prices()
         data = get_data(this_year)
         load_ffc_json(average_adp_prices, this_year, data)
         # load_fantasypros_txt(this_year)

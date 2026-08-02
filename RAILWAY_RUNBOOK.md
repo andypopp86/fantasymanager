@@ -59,6 +59,43 @@ python manage.py createsuperuser
 Remove-Item Env:DATABASE_URL
 ```
 
+## Refresh ADP / prices in-season (point a local command at the hosted DB)
+
+ADP moves a lot in the month before the draft, and projected prices are
+derived from it. To refresh the hosted instance, run the import locally with
+`DATABASE_URL` pointed at the hosted DB (same trick as `createsuperuser`
+above — copy `DATABASE_PUBLIC_URL` from the Postgres service's Variables tab):
+
+```powershell
+$env:DATABASE_URL = "<DATABASE_PUBLIC_URL>"
+python manage.py refresh_player_adp
+Remove-Item Env:DATABASE_URL
+```
+
+```bash
+# macOS/Linux
+DATABASE_URL="<DATABASE_PUBLIC_URL>" .venv/bin/python manage.py refresh_player_adp
+```
+
+What it does: re-pulls the FFC ADP feed for the current year, creates any
+missing `NFLTeam` rows, updates every listed player's team link,
+`adp_formatted`, and `projected_price`, and creates players new to the feed.
+`refresh_player_adp` and `add_players` run the same import
+(`refresh_player_adp` is the in-season alias).
+
+Two safety properties, learned the hard way:
+
+- **Prices need `HistoricalDraftPicks`.** projected_price = average historical
+  auction price at each ADP rank. If the target DB has no historical picks,
+  the command warns and leaves existing prices untouched instead of
+  flattening everything to the fallback (a DB seeded without them can use
+  `add_default_prices --update` for the hardcoded curve). The Railway DB
+  restored from the laptop dump has them; a from-scratch DB won't.
+- **It never deletes players** (except kickers) — players who fall off the
+  FFC feed keep their last ADP/price, so mid-draft refreshes are safe for
+  already-created drafts. New feed players are NOT auto-added to existing
+  drafts (that's `Draft.add_missing_players`).
+
 ## Pull data back down (after using the hosted instance for real picks)
 
 ```powershell

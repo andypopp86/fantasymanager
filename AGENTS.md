@@ -219,6 +219,28 @@ guard a `None` pick — otherwise re-drafting a slot 500s, which surfaces on the
 "the pick submitted but the board didn't update" (the optimistic budget change lands, but
 the `draftPickSubmit` promise rejects so `draft_player` never fires).
 
+## Player data import (FFC ADP)
+
+`add_players` / `refresh_player_adp` (same import; the latter is the in-season
+alias) pull the Fantasy Football Calculator ADP API for the current year and
+upsert players: team link, `adp_formatted`, and `projected_price` (= average
+`HistoricalDraftPicks` auction price at each ADP rank). Shared helpers live in
+`add_players.py` (`get_data`, `get_or_create_team`, `compute_average_adp_prices`,
+`load_ffc_json`) — `refresh_player_adp` and `add_nfl_teams` import from it, so
+change the import there, once.
+
+- Missing `NFLTeam` rows are created on the fly (`get_or_create` keyed
+  code+year — the year matters; unkeyed lookups grabbed other seasons' rows on
+  the historical DB). `add_nfl_teams` still exists to seed teams alone, also
+  API-driven and idempotent now.
+- **A DB without `HistoricalDraftPicks` gets no price updates** — the import
+  warns and preserves existing prices rather than flattening them (the dev Mac
+  DB is in this state; `add_default_prices --update` applies the hardcoded
+  curve by ADP order instead).
+- Refreshing the Railway instance: see "Refresh ADP / prices in-season" in
+  `RAILWAY_RUNBOOK.md` (run the command locally with `DATABASE_URL` set to the
+  hosted `DATABASE_PUBLIC_URL`).
+
 ## Client data layer (Dexie/IndexedDB)
 
 **Dexie is the client-side database; XState holds flow only.** The pieces:

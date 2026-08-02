@@ -17,6 +17,7 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
     const [statAbbreviation, setStatAbbreviation] = useState("$");
     const [nameFilterValue, setNameFilterValue] = useState("");
     const [positionFilterValue, setPositionFilterValue] = useState("");
+    const [teamFilterValue, setTeamFilterValue] = useState("");
     const [priceFilterValue, setPriceFilterValue] = useState(undefined);
     const [budgetedFilterValue, setBudgetedFilterValue] = useState("off");
     const [favoriteFilterValue, setFavoriteFilterValue] = useState("off");
@@ -28,6 +29,9 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
     }
     const checkPosition = (player) => {
         return player.player.position.toLowerCase().includes(positionFilterValue.toLowerCase());
+    }
+    const checkTeam = (player) => {
+        return player.player.team?.code === teamFilterValue;
     }
     const checkPrice = (player) => {
         return player.projected_price <= priceFilterValue;
@@ -45,10 +49,19 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
         const budgetedPlayerId = draftContext.budgetedPlayers[slot].pick.player_id;
         return budgetedPlayerId ;
     });
+    // Options come from the loaded players (not a hardcoded list), so the
+    // dropdown stays empty until the year's players have teams linked and
+    // never offers a team with no available players.
+    const teamCodes = [...new Set(
+        draftContext.undraftedPlayers
+            .map((player) => player.player.team?.code)
+            .filter(Boolean)
+    )].sort() as string[];
     const handleFilterChange = () => {
         const predicates = [];
         if (nameFilterValue !== "") { predicates.push(checkName); }
         if (positionFilterValue !== "") { predicates.push(checkPosition); }
+        if (teamFilterValue !== "") { predicates.push(checkTeam); }
         if (priceFilterValue !== undefined && priceFilterValue > 0) { predicates.push(checkPrice); }
         if (budgetedFilterValue === "on") { predicates.push(checkBudget); }
         if (favoriteFilterValue === "on") { predicates.push(checkFavorite); }
@@ -88,6 +101,7 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
     const clearFilter = () => {
         setNameFilterValue("");
         setPositionFilterValue("");
+        setTeamFilterValue("");
         setPriceFilterValue(undefined);
         setBudgetedFilterValue("off");
         setFavoriteFilterValue("off");
@@ -151,6 +165,18 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
                                 <option value="WR">WR</option>
                                 <option value="TE">TE</option>
                                 <option value="DEF">DEF</option>
+                            </select>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td scope="row">Team:</td>
+                        <td>
+                            <select style={{width: "100px"}} value={teamFilterValue}
+                                onChange={(e) => setTeamFilterValue(e.target.value)}>
+                                <option value="">All</option>
+                                {teamCodes.map((code) => (
+                                    <option key={code} value={code}>{code}</option>
+                                ))}
                             </select>
                         </td>
                     </tr>

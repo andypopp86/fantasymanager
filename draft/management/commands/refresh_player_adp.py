@@ -1,87 +1,27 @@
 import logging
 logger = logging.getLogger(__name__)
 
-from email.policy import default
-from django.core.management.base import BaseCommand, CommandError
-
-import os 
-import requests
-import json
-
+from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from draft import models as d
+from draft.management.commands.add_players import (
+    compute_average_adp_prices,
+    get_data,
+    load_ffc_json,
+)
+
 
 class Command(BaseCommand):
-    # help = 'Closes the specified poll for voting'
-
-    def add_arguments(self, parser):
-        parser.add_argument('--delete_all_first', action='store_true', dest='delete_all_first')
+    help = ('Re-pull ADP from Fantasy Football Calculator and refresh players, '
+            'projected prices, and NFL team links for the current year. '
+            'Same import as add_players (kept as the in-season alias).')
 
     def handle(self, *args, **options):
-        type = 'half-ppr' #standard, full-ppr
-        team_ct = 10
         this_year = timezone.now().year
-
-        url = f'https://fantasyfootballcalculator.com/api/v1/adp/{type}?teams={team_ct}&year={this_year}'
-        resp = requests.get(url)
-        jresp = json.loads(resp.content)
-        player_jsons = jresp['players']
-        kickers = d.Player.objects.filter(position='PK')
-        kickers.delete()
-        yearly_prices = {}
-        years = d.HistoricalDraftPicks.objects.all().distinct('year')
-        for year in years:
-            yearly_prices[year.year] = []
-        historical_picks = d.HistoricalDraftPicks.objects.all().order_by('year', '-price')
-        for pick in historical_picks:
-            if pick.player:
-                yearly_prices[pick.year].append(pick.price)
-        
-        loops = 0
-        stop_pricing = False
-        average_adp_prices = []
-        while loops < 300 and not stop_pricing:
-            draft_pos_prices = []
-            for year in yearly_prices.keys():
-                try:
-                    draft_pos_prices.append(yearly_prices[year][loops])
-                except:
-                    pass 
-            if len(draft_pos_prices) == 0:
-                stop_pricing = True
-            else:
-                average_adp_prices.append(sum(draft_pos_prices) / len(draft_pos_prices))
-            loops += 1
-
-        # for price in average_adp_prices:
-        #     logger.info(price)
-        
-        # data_path = os.path.join(os.getcwd(),'data','players.json')
-        # with open(data_path, 'r') as f:
-            # data = json.load(f)
-        player_ct = 0
-        for player_json in player_jsons:
-            if player_json['position'] != 'PK':
-                try:
-                    projected_price = round(average_adp_prices[player_ct],2)
-                except:
-                    projected_price = 0.00
-                logger.info('updating player %s (%s) with price %s' % (player_json['name'], player_json['player_id'], projected_price))
-                nfl_team = d.NFLTeam.objects.filter(code=player_json['team']).first()
-                player, created = d.Player.objects.get_or_create(
-                    player_id=player_json['player_id'],
-                    year=this_year,
-                    defaults={
-                        'name': player_json['name'],
-                        'position': player_json['position'],
-                        'adp_formatted': player_json['adp_formatted'],
-                        'projected_price': projected_price,
-                        'team': nfl_team
-                    }
-                )
-                player.projected_price = projected_price
-                if not created:
-                    player.team = nfl_team
-                player.save()
-                player_ct += 1
+        d.Player.objects.filter(position='PK').delete()
+        average_adp_prices = compute_average_adp_prices()
+        data = get_data(this_year)
+        load_ffc_json(average_adp_prices, this_year, data)
+        self.stdout.write(self.style.SUCCESS(
+            f'refreshed {len(data["players"])} FFC rows for {this_year}'))
