@@ -211,8 +211,10 @@ player object for this reason; always pass one that includes `position`.
 `false` = actively avoid. The endpoint **cycles** server-side
 (null → true → false → null) rather than taking a value, so each offline-queued
 click replays as exactly one step (`DraftWriteService.favorite_player`). UI:
-heart is solid/outline/cracked for true/null/false; the nomination area tints
-green/yellow/red by the nominated player's **live** Dexie row (not the
+heart is solid/outline/cracked for true/null/false; the nomination area has a
+four-way tint — green when the nominated player is budgeted (strongest, wins
+over favorite), else yellow/grey/red for favorited/agnostic/unfavorited — with
+favorite read from the nominated player's **live** Dexie row (not the
 state-machine snapshot, so cycling mid-nomination recolors it). The Favorite
 filter and Rebudget only treat `true` as favorited. Ordering gotcha: Postgres
 sorts nulls first on `DESC`, so rank explicitly (see `favorite_rank` in

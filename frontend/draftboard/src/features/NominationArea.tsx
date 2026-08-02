@@ -12,18 +12,19 @@ export const NominationArea = ({ draftContext, draftSend }: NominationAreaProps)
     const [isDragOver, setIsDragOver] = useState(false);
     const nominatedPlayer = draftContext.nominatedPlayer;
     const hasNomination = !!(nominatedPlayer && nominatedPlayer.player_id);
-    // Quiet drafter-only cue: glow when the nominated player is on the
-    // current budgeted team. Deliberately subtle (shoulder-surfers
-    // shouldn't read targets off the screen); String() bridges the
-    // number/string player_id mix in budget rows.
+    // Drafter-only cue: the nominated player is on the current budgeted
+    // team (green tint + glow). String() bridges the number/string
+    // player_id mix in budget rows.
     const isBudgetedTarget = hasNomination && Object.values(draftContext.budgetedPlayers ?? {}).some(
         (slot: any) => slot?.pick?.player_id != null && slot.pick.player_id !== "" &&
             String(slot.pick.player_id) === String(nominatedPlayer.player_id)
     );
-    // Tint tracks the tri-state favorite: green = target (true), yellow =
-    // neutral (null), red = avoid (false). Read live from the Dexie row so
-    // cycling the heart while a player is on the block recolors immediately;
-    // the state-machine snapshot is the fallback before the row loads.
+    // Four-way tint, strongest signal first: green = on the budgeted team,
+    // then the tri-state favorite — yellow = favorited (true), grey =
+    // agnostic (null), red = unfavorited (false). Favorite reads live from
+    // the Dexie row so cycling the heart while a player is on the block
+    // recolors immediately; the state-machine snapshot is the fallback
+    // before the row loads.
     const liveRow = useLiveQuery(
         () => hasNomination
             ? db.draft_picks.get([draftContext.draftId, nominatedPlayer.player_id])
@@ -31,8 +32,14 @@ export const NominationArea = ({ draftContext, draftSend }: NominationAreaProps)
         [draftContext.draftId, hasNomination ? nominatedPlayer.player_id : null],
     );
     const favorite = liveRow ? (liveRow.player?.favorite ?? null) : (nominatedPlayer?.favorite ?? null);
-    const nominationBorder = favorite === true ? "#4ade80" : favorite === false ? "#f87171" : "#facc15";
-    const nominationBg = favorite === true ? "#f0fdf4" : favorite === false ? "#fef2f2" : "#fefce8";
+    const nominationBorder = isBudgetedTarget ? "#4ade80"
+        : favorite === true ? "#facc15"
+        : favorite === false ? "#f87171"
+        : "#9ca3af";
+    const nominationBg = isBudgetedTarget ? "#f0fdf4"
+        : favorite === true ? "#fefce8"
+        : favorite === false ? "#fef2f2"
+        : "#f3f4f6";
 
     const handleDragOver = (e) => {
         e.preventDefault();
