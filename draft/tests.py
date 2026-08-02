@@ -245,3 +245,31 @@ class RelinkPlayerTeamsTests(TestCase):
         self.assertEqual(stale.team.year, this_year)
         self.assertEqual(current.team_id, new_det.id)
         self.assertIsNone(teamless.team)
+
+
+class BudgetedPicksActualPriceTests(TestCase):
+    """Budgeted slots report the real winning price once the player is
+    drafted. Regression: actual_prices was keyed by Player pk but looked up
+    by the FFC player_id — different id spaces, so actual_price was always 0
+    and the budget kept showing projections."""
+
+    def test_drafted_budget_pick_reports_actual_price(self):
+        from draft.models import BudgetPlayer
+        from draft.services.draft.draft import DraftReadService
+
+        draft = Draft.objects.create(year=2026, draft_name="budget actuals")
+        manager = Manager.objects.create(draft=draft, name="me", drafter=True, position=0)
+        player = make_player("Deal Player", "RB")
+        player.projected_price = 70
+        player.save(update_fields=["projected_price"])
+
+        BudgetPlayer.objects.create(
+            draft=draft, player=player, manager=manager,
+            price=70, position="RB1", status="budgeted")
+        DraftPick.objects.create(
+            draft=draft, player=player, manager=manager,
+            price=60, drafted=True, position_slot="RB1")
+
+        picks = DraftReadService(user=None).get_budgeted_picks(draft_id=draft.id)
+        self.assertEqual(picks["RB1"]["pick"]["actual_price"], 60)
+        self.assertEqual(int(picks["RB1"]["pick"]["projected_price"]), 70)
