@@ -246,6 +246,23 @@ class DraftReadService(BaseService):
     def get_picks(self, draft_id):
         picks = d.DraftPick.objects.filter(draft_id=draft_id).order_by("manager__name", "-price")
         return picks
+
+    def get_spectator_drafts(self):
+        return d.Draft.objects.filter(
+            available_to_spectators=True,
+        ).order_by("-year", "-date_created", "draft_name")
+
+    def get_drafted_players(self, draft_id):
+        # Spectator-flagged drafts only: unflagged drafts (mockups) 404 even
+        # for superusers, so the sync consumer can't pull them by ID.
+        if not d.Draft.objects.filter(
+            id=draft_id, available_to_spectators=True,
+        ).exists():
+            raise Http404
+        return d.DraftPick.objects.filter(
+            draft_id=draft_id, drafted=True,
+            draft__available_to_spectators=True,
+        ).select_related("player", "manager").order_by("manager__position", "last_update_time")
     
     def get_available_players(self, draft_id):
         picks = d.DraftPick.objects.filter(draft_id=draft_id, drafted=False)

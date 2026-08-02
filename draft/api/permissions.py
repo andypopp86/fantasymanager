@@ -22,6 +22,18 @@ class IsSpectatorVisible(BasePermission):
         ).exists()
 
 
+class IsSuperuser(BasePermission):
+    """Cross-site sync tier: superuser only. Used by the spectator-sync
+    endpoints that a local copy of the site polls against the hosted
+    deploy during a live draft."""
+
+    message = "Superuser access required."
+
+    def has_permission(self, request, view):
+        user = request.user
+        return bool(user and user.is_authenticated and user.is_superuser)
+
+
 class IsDrafter(BasePermission):
     """Full-access tier: staff accounts (the app owner).
 

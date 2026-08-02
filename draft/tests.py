@@ -160,6 +160,30 @@ class ApiAuthorizationTests(TestCase):
         self.assertEqual(
             self.client.get(f"/api/drafts/draft/{self.hidden_draft.id}/manager_picks/").status_code, 403)
 
+    def test_superuser_sync_endpoints_require_superuser(self):
+        for user in (self.spectator, make_drafter_user()):
+            self.client.force_login(user)
+            self.assertEqual(
+                self.client.get("/api/drafts/draft/spectator/drafts/").status_code, 403)
+            self.assertEqual(
+                self.client.get(f"/api/drafts/draft/spectator/{self.draft.id}/drafted_players/").status_code, 403)
+
+    def test_superuser_sync_endpoints(self):
+        superuser = get_user_model().objects.create_superuser(
+            email="admin2@test.com", password="pw")
+        self.client.force_login(superuser)
+        listed = self.client.get("/api/drafts/draft/spectator/drafts/")
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual([row["draft_name"] for row in listed.data], ["authz"])
+        picks = self.client.get(f"/api/drafts/draft/spectator/{self.draft.id}/drafted_players/")
+        self.assertEqual(picks.status_code, 200)
+        self.assertEqual(picks.data, [])
+        self.assertEqual(
+            self.client.get("/api/drafts/draft/spectator/999999/drafted_players/").status_code, 404)
+        # unflagged drafts (mockups) 404 even for superusers
+        self.assertEqual(
+            self.client.get(f"/api/drafts/draft/spectator/{self.hidden_draft.id}/drafted_players/").status_code, 404)
+
     def test_create_draft_with_spectator_flag(self):
         self.client.force_login(make_drafter_user())
         response = self.client.post(
