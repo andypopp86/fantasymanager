@@ -314,7 +314,10 @@ class DraftReadService(BaseService):
                 budget_map[bpick.position]["pick"]["player_name"] = bpick.player.name
                 budget_map[bpick.position]["pick"]["position"] = bpick.player.position
                 budget_map[bpick.position]["pick"]["projected_price"] = bpick.player.override_price or bpick.player.projected_price
-                budget_map[bpick.position]["pick"]["actual_price"] = actual_prices.get(bpick.player.player_id, 0)
+                # actual_prices is keyed by Player pk (FK attname), so look up
+                # by pk too — bpick.player.player_id is the FFC id, a
+                # different id space, and never matches.
+                budget_map[bpick.position]["pick"]["actual_price"] = actual_prices.get(bpick.player_id, 0)
                 budget_map[bpick.position]["pick"]["budget_position"] = bpick.position
                 budget_map[bpick.position]["pick"]["status"] = bpick.status
         ordered_budget_map = {k: v for k, v in sorted(budget_map.items(), key=lambda item: item[1]['order'])}

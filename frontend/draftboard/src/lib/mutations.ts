@@ -39,7 +39,7 @@ export const submitPick = async (
         if (errMsg != null) return errMsg;
     }
 
-    await db.transaction("rw", db.draft_picks, db.watch_picks, async () => {
+    await db.transaction("rw", db.draft_picks, db.watch_picks, db.budget_picks, async () => {
         await db.draft_picks.update([draftId, player.player_id], {
             drafted: true,
             manager_id: managerId,
@@ -47,6 +47,11 @@ export const submitPick = async (
             slot,
         });
         await db.watch_picks.delete([draftId, player.player_id]);
+        // Budget tracks real spend: if this player is on the budgeted plan,
+        // record the winning price (actual_price wins over projected in the
+        // slot display and budgetSpent). No-op when there's no budget row —
+        // draftPlayer unbudgets stolen targets before submitting.
+        await db.budget_picks.update([draftId, player.player_id], { actual_price: price });
     });
     return null;
 };
@@ -81,6 +86,8 @@ export const unsubmitPick = async (draftId: number, managerId: number, playerId:
         price: null,
         slot: null,
     });
+    // Kept budget row goes back to tracking the projection.
+    await db.budget_picks.update([draftId, playerId], { actual_price: 0 });
     sendOrQueue(draftId, "unsubmit_pick", { draftId, managerId, playerId });
 };
 
