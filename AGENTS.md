@@ -206,6 +206,20 @@ or two rows collide on one slot.
 eligibility checks until the next refetch. `mutations.budgetPick` takes the whole
 player object for this reason; always pass one that includes `position`.
 
+**Favorite is tri-state** (`Player.favorite`, nullable boolean): `true` = target,
+`null` = neutral (the default; legacy `false` rows were migrated to `null`),
+`false` = actively avoid. The endpoint **cycles** server-side
+(null → true → false → null) rather than taking a value, so each offline-queued
+click replays as exactly one step (`DraftWriteService.favorite_player`). UI:
+heart is solid/outline/cracked for true/null/false; the nomination area has a
+four-way tint — green when the nominated player is budgeted (strongest, wins
+over favorite), else yellow/grey/red for favorited/agnostic/unfavorited — with
+favorite read from the nominated player's **live** Dexie row (not the
+state-machine snapshot, so cycling mid-nomination recolors it). The Favorite
+filter and Rebudget only treat `true` as favorited. Ordering gotcha: Postgres
+sorts nulls first on `DESC`, so rank explicitly (see `favorite_rank` in
+`get_picks`) instead of ordering by `-player__favorite`.
+
 **Winning-price gotcha:** the nominated-player object (`draftContext.nominatedPlayer`)
 has NO `.price` — the winning bid lives in `draftContext.nominationPrice`, threaded
 around as a separate `price`. Using `player.price` for a budget projected price renders

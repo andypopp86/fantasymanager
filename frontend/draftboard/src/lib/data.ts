@@ -10,7 +10,6 @@ import type { DraftRetrieveOutput,
     AvailablePlayersRetrieveOutput,
     DraftBudgetPickParams,
     DraftCreateParams,
-    FavoritePlayerParams,
     DraftPlanOutput,
     CurrentUserOutput
 } from "./draft.schemas";
@@ -305,17 +304,17 @@ export const draftRetrieve = <
       })
     }
 
+    // The server cycles the tri-state itself (null -> true -> false -> null),
+    // so the request carries no target value; the response has the new state.
     export const favoritePlayer = <
     TData = AxiosResponse<DraftSubmitPickOutput>,
     >(
       draft_id: number,
       player_id: number,
-      params: FavoritePlayerParams,
       options?: AxiosRequestConfig,
     ): Promise<TData> => {
       return axios.default.post(`/api/drafts/draft/${draft_id}/favorite_player/${player_id}/`, {
           options,
-          params,
       })
     }
 

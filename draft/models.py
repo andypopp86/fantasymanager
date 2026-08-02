@@ -133,7 +133,8 @@ class Player(models.Model):
     nickname = models.CharField(max_length=200, null=True, blank=True)
     team = models.ForeignKey(NFLTeam, null=True, blank=True, on_delete=models.SET_NULL)
     year = models.IntegerField(default=2023)
-    favorite = models.BooleanField(default=False)
+    # Tri-state: True = target, None = neutral, False = actively avoid.
+    favorite = models.BooleanField(null=True, blank=True, default=None)
     offensive_support = models.IntegerField(default=0)
     skepticism = models.IntegerField(default=0)
     notes = models.TextField(null=True, blank=True)

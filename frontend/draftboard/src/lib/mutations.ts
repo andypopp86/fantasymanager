@@ -171,13 +171,20 @@ export const unwatchPick = async (draftId: number, managerId: number, playerId: 
     sendOrQueue(draftId, "watch", { draftId, managerId, playerId, watch: false });
 };
 
-// Server-first like submitPick: the server may override the requested value,
-// so the row takes what it actually returns — unless the write got queued,
-// in which case the requested value applies optimistically.
-export const setFavorite = async (draftId: number, playerId: number | string, favorite: boolean) => {
-    const result = await sendOrQueueWithResponse(draftId, "favorite", { draftId, playerId, favorite });
-    const confirmed = "response" in result ? result.response.data["favorite"] : favorite;
+// Tri-state cycle: neutral (null) -> target (true) -> avoid (false) -> neutral.
+// Mirrors the server's cycle so the optimistic value matches what a queued
+// replay will produce.
+export const cycleFavorite = (favorite: boolean | null | undefined): boolean | null =>
+    favorite == null ? true : favorite ? false : null;
+
+// Server-first like submitPick: the server cycles from its own current value
+// and the row takes what it actually returns — unless the write got queued,
+// in which case the locally-cycled value applies optimistically.
+export const setFavorite = async (draftId: number, playerId: number | string) => {
     const row = await db.draft_picks.get([draftId, playerId]);
+    const optimistic = cycleFavorite(row?.player?.favorite);
+    const result = await sendOrQueueWithResponse(draftId, "favorite", { draftId, playerId });
+    const confirmed = "response" in result ? result.response.data["favorite"] : optimistic;
     if (row) {
         await db.draft_picks.update([draftId, playerId], {
             player: { ...row.player, favorite: confirmed },

@@ -2,21 +2,22 @@ import React from "react";
 import { setFavorite } from "../lib/mutations";
 import { POSITION_BG_COLORS, POSITION_FG_COLORS } from "../utils/colors";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faHeart as solidHeart } from '@fortawesome/free-solid-svg-icons';
+import { faHeart as solidHeart, faHeartCrack } from '@fortawesome/free-solid-svg-icons';
 import { faHeart as regularHeart } from '@fortawesome/free-regular-svg-icons';
 import { faEdit, faWind } from "@fortawesome/free-solid-svg-icons";
 
 interface HeartProps {
-    filled: boolean;
+    favorite: boolean | null | undefined; // true = target, null = neutral, false = avoid
     size?: 'sm' | 'lg'; // Optional size prop
   }
-  
-  const Heart: React.FC<HeartProps> = ({ filled, size }) => {
-    const icon = filled ? solidHeart : regularHeart;
+
+  const Heart: React.FC<HeartProps> = ({ favorite, size }) => {
+    const icon = favorite ? solidHeart : favorite === false ? faHeartCrack : regularHeart;
+    const color = favorite === false ? "#6b7280" : "red";
     const iconSize = size === 'lg' ? 'lg' : 'sm'; // Default to 'sm' if size is not provided
-  
+
     return (
-      <FontAwesomeIcon icon={icon} size={iconSize} color="red" />
+      <FontAwesomeIcon icon={icon} size={iconSize} color={color} />
     );
   };
 
@@ -31,13 +32,12 @@ export default function AvailablePlayer({pick, nominatePlayer, handleDragStart, 
         }
         return 1000;
     }
-    // The mutation updates the Dexie row, so the Favorite filter sees hearts
-    // toggled this session; the row's live query re-renders this component.
-    const postFavorite = (player, favorite) => {
-        setFavorite(draftContext.draftId, player.player_id, favorite);
+    // The mutation cycles the tri-state (neutral -> target -> avoid) and
+    // updates the Dexie row, so the Favorite filter sees hearts cycled this
+    // session; the row's live query re-renders this component.
+    const postFavorite = (player) => {
+        setFavorite(draftContext.draftId, player.player_id);
     }
-
-    const isFavorite = !!pick.player.favorite;
 
     const strengthOfSchedule = getStrengthOfSchedule(pick);
     const scheduleBG = strengthOfSchedule > 25 ? "bg-red-900" : strengthOfSchedule <= 5 ? "bg-green-900" : "bg-yellow-200";
@@ -72,8 +72,8 @@ export default function AvailablePlayer({pick, nominatePlayer, handleDragStart, 
                 </td>
                 <td>{parseInt(pick[statField])}</td>
                 */}
-                <td className="bg-white" onClick={() => postFavorite(pick.player, !isFavorite)}>
-                    <Heart key={`H${pick.player.player_id}`} filled={isFavorite} size="sm"/>
+                <td className="bg-white" onClick={() => postFavorite(pick.player)}>
+                    <Heart key={`H${pick.player.player_id}`} favorite={pick.player.favorite} size="sm"/>
                 </td>
                 <td className="bg-white" title={pick.player.notes}>
                     {pick.player.notes &&

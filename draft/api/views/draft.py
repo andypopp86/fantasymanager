@@ -59,7 +59,7 @@ class PlayerOutputSerializer(BaseSerializer):
     nickname = serializers.CharField()
     team = NFLTeamSerializer(read_only=True)
     year = serializers.IntegerField()
-    favorite = serializers.BooleanField()
+    favorite = serializers.BooleanField(allow_null=True)
     offensive_support = serializers.IntegerField()
     skepticism = serializers.IntegerField()
 
@@ -224,7 +224,7 @@ class DraftPicksOutputSerializer(BaseSerializer):
         projected_price = serializers.DecimalField(max_digits=8, decimal_places=2)
         position_price = serializers.DecimalField(max_digits=8, decimal_places=2)
         adp_price = serializers.DecimalField(max_digits=8, decimal_places=2)
-        favorite = serializers.BooleanField()
+        favorite = serializers.BooleanField(allow_null=True)
         notes = serializers.CharField()
         target_type = serializers.CharField(allow_null=True, required=False)
 
@@ -309,7 +309,7 @@ class WatchPlayersOutputSerializer(BaseSerializer):
     name = serializers.CharField()
     position = serializers.CharField()
     projected_price = serializers.DecimalField(max_digits=8, decimal_places=2)
-    favorite = serializers.BooleanField()
+    favorite = serializers.BooleanField(allow_null=True)
 
 
 class DraftWatchedPicksAPI(APIView):
@@ -587,7 +587,6 @@ class DraftFavoritePickAPI(APIView):
         ).favorite_player(
             draft_id=draft_id,
             player_id=player_id,
-            favorite=request.data["params"]["favorite"]
         )
         response = Response(status=status.HTTP_200_OK)
         response.data = {"error": "", "favorite": player.favorite}

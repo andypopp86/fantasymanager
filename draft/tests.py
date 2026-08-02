@@ -273,3 +273,21 @@ class BudgetedPicksActualPriceTests(TestCase):
         picks = DraftReadService(user=None).get_budgeted_picks(draft_id=draft.id)
         self.assertEqual(picks["RB1"]["pick"]["actual_price"], 60)
         self.assertEqual(int(picks["RB1"]["pick"]["projected_price"]), 70)
+
+
+class FavoriteCycleTests(TestCase):
+    """favorite is tri-state: None (neutral) -> True (target) -> False (avoid) -> None."""
+
+    def setUp(self):
+        self.draft = Draft.objects.create(year=2026, draft_name="mock one")
+        self.player = make_player("Cycle RB", "RB")
+
+    def test_new_player_defaults_to_neutral(self):
+        self.assertIsNone(self.player.favorite)
+
+    def test_favorite_player_cycles(self):
+        from draft.services.draft.draft import DraftWriteService
+        service = DraftWriteService(user=None)
+        for expected in (True, False, None, True):
+            player = service.favorite_player(self.draft.id, self.player.player_id)
+            self.assertEqual(player.favorite, expected)
