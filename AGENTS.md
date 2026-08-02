@@ -238,8 +238,11 @@ change the import there, once.
   DB is in this state; `add_default_prices --update` applies the hardcoded
   curve by ADP order instead).
 - Refreshing the Railway instance: see "Refresh ADP / prices in-season" in
-  `RAILWAY_RUNBOOK.md` (run the command locally with `DATABASE_URL` set to the
-  hosted `DATABASE_PUBLIC_URL`).
+  `RAILWAY_RUNBOOK.md` — run the DEPLOYED command via
+  `railway ssh --service app -- python manage.py refresh_player_adp`.
+  NEVER point a local process at the hosted DB (`DATABASE_URL=<public URL>`
+  or ad-hoc SQL) — it bypasses all app-level controls; deploy first, then
+  run the command server-side.
 - `relink_player_teams_for_current_year` repoints players stuck on another
   season's team row (legacy of the unfiltered lookup; also off-feed players,
   since the refresh only relinks players present in the FFC feed). Run it

@@ -59,23 +59,25 @@ python manage.py createsuperuser
 Remove-Item Env:DATABASE_URL
 ```
 
-## Refresh ADP / prices in-season (point a local command at the hosted DB)
+## Refresh ADP / prices in-season (run the DEPLOYED command via railway ssh)
 
 ADP moves a lot in the month before the draft, and projected prices are
-derived from it. To refresh the hosted instance, run the import locally with
-`DATABASE_URL` pointed at the hosted DB (same trick as `createsuperuser`
-above — copy `DATABASE_PUBLIC_URL` from the Postgres service's Variables tab):
-
-```powershell
-$env:DATABASE_URL = "<DATABASE_PUBLIC_URL>"
-python manage.py refresh_player_adp
-Remove-Item Env:DATABASE_URL
-```
+derived from it. Refresh by executing the management command **inside the
+deployed container** — deployed code only, internal DB networking, nothing
+to leak:
 
 ```bash
-# macOS/Linux
-DATABASE_URL="<DATABASE_PUBLIC_URL>" .venv/bin/python manage.py refresh_player_adp
+railway ssh --service app -- python manage.py refresh_player_adp
 ```
+
+**Rule: never point a local process at the hosted DB** (no
+`DATABASE_URL=<DATABASE_PUBLIC_URL> manage.py ...`, no ad-hoc SQL). A direct
+connection bypasses every app-level control and runs with full DB
+privileges; the hosted DB only meets local tooling during the documented
+dump/restore flows above. Corollary: the command must be in the deployed
+image — **push + deploy first, then run it**. (Deploys are CLI-triggered:
+`railway up --service app` from repo root; merging to master does NOT
+auto-deploy — the app service isn't GitHub-connected.)
 
 What it does: re-pulls the FFC ADP feed for the current year, creates any
 missing `NFLTeam` rows, updates every listed player's team link,
@@ -98,8 +100,8 @@ Two safety properties, learned the hard way:
 
 Off-feed players also keep their old team link. On a DB whose links predate
 the code+year lookup fix, chase the refresh with
-`python manage.py relink_player_teams_for_current_year` (idempotent) to
-repoint any players stuck on another season's team row.
+`railway ssh --service app -- python manage.py relink_player_teams_for_current_year`
+(idempotent) to repoint any players stuck on another season's team row.
 
 ## Pull data back down (after using the hosted instance for real picks)
 
