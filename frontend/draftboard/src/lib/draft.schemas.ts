@@ -78,10 +78,6 @@ export interface DraftCreateParams {
     available_to_spectators: boolean;
 }
 
-export interface FavoritePlayerParams {
-    favorite: boolean;
-}
-
 export type Manager = {
     id: number,
     name: string,
@@ -181,7 +177,8 @@ export type PlayerDetail = {
     position: string,
     projected_price?: number | string,
     adp_price?: number | string,
-    favorite?: boolean,
+    // Tri-state: true = target, null/undefined = neutral, false = avoid.
+    favorite?: boolean | null,
     notes?: string | null,
     target_type?: string | null,
     team?: Record<string, any> | null,

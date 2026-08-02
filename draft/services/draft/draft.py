@@ -173,10 +173,16 @@ class DraftWriteService(BaseService):
         pick.save()
         return pick
     
-    def favorite_player(self, draft_id, player_id, favorite):
+    def favorite_player(self, draft_id, player_id):
+        # Cycle the tri-state: None (neutral) -> True (target) -> False (avoid) -> None.
         draft = d.Draft.objects.filter(id=draft_id).first()
         player = d.Player.objects.filter(year=draft.year, player_id=player_id).first()
-        player.favorite = bool(favorite)
+        if player.favorite is None:
+            player.favorite = True
+        elif player.favorite:
+            player.favorite = False
+        else:
+            player.favorite = None
         player.save()
         return player
     
@@ -282,7 +288,15 @@ class DraftReadService(BaseService):
                 default=F("player__projected_price"),
             )
         )
-        picks = picks.order_by("-player__projected_price", "-player__favorite")
+        # favorite is tri-state (True/None/False); rank explicitly so neutral (null)
+        # doesn't sort above targets under Postgres's DESC-nulls-first default.
+        picks = picks.annotate(
+            favorite_rank=Case(
+                When(player__favorite=True, then=2),
+                When(player__favorite__isnull=True, then=1),
+                default=0,
+            )
+        ).order_by("-player__projected_price", "-favorite_rank")
         return picks
     
     def get_budgeted_picks(self, draft_id):

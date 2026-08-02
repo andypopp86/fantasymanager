@@ -28,7 +28,8 @@ const OP_SENDERS: Record<string, (args: any) => Promise<any>> = {
     watch: (a) => draftWatchPick(a.draftId, a.managerId, a.playerId, { watch: a.watch }),
     reslot_picks: (a) => draftReslotPicks(a.draftId, a.managerId, { assignments: a.assignments }),
     reslot_budget: (a) => draftReslotBudget(a.draftId, a.managerId, { assignments: a.assignments }),
-    favorite: (a) => favoritePlayer(a.draftId, a.playerId, { favorite: a.favorite }),
+    // Server-side cycle: each queued click replays as exactly one cycle step.
+    favorite: (a) => favoritePlayer(a.draftId, a.playerId),
 };
 
 // Request never reached the server (offline, refused, timed out) — as opposed

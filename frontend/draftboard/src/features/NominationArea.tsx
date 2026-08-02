@@ -1,4 +1,6 @@
 import React, { useState } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
+import { db } from "../lib/db";
 import { POSITION_BG_COLORS, POSITION_FG_COLORS } from "../utils/colors";
 
 type NominationAreaProps = {
@@ -10,14 +12,27 @@ export const NominationArea = ({ draftContext, draftSend }: NominationAreaProps)
     const [isDragOver, setIsDragOver] = useState(false);
     const nominatedPlayer = draftContext.nominatedPlayer;
     const hasNomination = !!(nominatedPlayer && nominatedPlayer.player_id);
-    // Quiet drafter-only cue: green border when the nominated player is on
-    // the current budgeted team. Deliberately subtle (shoulder-surfers
+    // Quiet drafter-only cue: glow when the nominated player is on the
+    // current budgeted team. Deliberately subtle (shoulder-surfers
     // shouldn't read targets off the screen); String() bridges the
     // number/string player_id mix in budget rows.
     const isBudgetedTarget = hasNomination && Object.values(draftContext.budgetedPlayers ?? {}).some(
         (slot: any) => slot?.pick?.player_id != null && slot.pick.player_id !== "" &&
             String(slot.pick.player_id) === String(nominatedPlayer.player_id)
     );
+    // Tint tracks the tri-state favorite: green = target (true), yellow =
+    // neutral (null), red = avoid (false). Read live from the Dexie row so
+    // cycling the heart while a player is on the block recolors immediately;
+    // the state-machine snapshot is the fallback before the row loads.
+    const liveRow = useLiveQuery(
+        () => hasNomination
+            ? db.draft_picks.get([draftContext.draftId, nominatedPlayer.player_id])
+            : undefined,
+        [draftContext.draftId, hasNomination ? nominatedPlayer.player_id : null],
+    );
+    const favorite = liveRow ? (liveRow.player?.favorite ?? null) : (nominatedPlayer?.favorite ?? null);
+    const nominationBorder = favorite === true ? "#4ade80" : favorite === false ? "#f87171" : "#facc15";
+    const nominationBg = favorite === true ? "#f0fdf4" : favorite === false ? "#fef2f2" : "#fefce8";
 
     const handleDragOver = (e) => {
         e.preventDefault();
@@ -55,12 +70,10 @@ export const NominationArea = ({ draftContext, draftSend }: NominationAreaProps)
                 className="border-2 border-dashed rounded p-3 min-h-[140px] flex flex-col items-center justify-center"
                 style={{
                     borderColor: isDragOver ? "blue"
-                        : isBudgetedTarget ? "#4ade80"
-                        : hasNomination ? "#facc15"
+                        : hasNomination ? nominationBorder
                         : "#cbd5e1",
                     backgroundColor: isDragOver ? "#dbeafe"
-                        : isBudgetedTarget ? "#f0fdf4"
-                        : hasNomination ? "#fefce8"
+                        : hasNomination ? nominationBg
                         : "white",
                     boxShadow: isBudgetedTarget && !isDragOver ? "0 0 8px rgba(74, 222, 128, 0.45)" : "none",
                 }}
