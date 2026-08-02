@@ -25,3 +25,4 @@ scratch.py
 frontend/draftboard/.gitignore
 frontend/draftboard/dist/
 
+!*_missing_players.csv
