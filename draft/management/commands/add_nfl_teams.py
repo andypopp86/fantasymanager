@@ -1,29 +1,24 @@
-from email.policy import default
-from django.core.management.base import BaseCommand, CommandError
-
-import os 
-import json
-
+from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from draft import models as d
+from draft.management.commands.add_players import get_data, get_or_create_team
+
 
 class Command(BaseCommand):
-    # help = 'Closes the specified poll for voting'
-
-    def add_arguments(self, parser):
-        parser.add_argument('--delete_all_first', action='store_true', dest='delete_all_first', default=None)
+    help = ("Create the current year's NFLTeam rows from the Fantasy Football "
+            "Calculator ADP API. Idempotent. Optional since add_players now "
+            "creates missing team rows itself; kept for seeding teams alone.")
 
     def handle(self, *args, **options):
         this_year = timezone.now().year
-        data_path = os.path.join(os.getcwd(),'data','players.json')
-        nfl_team_codes = set()
-        with open(data_path, 'r') as f:
-            data = json.load(f)
-            player_ct = 0
-            for player_json in data['players']:
-                nfl_team_codes.add(player_json['team'])
-        
-        for team in nfl_team_codes:
-            d.NFLTeam.objects.create(code=team, year=this_year)
-                
+        data = get_data(this_year)
+        codes = {p['team'] for p in data['players'] if p.get('team')}
+
+        before = d.NFLTeam.objects.filter(year=this_year).count()
+        for code in sorted(codes):
+            get_or_create_team(code, this_year)
+        created = d.NFLTeam.objects.filter(year=this_year).count() - before
+        self.stdout.write(self.style.SUCCESS(
+            f'{len(codes)} team codes from FFC for {this_year}: '
+            f'{created} created, {len(codes) - created} already existed'))
