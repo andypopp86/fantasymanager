@@ -10,3 +10,4 @@ __pycache__
 data
 auto_configs
 .vscode
+!*_missing_players.csv
