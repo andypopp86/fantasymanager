@@ -132,7 +132,8 @@ spectators see an empty list.
 **Superuser sync endpoints** (`IsSuperuser` in `draft/api/permissions.py`):
 `/api/drafts/draft/spectator/drafts/` lists drafts flagged
 `available_to_spectators`; `/api/drafts/draft/spectator/<draft_id>/drafted_players/`
-lists that draft's drafted picks (manager, player, price, slot, timestamps).
+lists that draft's drafted picks (manager, player, price, slot, timestamps) —
+spectator-flagged drafts only, unflagged drafts 404 even for superusers.
 Purpose: a local copy of the site polls the hosted deploy to mirror a live
 draft. Machine-to-machine auth works out of the box via HTTP Basic
 (DRF's default `DEFAULT_AUTHENTICATION_CLASSES` includes `BasicAuthentication`)

@@ -368,8 +368,9 @@ class SpectatorDraftListAPI(APIView):
 
 
 class SpectatorDraftedPlayersAPI(APIView):
-    """Superuser-only sync endpoint: every drafted pick in a draft, ordered
-    by manager position then pick time."""
+    """Superuser-only sync endpoint: every drafted pick in a
+    spectator-flagged draft (unflagged drafts 404), ordered by manager
+    position then pick time."""
 
     permission_classes = [IsSuperuser]
 

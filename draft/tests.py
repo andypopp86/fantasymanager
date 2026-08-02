@@ -180,6 +180,9 @@ class ApiAuthorizationTests(TestCase):
         self.assertEqual(picks.data, [])
         self.assertEqual(
             self.client.get("/api/drafts/draft/spectator/999999/drafted_players/").status_code, 404)
+        # unflagged drafts (mockups) 404 even for superusers
+        self.assertEqual(
+            self.client.get(f"/api/drafts/draft/spectator/{self.hidden_draft.id}/drafted_players/").status_code, 404)
 
     def test_create_draft_with_spectator_flag(self):
         self.client.force_login(make_drafter_user())
