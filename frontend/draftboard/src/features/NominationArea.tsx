@@ -10,6 +10,14 @@ export const NominationArea = ({ draftContext, draftSend }: NominationAreaProps)
     const [isDragOver, setIsDragOver] = useState(false);
     const nominatedPlayer = draftContext.nominatedPlayer;
     const hasNomination = !!(nominatedPlayer && nominatedPlayer.player_id);
+    // Quiet drafter-only cue: green border when the nominated player is on
+    // the current budgeted team. Deliberately subtle (shoulder-surfers
+    // shouldn't read targets off the screen); String() bridges the
+    // number/string player_id mix in budget rows.
+    const isBudgetedTarget = hasNomination && Object.values(draftContext.budgetedPlayers ?? {}).some(
+        (slot: any) => slot?.pick?.player_id != null && slot.pick.player_id !== "" &&
+            String(slot.pick.player_id) === String(nominatedPlayer.player_id)
+    );
 
     const handleDragOver = (e) => {
         e.preventDefault();
@@ -45,7 +53,17 @@ export const NominationArea = ({ draftContext, draftSend }: NominationAreaProps)
             <div className="component-header">Nomination</div>
             <div
                 className="border-2 border-dashed rounded p-3 min-h-[140px] flex flex-col items-center justify-center"
-                style={{ borderColor: isDragOver ? "blue" : "#cbd5e1", backgroundColor: isDragOver ? "#dbeafe" : "white" }}
+                style={{
+                    borderColor: isDragOver ? "blue"
+                        : isBudgetedTarget ? "#4ade80"
+                        : hasNomination ? "#facc15"
+                        : "#cbd5e1",
+                    backgroundColor: isDragOver ? "#dbeafe"
+                        : isBudgetedTarget ? "#f0fdf4"
+                        : hasNomination ? "#fefce8"
+                        : "white",
+                    boxShadow: isBudgetedTarget && !isDragOver ? "0 0 8px rgba(74, 222, 128, 0.45)" : "none",
+                }}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
