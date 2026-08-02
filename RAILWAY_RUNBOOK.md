@@ -96,6 +96,11 @@ Two safety properties, learned the hard way:
   already-created drafts. New feed players are NOT auto-added to existing
   drafts (that's `Draft.add_missing_players`).
 
+Off-feed players also keep their old team link. On a DB whose links predate
+the code+year lookup fix, chase the refresh with
+`python manage.py relink_player_teams_for_current_year` (idempotent) to
+repoint any players stuck on another season's team row.
+
 ## Pull data back down (after using the hosted instance for real picks)
 
 ```powershell

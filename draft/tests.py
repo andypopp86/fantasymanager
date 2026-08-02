@@ -213,3 +213,35 @@ class ApiAuthorizationTests(TestCase):
         self.assertTrue(response.url.startswith("/login/"))
         self.client.force_login(self.spectator)
         self.assertEqual(self.client.get("/app/").status_code, 200)
+
+
+class RelinkPlayerTeamsTests(TestCase):
+    """relink_player_teams_for_current_year repoints players stuck on
+    another season's NFLTeam row (old unfiltered lookup / off-feed players)
+    at the current year's row for the same code."""
+
+    def test_relinks_stale_year_and_leaves_current_alone(self):
+        from django.core.management import call_command
+        from django.utils import timezone
+        from draft.models import NFLTeam
+
+        this_year = timezone.now().year
+        old_kc = NFLTeam.objects.create(code="KC", year=this_year - 3)
+        new_det = NFLTeam.objects.create(code="DET", year=this_year)
+
+        stale = make_player("Stale Link", "TE")
+        stale.team = old_kc
+        stale.save(update_fields=["team"])
+        current = make_player("Current Link", "RB")
+        current.team = new_det
+        current.save(update_fields=["team"])
+        teamless = make_player("No Team", "DEF")
+
+        call_command("relink_player_teams_for_current_year")
+
+        stale.refresh_from_db(); current.refresh_from_db(); teamless.refresh_from_db()
+        # relinked to a this-year KC row (created on the fly by get_or_create_team)
+        self.assertEqual(stale.team.code, "KC")
+        self.assertEqual(stale.team.year, this_year)
+        self.assertEqual(current.team_id, new_det.id)
+        self.assertIsNone(teamless.team)

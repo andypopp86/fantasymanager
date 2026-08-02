@@ -240,6 +240,11 @@ change the import there, once.
 - Refreshing the Railway instance: see "Refresh ADP / prices in-season" in
   `RAILWAY_RUNBOOK.md` (run the command locally with `DATABASE_URL` set to the
   hosted `DATABASE_PUBLIC_URL`).
+- `relink_player_teams_for_current_year` repoints players stuck on another
+  season's team row (legacy of the unfiltered lookup; also off-feed players,
+  since the refresh only relinks players present in the FFC feed). Run it
+  once after the first refresh on a DB with pre-fix data — cleaned 14 such
+  links on the Railway DB (2026-08-02).
 
 ## Client data layer (Dexie/IndexedDB)
 
