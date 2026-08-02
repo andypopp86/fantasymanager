@@ -7,7 +7,7 @@ from rest_framework.pagination import PageNumberPagination
 from drf_spectacular.utils import extend_schema
 
 from core.api.serializers.base import BaseSerializer, BaseInputSerializer
-from draft.api.permissions import IsDrafter, IsSpectatorVisible
+from draft.api.permissions import IsDrafter, IsSpectatorVisible, IsSuperuser
 from draft.services.draft.draft import DraftReadService, DraftManagersReadService, DraftBoardReadService, DraftWriteService
 
 class LargeResultsSetPagination(PageNumberPagination):
@@ -342,6 +342,63 @@ class DraftBoardAPI(APIView):
         output_data = [[pick for pick in draft_round] for draft_round in draft_board]
         return Response(output_data, status=status.HTTP_200_OK)
     
+
+
+class SpectatorDraftListAPI(APIView):
+    """Superuser-only sync endpoint: drafts flagged available_to_spectators.
+    Polled by a local copy of the site to mirror a draft running on the
+    hosted deploy."""
+
+    permission_classes = [IsSuperuser]
+
+    class SpectatorDraftOutputSerializer(BaseSerializer):
+        id = serializers.IntegerField()
+        year = serializers.IntegerField()
+        draft_name = serializers.CharField()
+        drafter = serializers.CharField()
+        locked = serializers.BooleanField()
+        starting_budget = serializers.IntegerField()
+        rounds = serializers.IntegerField()
+        date_created = serializers.DateTimeField()
+
+    def get(self, request):
+        drafts = DraftReadService(user=request.user).get_spectator_drafts()
+        output_data = [self.SpectatorDraftOutputSerializer.serialize(draft) for draft in drafts]
+        return Response(output_data, status=status.HTTP_200_OK)
+
+
+class SpectatorDraftedPlayersAPI(APIView):
+    """Superuser-only sync endpoint: every drafted pick in a draft, ordered
+    by manager position then pick time."""
+
+    permission_classes = [IsSuperuser]
+
+    class DraftedPlayerOutputSerializer(BaseSerializer):
+        id = serializers.IntegerField()
+        price = serializers.IntegerField()
+        position_slot = serializers.CharField()
+        created = serializers.DateTimeField()
+        last_update_time = serializers.DateTimeField()
+
+        class ManagerOutputSerializer(BaseSerializer):
+            id = serializers.IntegerField()
+            name = serializers.CharField()
+            position = serializers.IntegerField()
+            budget = serializers.FloatField()
+
+        manager = ManagerOutputSerializer(read_only=True)
+
+        class PlayerOutputSerializer(BaseSerializer):
+            player_id = serializers.IntegerField()
+            name = serializers.CharField()
+            position = serializers.CharField()
+
+        player = PlayerOutputSerializer(read_only=True)
+
+    def get(self, request, draft_id):
+        picks = DraftReadService(user=request.user).get_drafted_players(draft_id=draft_id)
+        output_data = [self.DraftedPlayerOutputSerializer.serialize(pick) for pick in picks]
+        return Response(output_data, status=status.HTTP_200_OK)
 
 
 class DraftSubmitPickAPI(APIView):

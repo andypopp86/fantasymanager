@@ -17,6 +17,11 @@ draft_urlpatterns = [
     path("<int:draft_id>/favorite_player/<int:player_id>/", api_views.DraftFavoritePickAPI.as_view(), name="favorite_player"),
     # /api/drafts/draft/${draft_id}/submit_pick/${manager_id}/${player_id}`
 
+    # spectator sync (superuser-only; polled by a local copy of the site to
+    # mirror a draft running on the hosted deploy)
+    path("spectator/drafts/", api_views.SpectatorDraftListAPI.as_view(), name="spectator_drafts"),
+    path("spectator/<int:draft_id>/drafted_players/", api_views.SpectatorDraftedPlayersAPI.as_view(), name="spectator_drafted_players"),
+
     # draft plans (standalone budget templates, not tied to a draft)
     path("plans/", api_views.DraftPlanListAPI.as_view(), name="draft_plan_list"),
     path("plans/<int:plan_id>/", api_views.DraftPlanDetailAPI.as_view(), name="draft_plan_detail"),
