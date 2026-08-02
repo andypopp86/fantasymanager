@@ -1,16 +1,8 @@
-import logging
 import csv
-logger = logging.getLogger(__name__)
-
-from email.policy import default
-from django.core.management.base import BaseCommand, CommandError
-
 import os
-import json
-import requests
 
+from django.core.management.base import BaseCommand
 from django.utils import timezone
-from django.db import models
 
 from draft import models as d
 
