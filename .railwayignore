@@ -11,3 +11,4 @@ data
 auto_configs
 .vscode
 !*_missing_players.csv
+!*_target_tiers.csv

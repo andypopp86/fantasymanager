@@ -243,6 +243,80 @@ filter and Rebudget only treat `true` as favorited. Ordering gotcha: Postgres
 sorts nulls first on `DESC`, so rank explicitly (see `favorite_rank` in
 `get_picks`) instead of ordering by `-player__favorite`.
 
+**Target tiers** (`Player.target_tier`, non-negative int, default `0` = untiered;
+`1` is the TOP tier and they ascend). Prep-time tiering, not a draft-time write:
+the app has no endpoint that sets it — you tier players **inline in /admin's
+player list** (`PlayerAdmin.list_editable = target_tier, favorite,
+override_price`; `player_id` stays the link column, so it can never join
+`list_editable`). Read side: `GET /api/drafts/draft/<id>/target_tiers/`
+(`IsDrafter`) → `[{tier, players: [...]}]`, best tier first,
+`DraftReadService.get_target_tiers`. **Availability comes from `DraftPick`
+(`drafted=False`), not from `Player`** — tiers are per draft, so a player taken
+in another draft still shows here. Tier 0 is excluded entirely; within a tier,
+players sort by `override_price || projected_price` desc.
+Because tiering is hand-done in /admin, it lives on one machine and has to be
+carried to the others: `write_target_tiers_to_csv` dumps `<year>_target_tiers.csv`
+(repo ROOT — `data/` is stripped from the builds) and
+`update_player_target_tiers` replays it. The file is the source of truth (tiered
+players it omits are reset to 0; `--no-clear` opts out), matching is on
+`(player_id, year)`, and it writes with `queryset.update()` because
+`Player.save()` would rewrite `projected_price`. Deploy-then-run via
+`railway ssh` as usual — see "Push target tiers up" in `RAILWAY_RUNBOOK.md`.
+
+UI: `features/TargetTiers.tsx` is the component (one column per tier,
+position-filter chips, 15s poll) and it renders in TWO places — a collapsible
+section **under the draft board** in `Draft.tsx` (shown by default; the "Tiers ▾"
+button brings it back after Hide) and the full-page `TargetTiersPage.tsx` at
+`/draft/:draftId/tiers`. Keep rendering in the shared component so the two can't
+drift. React Query dedupes the `["target_tiers", draftId]` key, so both mounted
+at once still cost one request. NOT on `SpectatorBoard` — tiers are the
+drafter's targets and forecasting them is exactly what that view withholds.
+
+It reads the server DIRECTLY (React Query), **not** through Dexie — a read-only
+view that never writes has no reason to enter the offline pipeline. The board's
+copy additionally takes `hidePlayerIds` (drafted player_ids projected from the
+LOCAL Dexie rows) so a pick you just submitted drops out of the tiers at once
+instead of lingering until the next poll.
+
+The tier strip scrolls HORIZONTALLY ONLY, and has **no height cap of any kind** —
+not per column, not on the strip. Under `items-start` every column is exactly as
+tall as its contents, so the ragged bottoms show how deep each tier is at a
+glance (the count badge in each header says it exactly); any vertical cap
+flattens the columns to one height and destroys that signal. This is a
+deliberate user preference — don't reintroduce a `max-h-*` here. Vertical
+scrolling belongs to the enclosing page / board column. Tier headers are
+`sticky top-0` so the label and count survive that scroll.
+
+**Board page scrolling — the PAGE scrolls, nothing nests its own scrollbar.**
+Placing the tier strip under the board forced two fixes, and both are load-bearing
+for anything else added below the grid:
+
+- `.draftboard-grid` no longer sets `height: 100vh` on desktop (`custom.css`).
+  That pin made the grid exactly one viewport tall, so anything under the board
+  had to live in an inner scroll container — the page scrollbar did nothing and
+  you had to find and scroll the board column instead. The grid now sizes to
+  content. Don't reintroduce the height, and don't give `.draft-main` an
+  `overflow-y` to compensate.
+- `body` is start-aligned, not centered (`index.css`). It's a flex container, and
+  Vite's template `place-items: center` centered it vertically; a centered flex
+  item taller than the viewport overflows in BOTH directions, so the top of the
+  page gets clipped with no way to scroll up to it. (This replaces the
+  mobile-only `align-items: flex-start` override that used to live in
+  `custom.css` for the same reason.)
+
+- The desktop tracks are `fit-content(45vw) minmax(0, 1fr)`, not `auto auto`.
+  Two `auto` tracks SHARE free space, which cost it both ways: the board column
+  (and anything under it) squeezed the sidebar tables into wrapping, and with a
+  short board the sidebar track stretched into a blank gap beside the budget
+  panel. Content-sizing the sidebar and giving the board `minmax(0, 1fr)` —
+  which absorbs ALL the slack, and whose `0` min lets it shrink past its content
+  into its own `.draft-board-scroll` — fixes both. The `45vw` cap keeps a long
+  player name from swallowing the board.
+
+The tier strip renders after `.draftboard-grid` as a full-width sibling, under
+the sidebar and board together (a user preference — it's a wide horizontal
+strip). That placement is only gap-free because of the track sizing above.
+
 **Winning-price gotcha:** the nominated-player object (`draftContext.nominatedPlayer`)
 has NO `.price` — the winning bid lives in `draftContext.nominationPrice`, threaded
 around as a separate `price`. Using `player.price` for a budget projected price renders

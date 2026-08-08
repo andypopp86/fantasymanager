@@ -219,6 +219,27 @@ export type DraftPlanOutput = {
     slots: Record<SlotName, DraftPlanPlayer | null>,
 }
 
+// ---- Target tiers (/api/drafts/draft/<id>/target_tiers/) ------------------
+// Manual tiering of Player.target_tier (1 = best tier; 0 = untiered, omitted).
+// The server only returns players still UNDRAFTED in that draft.
+
+export type TargetTierPlayer = {
+    player_id: number,
+    name: string,
+    position: string,
+    target_tier: number,
+    adp_formatted: number | string,
+    favorite: boolean | null,
+    notes: string | null,
+    team: string | null,
+    projected_price: number | string,
+}
+
+export type TargetTierOutput = {
+    tier: number,
+    players: TargetTierPlayer[],
+}
+
 // ---- Dexie table rows (lib/db.ts) -----------------------------------------
 // Modeled on the SERVER's rows, not the UI's lists: a DraftPickRow mirrors
 // DraftPick (one row per draft+player; "available" is just drafted=false),

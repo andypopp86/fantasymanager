@@ -142,6 +142,10 @@ class Player(models.Model):
     bye_week = models.IntegerField(null=True, blank=True)
     watched = models.BooleanField(default=False)
     target_type = models.CharField(max_length=20, choices=TARGET_TYPES, null=True, blank=True)
+    # Manual tiering for draft-day targeting: 0 = untiered (the default), 1 = the
+    # top tier, ascending. Edited inline in /admin's player list; surfaced by the
+    # target_tiers endpoint / the Tiers page.
+    target_tier = models.PositiveIntegerField(default=0)
 
     def __str__(self) -> str:
         return self.name

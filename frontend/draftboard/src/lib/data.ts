@@ -11,6 +11,7 @@ import type { DraftRetrieveOutput,
     DraftBudgetPickParams,
     DraftCreateParams,
     DraftPlanOutput,
+    TargetTierOutput,
     CurrentUserOutput
 } from "./draft.schemas";
 
@@ -315,6 +316,20 @@ export const draftRetrieve = <
     ): Promise<TData> => {
       return axios.default.post(`/api/drafts/draft/${draft_id}/favorite_player/${player_id}/`, {
           options,
+      })
+    }
+
+    // Undrafted players grouped by Player.target_tier (set in /admin), best
+    // tier first. Read straight from the server — tiers are reference data the
+    // board never writes, so they stay out of the Dexie pipeline.
+    export const draftTargetTiersRetrieve = <
+    TData = AxiosResponse<TargetTierOutput[]>,
+    >(
+      draft_id: number,
+      options?: AxiosRequestConfig,
+    ): Promise<TData> => {
+      return axios.default.get(`/api/drafts/draft/${draft_id}/target_tiers/`, {
+          ...options,
       })
     }
 

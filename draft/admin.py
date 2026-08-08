@@ -36,10 +36,14 @@ class FlexFilter(admin.SimpleListFilter):
 
 
 class PlayerAdmin(admin.ModelAdmin):
-    list_display = ('player_id', 'year', 'name', 'team', 'favorite', 'nickname',  'position',  'adp_formatted',  'projected_price',  'override_price')
+    list_display = ('player_id', 'year', 'name', 'team', 'target_tier', 'favorite', 'nickname',  'position',  'adp_formatted',  'projected_price',  'override_price')
+    # Edit tiers (and the other targeting fields) straight from the list — tiering
+    # a board's worth of players one change-form at a time is unworkable.
+    # player_id stays the link column, so it can't be list_editable.
+    list_editable = ('target_tier', 'favorite', 'override_price')
     search_fields = ('name', 'position', )
-    list_filter = ('position', 'year', 'team', 'favorite')
-    fields = ('player_id', 'notes', 'team', 'year',  'name', 'nickname', 'position',  'adp_formatted',  'projected_price', 'adp_price', 'override_price', 'skepticism', 'favorite', )
+    list_filter = ('position', 'year', 'team', 'target_tier', 'favorite')
+    fields = ('player_id', 'notes', 'team', 'year',  'name', 'nickname', 'position',  'adp_formatted',  'projected_price', 'adp_price', 'override_price', 'skepticism', 'favorite', 'target_tier', )
     
 class DraftAdmin(admin.ModelAdmin):
     list_display = ('draft_name', 'year', 'drafter', 'projected_draft', 'available_to_spectators', 'date_created')

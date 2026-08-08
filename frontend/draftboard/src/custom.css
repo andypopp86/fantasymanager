@@ -11,13 +11,27 @@
     width: 100%;
 }
 
+/* No height here on purpose. This used to be `height: 100vh`, which pinned the
+   board to the viewport and forced anything below it (the target-tiers strip)
+   into an inner scroll container — so the page scrollbar did nothing and you
+   had to scroll the board column itself. The grid now sizes to its content and
+   the PAGE scrolls, which is what everything below it depends on. */
 @media (min-width: 1024px) {
     .draftboard-grid {
         grid-template-areas:
             "sidebar main";
-        grid-template-columns: auto auto;
-        grid-template-rows: 1fr;
-        height: 100vh;
+        /* Was `auto auto`, where the two tracks SHARE the free space: the board
+           column's content (and anything under it) could squeeze the sidebar
+           into wrapping, and with a short board the sidebar track instead
+           stretched into a blank gap beside the budget panel. Now:
+           - sidebar: sized to its own content — the players/budget tables are
+             `lg:w-auto`, so their natural width is the no-wrap width — capped at
+             45vw so a long player name can't swallow the board.
+           - board: minmax(0, 1fr) takes ALL the leftover space, which is what
+             stops the sidebar stretching, and the 0 min lets it shrink past its
+             content (it has its own .draft-board-scroll) instead of pushing back
+             on the sidebar. */
+        grid-template-columns: fit-content(45vw) minmax(0, 1fr);
     }
 }
 
@@ -85,12 +99,5 @@
     input,
     select {
         font-size: 16px;
-    }
-
-    /* index.css centers the app vertically (Vite template default). On a phone
-       that leaves dead space above the header whenever the panel happens to be
-       shorter than the viewport. */
-    body {
-        align-items: flex-start;
     }
 }

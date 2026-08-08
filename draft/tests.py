@@ -1,4 +1,9 @@
+import os
+import tempfile
+from unittest import mock
+
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from django.test import TestCase
 
 from draft.models import DRAFT_PLAN_SLOTS, Draft, DraftPick, DraftPlan, Manager, Player
@@ -273,6 +278,168 @@ class BudgetedPicksActualPriceTests(TestCase):
         picks = DraftReadService(user=None).get_budgeted_picks(draft_id=draft.id)
         self.assertEqual(picks["RB1"]["pick"]["actual_price"], 60)
         self.assertEqual(int(picks["RB1"]["pick"]["projected_price"]), 70)
+
+
+class TargetTierTests(TestCase):
+    """Target tiers group UNDRAFTED players by Player.target_tier, best tier
+    first. Untiered (0) players are excluded, and availability is read from
+    this draft's DraftPicks, not from the Player row."""
+
+    def setUp(self):
+        from draft.services.draft.draft import DraftReadService
+        self.service = DraftReadService(user=None)
+        self.draft = Draft.objects.create(year=2026, draft_name="tiers")
+        self.manager = Manager.objects.create(draft=self.draft, name="me", drafter=True, position=0)
+
+    def add_pick(self, player, tier, drafted=False):
+        player.target_tier = tier
+        player.save(update_fields=["target_tier"])
+        return DraftPick.objects.create(
+            draft=self.draft, player=player,
+            manager=self.manager if drafted else None,
+            price=10 if drafted else None,
+            drafted=drafted, position_slot="RB1" if drafted else None,
+        )
+
+    def test_groups_undrafted_players_by_tier(self):
+        top = make_player("Top RB", "RB")
+        second = make_player("Second WR", "WR")
+        self.add_pick(top, 1)
+        self.add_pick(second, 2)
+
+        tiers = self.service.get_target_tiers(draft_id=self.draft.id)
+
+        self.assertEqual([tier["tier"] for tier in tiers], [1, 2])
+        self.assertEqual([pick.player for pick in tiers[0]["picks"]], [top])
+        self.assertEqual([pick.player for pick in tiers[1]["picks"]], [second])
+
+    def test_excludes_untiered_and_drafted_players(self):
+        untiered = make_player("Untiered RB", "RB")
+        gone = make_player("Gone RB", "RB")
+        available = make_player("Available RB", "RB")
+        self.add_pick(untiered, 0)
+        self.add_pick(gone, 1, drafted=True)
+        self.add_pick(available, 1)
+
+        tiers = self.service.get_target_tiers(draft_id=self.draft.id)
+
+        self.assertEqual(len(tiers), 1)
+        self.assertEqual([pick.player for pick in tiers[0]["picks"]], [available])
+
+    def test_tier_players_order_by_price_descending(self):
+        cheap = make_player("Cheap RB", "RB")
+        pricey = make_player("Pricey RB", "RB")
+        pricey.projected_price = 50
+        pricey.save(update_fields=["projected_price"])
+        # override_price wins over projected_price in the ordering annotation.
+        overridden = make_player("Overridden RB", "RB")
+        overridden.override_price = 70
+        overridden.save(update_fields=["override_price"])
+        for player in (cheap, pricey, overridden):
+            self.add_pick(player, 1)
+
+        tiers = self.service.get_target_tiers(draft_id=self.draft.id)
+
+        self.assertEqual(
+            [pick.player for pick in tiers[0]["picks"]],
+            [overridden, pricey, cheap],
+        )
+
+
+class TargetTierCsvTests(TestCase):
+    """write_target_tiers_to_csv → update_player_target_tiers is how hand-set
+    tiers move from the machine whose /admin has them to the hosted DB, so the
+    round trip and the file's source-of-truth semantics are the contract."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.path = os.path.join(self.tmpdir, "2026_target_tiers.csv")
+        # Both commands resolve the file through csv_path(); point them at a
+        # tempfile instead of the repo root.
+        for module in (
+            "draft.management.commands.write_target_tiers_to_csv.csv_path",
+            "draft.management.commands.update_player_target_tiers.csv_path",
+        ):
+            patcher = mock.patch(module, return_value=self.path)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+        self.top = make_player("Top RB", "RB")
+        self.mid = make_player("Mid WR", "WR")
+        self.untiered = make_player("Untiered TE", "TE")
+
+    def set_tiers(self, **tiers):
+        for player, tier in tiers.items():
+            getattr(self, player).target_tier = tier
+            getattr(self, player).save(update_fields=["target_tier"])
+
+    def reload(self, player):
+        return Player.objects.get(pk=player.pk)
+
+    def test_round_trip_restores_tiers(self):
+        self.set_tiers(top=1, mid=3)
+        call_command("write_target_tiers_to_csv", year=2026)
+
+        Player.objects.update(target_tier=0)
+        call_command("update_player_target_tiers", year=2026)
+
+        self.assertEqual(self.reload(self.top).target_tier, 1)
+        self.assertEqual(self.reload(self.mid).target_tier, 3)
+        self.assertEqual(self.reload(self.untiered).target_tier, 0)
+
+    def test_unlisted_players_are_cleared(self):
+        self.set_tiers(top=1)
+        call_command("write_target_tiers_to_csv", year=2026)
+        # Tiered on the target DB but absent from the file: the file wins.
+        self.set_tiers(mid=2)
+
+        call_command("update_player_target_tiers", year=2026)
+
+        self.assertEqual(self.reload(self.top).target_tier, 1)
+        self.assertEqual(self.reload(self.mid).target_tier, 0)
+
+    def test_no_clear_keeps_unlisted_tiers(self):
+        self.set_tiers(top=1)
+        call_command("write_target_tiers_to_csv", year=2026)
+        self.set_tiers(mid=2)
+
+        call_command("update_player_target_tiers", year=2026, no_clear=True)
+
+        self.assertEqual(self.reload(self.mid).target_tier, 2)
+
+    def test_dry_run_writes_nothing(self):
+        self.set_tiers(top=1)
+        call_command("write_target_tiers_to_csv", year=2026)
+        Player.objects.update(target_tier=0)
+
+        call_command("update_player_target_tiers", year=2026, dry_run=True)
+
+        self.assertEqual(self.reload(self.top).target_tier, 0)
+
+    def test_import_leaves_projected_price_alone(self):
+        """Player.save() forces projected_price to max(price or 0, 1), so the
+        import must go through queryset.update() or it silently reprices."""
+        self.set_tiers(top=1)
+        call_command("write_target_tiers_to_csv", year=2026)
+        Player.objects.filter(pk=self.top.pk).update(projected_price=None)
+
+        call_command("update_player_target_tiers", year=2026)
+
+        refreshed = self.reload(self.top)
+        self.assertEqual(refreshed.target_tier, 1)
+        self.assertIsNone(refreshed.projected_price)
+
+    def test_other_years_are_untouched(self):
+        """player_id repeats across years (it's unique per year), so the import
+        must scope to the year it was told about."""
+        self.set_tiers(top=1)
+        call_command("write_target_tiers_to_csv", year=2026)
+        last_year = make_player("Top RB", "RB", year=2025, player_id=self.top.player_id)
+        Player.objects.filter(pk=last_year.pk).update(target_tier=4)
+
+        call_command("update_player_target_tiers", year=2026)
+
+        self.assertEqual(self.reload(last_year).target_tier, 4)
 
 
 class FavoriteCycleTests(TestCase):

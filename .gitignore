@@ -25,4 +25,7 @@ scratch.py
 frontend/draftboard/.gitignore
 frontend/draftboard/dist/
 
+# ...and these CSVs are hand-curated project data that must ship with the
+# deploy, not data dumps (see RAILWAY_RUNBOOK.md)
 !*_missing_players.csv
+!*_target_tiers.csv

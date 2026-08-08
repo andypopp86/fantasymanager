@@ -385,6 +385,29 @@ class DraftReadService(BaseService):
         watched_players = d.Player.objects.filter(year=draft.year, watched=True).order_by("-projected_price")
         return watched_players
     
+    def get_target_tiers(self, draft_id):
+        """Undrafted players grouped by Player.target_tier, best tier (1) first.
+
+        Availability is read from DraftPick (drafted=False) rather than Player, so
+        the tiers reflect THIS draft's board — a player taken in another draft still
+        shows as available here. target_tier 0 means untiered and is excluded.
+        """
+        picks = d.DraftPick.objects.filter(
+            draft_id=draft_id,
+            drafted=False,
+            player__target_tier__gt=0,
+        ).select_related("player", "player__team").annotate(
+            projected_price=Case(
+                When(player__override_price__isnull=False, then=F("player__override_price")),
+                default=F("player__projected_price"),
+            )
+        ).order_by("player__target_tier", "-projected_price", "player__adp_formatted")
+
+        tiers = {}
+        for pick in picks:
+            tiers.setdefault(pick.player.target_tier, []).append(pick)
+        return [{"tier": tier, "picks": tier_picks} for tier, tier_picks in sorted(tiers.items())]
+
     def get_budgeted_player(self, draft_id, position_slot):
         return d.BudgetPlayer.objects.filter(draft_id=draft_id, position=position_slot).first()
 
