@@ -317,6 +317,37 @@ The tier strip renders after `.draftboard-grid` as a full-width sibling, under
 the sidebar and board together (a user preference — it's a wide horizontal
 strip). That placement is only gap-free because of the track sizing above.
 
+**Clicking a tier player opens `BudgetFromTierModal`** — a STAGED, whole-plan
+budget editor, not a swap. `BudgetConflictModal` (still live, on the drafting
+path) can only trade one player for one slot, and that's the wrong shape here:
+working a target in usually means dropping several players and MOVING the
+incumbent rather than losing them. So slots and an "out of the budget" tray are
+two ends of one staging area — ✕ drops a player to the tray, clicking a tray
+player then a slot places or moves them, and whatever is still in the tray on
+Apply gets unbudgeted. Nothing is written until Apply.
+
+The pure logic is `utils/budgetStaging.ts` (same split as
+`strategyShuffle.ts`/`RebudgetModal`); `lib/mutations.ts::applyBudgetChanges`
+commits it. Three things there are load-bearing:
+
+- **`unbudget` is REMOVALS ONLY — never movers.** `budget_pick` get_or_creates
+  on `(draft, manager, player)` so re-budgeting MOVES the row, but
+  `unbudget_pick` nulls the row's `manager`, so unbudget-then-budget on one
+  player no longer matches and creates a SECOND `BudgetPlayer` row. A mover is
+  re-placed and nothing else.
+- That's only safe because staging guarantees **every displaced player is either
+  re-placed or removed** — never dropped. `budgetPick` clears the target slot in
+  Dexie only, with no server counterpart, so an orphaned row reclaims its slot
+  on the next hydrate.
+- Removals are applied before placements, sequentially (the write queue replays
+  FIFO).
+
+The modal FREEZES its slot snapshot and baseline on open (`useState` initializer,
+not `useMemo`): `budgetedPlayers` is a live Dexie projection, so a pick landing
+mid-edit would otherwise move the baseline out from under the staged
+assignments and diff against a plan the user never saw. Drafted budget rows are
+flagged and locked, as in `RebudgetModal`.
+
 **Winning-price gotcha:** the nominated-player object (`draftContext.nominatedPlayer`)
 has NO `.price` — the winning bid lives in `draftContext.nominationPrice`, threaded
 around as a separate `price`. Using `player.price` for a budget projected price renders
@@ -399,6 +430,14 @@ change the import there, once.
 - **Flow state** (`draftStateMachine` / `useDraftState`): nomination, price,
   drag, slot targeting — a module-scope singleton actor so it survives SPA
   navigation. `Draft.tsx` sends `reset_flow` when the draft id changes.
+- **Never coerce `player_id` on its way into a mutation.** IndexedDB compound
+  keys are TYPE-SENSITIVE, and the server sends `player_id` as a number, so
+  `budget_picks.delete([draftId, "2"])` silently misses the row stored at
+  `[draftId, 2]`. The failure is deceptive: the API call still succeeds, so the
+  change looks lost locally but correct after any refetch ("it only removed the
+  player once I refreshed"). Stringify for map keys and comparisons only — see
+  `utils/budgetStaging.ts`, which keeps the raw id on every occupant and does
+  lookups through a separate `key()`.
 - **Schema changes** in `db.ts` APPEND a new `this.version(n)` block (Dexie
   upgrades browsers sequentially); never edit or remove an existing block.
 
@@ -464,11 +503,18 @@ refetch). Plan players are priced `override_price || projected_price`. The page
 reads the draft via `useDraftData`, so the board must have been opened once to
 hydrate Dexie.
 
-**Running backend tests**: `.venv/bin/python manage.py test draft` — requires the
-`fantasymanager-db` Docker container running (`docker start fantasymanager-db`,
-Postgres on :5434). `fantasy/settings.py` sets `TESTING = 'test' in sys.argv` and
-strips `debug_toolbar` from apps/middleware under tests (it refuses to run when
-Django forces DEBUG=False).
+**Running backend tests**: `.venv/bin/python manage.py test draft --keepdb` —
+requires the `fantasymanager-db` Docker container running
+(`docker start fantasymanager-db`, Postgres on :5434). `fantasy/settings.py` sets
+`TESTING = 'test' in sys.argv` and strips `debug_toolbar` from apps/middleware
+under tests (it refuses to run when Django forces DEBUG=False).
+
+`--keepdb` reuses the test database instead of rebuilding and dropping it every
+run (1.9s → 1.4s today, and the gap widens as the migration count grows — it's
+skipping a full replay of all 81 migrations). New migrations still get applied to
+the kept DB, so it stays correct as the schema moves. The exception is EDITING or
+DELETING an existing migration, which can leave the kept DB drifted from the
+graph and fail confusingly — run once without the flag to rebuild it.
 
 **Testing philosophy (standing rule): test business logic only.** Do NOT write
 tests that exercise well-established framework behavior — DRF

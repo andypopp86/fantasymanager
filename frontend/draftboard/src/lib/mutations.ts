@@ -150,6 +150,43 @@ export const applyPlanSelections = async (
     }
 };
 
+// Apply an arbitrary rearrangement of the budget in one go: any number of
+// players leaving, moving between slots, or joining. Used by the tier → budget
+// editor, which stages a whole plan before committing it.
+//
+// `unbudget` is REMOVALS ONLY. A player who merely moves is re-budgeted at the
+// new slot and nothing more — the server's budget_pick get_or_creates on
+// (draft, manager, player), so it MOVES the existing row. Unbudgeting a mover
+// first would actually corrupt things: unbudget_pick nulls the row's manager,
+// so the following budget_pick no longer matches it and creates a SECOND row.
+//
+// Removals go first so a slot someone is moving into isn't still claimed by the
+// player leaving it. Callers must preserve the staging invariant: every
+// displaced player is either re-placed or listed for removal, never dropped
+// silently — `budgetPick` clears the target slot only in Dexie, with no server
+// counterpart, so an orphan row would reclaim its slot on the next hydrate.
+export const applyBudgetChanges = async (
+    draftId: number,
+    drafterId: number,
+    changes: {
+        unbudget: (number | string)[],
+        place: {
+            slot: SlotName,
+            player: { player_id: number | string, name: string, position: string },
+            projectedPrice: number | string,
+        }[],
+    },
+) => {
+    // Sequential, not Promise.all: the write queue replays FIFO, and a place
+    // that reached the server before the removals would be racing them.
+    for (const playerId of changes.unbudget) {
+        await unbudgetPick(draftId, drafterId, playerId);
+    }
+    for (const { slot, player, projectedPrice } of changes.place) {
+        await budgetPick(draftId, drafterId, player, slot, projectedPrice);
+    }
+};
+
 export const watchPick = async (
     draftId: number,
     managerId: number,

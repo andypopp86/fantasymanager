@@ -16,6 +16,10 @@ type TargetTiersProps = {
     hidePlayerIds?: Set<string>,
     // Rendered instead of the columns when nothing is tiered at all.
     emptyState?: React.ReactNode,
+    // Opens the budget editor for a player. Omitted where there's no local
+    // draft data to edit against (an unhydrated standalone page), in which case
+    // the cards stay inert rather than pretending to be clickable.
+    onPlayerClick?: (player: TargetTierPlayer) => void,
 };
 
 // The tier board itself — one column per Player.target_tier, listing only
@@ -26,7 +30,7 @@ type TargetTiersProps = {
 // reference data this view never writes (same call as SpectatorBoard). React
 // Query dedupes the ["target_tiers", draftId] key, so mounting both costs one
 // request.
-export default function TargetTiers({ draftId, hidePlayerIds, emptyState }: TargetTiersProps) {
+export default function TargetTiers({ draftId, hidePlayerIds, emptyState, onPlayerClick }: TargetTiersProps) {
     const [positions, setPositions] = useState<string[]>([]);
 
     const { data: tiers, isLoading, dataUpdatedAt, refetch } = useQuery({
@@ -125,8 +129,16 @@ export default function TargetTiers({ draftId, hidePlayerIds, emptyState }: Targ
                                 {players.map((player) => (
                                     <li
                                         key={player.player_id}
-                                        className="bg-white border border-gray-200 rounded-md px-2 py-1.5 text-sm"
-                                        title={player.notes || undefined}
+                                        className={
+                                            "bg-white border border-gray-200 rounded-md px-2 py-1.5 text-sm" +
+                                            (onPlayerClick ? " cursor-pointer hover:border-blue-400 hover:bg-blue-50" : "")
+                                        }
+                                        title={
+                                            onPlayerClick
+                                                ? [player.notes, `Budget ${player.name}`].filter(Boolean).join(" — ")
+                                                : player.notes || undefined
+                                        }
+                                        onClick={onPlayerClick ? () => onPlayerClick(player) : undefined}
                                     >
                                         <div className="flex items-center gap-1.5">
                                             <span
