@@ -44,7 +44,7 @@ export const BudgetedPicks = ({draftContext, draftSend}) => {
                     onClick={shuffleBudget}
                 >🔀</button>
             </div>
-            <table>
+            <table className="w-full lg:w-auto">
                 <thead>
                     <tr className="component-subheader">
                         <th>Player Name</th>

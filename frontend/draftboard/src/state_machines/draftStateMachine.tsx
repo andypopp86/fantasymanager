@@ -44,6 +44,14 @@ export const draftStateMachine = createMachine({
     },
     player_nominated: {
         on: {
+            // Tapping/dragging another player swaps who's on the block, rather
+            // than being ignored until Cancel — the tap flow leans on this.
+            'nominate_player': {
+                actions: assign({
+                    nominatedPlayer: ({ event }) => event.player,
+                    nominationPrice: ({ event }) => Math.round(parseFloat(event.player.projected_price)) || 1,
+                }),
+            },
             'set_nomination_price': {
                 actions: assign({
                     nominationPrice: ({ event }) => event.price,
