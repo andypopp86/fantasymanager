@@ -141,6 +141,17 @@ class Player(models.Model):
     adp_formatted = models.DecimalField(max_digits=8, decimal_places=2)
     projected_price = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     override_price = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    # The drafter's WALK-AWAY price: stop bidding above this. Hand-set in /admin,
+    # unrelated to the derived prices around it — it's a decision, not a
+    # valuation. Shown in the nomination area, coloured against the effective
+    # projected price (override_price or projected_price). Null = no view.
+    my_price = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    # Why my_price differs from the projection. Deliberately free text sitting
+    # right beside the number in /admin's list, so writing down the reasoning is
+    # the path of least resistance — an unexplained variance is usually a gut
+    # call that won't survive the room. PREP-TIME ONLY: not serialized, never
+    # shown on the board.
+    my_price_rationale = models.TextField(null=True, blank=True)
     position_price = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     adp_price = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     nickname = models.CharField(max_length=200, null=True, blank=True)

@@ -395,6 +395,31 @@ class PlayerProjectionFlagTests(TestCase):
         self.assertIsNone(rows["Neutral TE"]["defensive_impact"])
         self.assertIsNone(rows["Neutral TE"]["team"])
 
+    def test_my_price_is_exposed_but_its_rationale_is_not(self):
+        """my_price drives the nomination-area figure, so it has to survive the
+        serializer. Its rationale is prep-time reasoning for /admin only and must
+        NOT reach the board."""
+        from draft.api.views.draft import DraftPicksOutputSerializer
+        from draft.services.draft.draft import DraftReadService
+
+        draft = Draft.objects.create(year=2026, draft_name="my price")
+        player = make_player("Priced RB", "RB")
+        Player.objects.filter(pk=player.pk).update(
+            my_price=41, my_price_rationale="thin depth chart behind him")
+        unpriced = make_player("Unpriced WR", "WR")
+        DraftPick.objects.create(draft=draft, player=player, drafted=False)
+        DraftPick.objects.create(draft=draft, player=unpriced, drafted=False)
+
+        picks = DraftReadService(user=None).get_available_players(draft_id=draft.id)
+        rows = {
+            row["player"]["name"]: row["player"]
+            for row in (DraftPicksOutputSerializer.serialize(pick) for pick in picks)
+        }
+        self.assertEqual(int(float(rows["Priced RB"]["my_price"])), 41)
+        # No view serializes as null, which renders nothing.
+        self.assertIsNone(rows["Unpriced WR"]["my_price"])
+        self.assertNotIn("my_price_rationale", rows["Priced RB"])
+
 
 class TargetTierCsvTests(TestCase):
     """write_target_tiers_to_csv → update_player_target_tiers is how hand-set

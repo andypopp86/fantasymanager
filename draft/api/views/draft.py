@@ -224,6 +224,10 @@ class DraftPicksOutputSerializer(BaseSerializer):
         projected_price = serializers.DecimalField(max_digits=8, decimal_places=2)
         position_price = serializers.DecimalField(max_digits=8, decimal_places=2)
         adp_price = serializers.DecimalField(max_digits=8, decimal_places=2)
+        # The drafter's walk-away price, shown in the nomination area.
+        my_price = serializers.DecimalField(max_digits=8, decimal_places=2, allow_null=True)
+        # my_price_rationale is deliberately NOT serialized — it's prep-time
+        # reasoning for /admin only, and the board has no use for it.
         favorite = serializers.BooleanField(allow_null=True)
         notes = serializers.CharField()
         target_type = serializers.CharField(allow_null=True, required=False)
