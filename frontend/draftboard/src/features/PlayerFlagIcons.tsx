@@ -33,14 +33,16 @@ const PLAYER_FLAGS: FlagSpec[] = [
     // Carrying an injury worth pricing in.
     { key: "injury", icon: faUserInjured, color: BAD, label: "Injury",
         active: (player) => !!player.has_injury },
-    // Scheme/staff helping or hurting what they'd otherwise produce. Null means
-    // no view and draws nothing. FontAwesome free has no referee or whistle
-    // icon (both Pro), so faFlag stands in — the penalty flag is the referee's
-    // signature, and it reads either way in red or green.
+    // Scheme/staff helping or hurting what they'd otherwise produce. Read
+    // through the TEAM — coaching is a property of the staff, so it's set once
+    // per team and every player on the roster inherits it. Null (or no team at
+    // all) means no view and draws nothing. FontAwesome free has no referee or
+    // whistle icon (both Pro), so faFlag stands in — the penalty flag is the
+    // referee's signature, and it reads either way in red or green.
     { key: "coaching-bad", icon: faFlag, color: BAD, label: "Bad coaching",
-        active: (player) => player.coaching_impact === "bad" },
+        active: (player) => player.team?.coaching_impact === "bad" },
     { key: "coaching-good", icon: faFlag, color: GOOD, label: "Good coaching",
-        active: (player) => player.coaching_impact === "good" },
+        active: (player) => player.team?.coaching_impact === "good" },
 ];
 
 type PlayerFlagIconsProps = {

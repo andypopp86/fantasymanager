@@ -230,7 +230,6 @@ class DraftPicksOutputSerializer(BaseSerializer):
         # Hand-set warning flags, rendered as icons in the nomination area.
         is_projection = serializers.BooleanField()
         has_injury = serializers.BooleanField()
-        coaching_impact = serializers.CharField(allow_null=True)
 
         class NFLTeamOutputSerializer(BaseSerializer):
             code = serializers.CharField()
@@ -243,6 +242,8 @@ class DraftPicksOutputSerializer(BaseSerializer):
             early_season_te = serializers.IntegerField()
             early_season_def = serializers.IntegerField()
             defensive_ranking = serializers.IntegerField()
+            # Read through the player's team by the nomination flag icons.
+            coaching_impact = serializers.CharField(allow_null=True)
         
         team = NFLTeamOutputSerializer(read_only=True)
 

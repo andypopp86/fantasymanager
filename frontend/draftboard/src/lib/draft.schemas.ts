@@ -187,9 +187,10 @@ export type PlayerDetail = {
     // than production actually delivered:
     is_projection?: boolean,
     has_injury?: boolean,
-    // Tri-state like favorite: null = no view, and no icon is drawn.
-    coaching_impact?: "good" | "bad" | null,
-    team?: Record<string, any> | null,
+    // Coaching is NOT a player field — it lives on the team (a property of the
+    // staff) and is read through `team.coaching_impact`. Tri-state like
+    // favorite: null = no view, and no icon is drawn.
+    team?: (Record<string, any> & { coaching_impact?: "good" | "bad" | null }) | null,
     [stat: string]: any, // points, yards, tds, … (stat-selector fields)
 }
 

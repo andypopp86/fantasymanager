@@ -93,6 +93,11 @@ class NFLTeam(models.Model):
     name = models.CharField(max_length=100, null=True, blank=True)
     short_name = models.CharField(max_length=50, null=True, blank=True)
     year = models.IntegerField(null=True, blank=True)
+    # Whether the scheme/staff helps or hurts what their players would otherwise
+    # produce. Lives on the TEAM — it's a property of the staff, so setting it
+    # once covers every player on the roster. Players read it through
+    # `player.team`; null = no view, and no icon is drawn.
+    coaching_impact = models.CharField(max_length=10, choices=COACHING_IMPACTS, null=True, blank=True)
     playoff_weather_score = models.IntegerField(default=None, blank=True, null=True)
     playoff_schedule = models.IntegerField(default=None, blank=True, null=True)
     early_season_schedule = models.IntegerField(default=None, blank=True, null=True)
@@ -162,9 +167,8 @@ class Player(models.Model):
     is_projection = models.BooleanField(default=False)
     # Carrying an injury worth pricing in.
     has_injury = models.BooleanField(default=False)
-    # Whether the scheme/staff helps or hurts what they'd otherwise produce.
-    # Tri-state like `favorite`: null = no view, and no icon is drawn.
-    coaching_impact = models.CharField(max_length=10, choices=COACHING_IMPACTS, null=True, blank=True)
+    # NOTE: coaching lives on NFLTeam.coaching_impact, not here — it's a property
+    # of the staff, and players read it through `player.team`.
 
     def __str__(self) -> str:
         return self.name

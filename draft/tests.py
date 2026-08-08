@@ -358,12 +358,20 @@ class PlayerProjectionFlagTests(TestCase):
         from draft.api.views.draft import DraftPicksOutputSerializer
         from draft.services.draft.draft import DraftReadService
 
+        from draft.models import NFLTeam
+
         draft = Draft.objects.create(year=2026, draft_name="projections")
+        # Coaching lives on the TEAM and is read through player.team, so the
+        # nested team serializer has to carry it too.
+        bad_staff = NFLTeam.objects.create(code="BAD", year=2026, coaching_impact="bad")
+        good_staff = NFLTeam.objects.create(code="GUD", year=2026, coaching_impact="good")
+
         risky = make_player("Projection RB", "RB")
         Player.objects.filter(pk=risky.pk).update(
-            is_projection=True, has_injury=True, coaching_impact="bad")
+            is_projection=True, has_injury=True, team=bad_staff)
         proven = make_player("Proven WR", "WR")
-        Player.objects.filter(pk=proven.pk).update(coaching_impact="good")
+        Player.objects.filter(pk=proven.pk).update(team=good_staff)
+        # No team at all must not blow up the lookup — it just draws no icon.
         neutral = make_player("Neutral TE", "TE")
         for player in (risky, proven, neutral):
             DraftPick.objects.create(draft=draft, player=player, drafted=False)
@@ -374,13 +382,12 @@ class PlayerProjectionFlagTests(TestCase):
             for row in (DraftPicksOutputSerializer.serialize(pick) for pick in picks)
         }
         self.assertEqual(
-            [rows["Projection RB"][f] for f in ("is_projection", "has_injury", "coaching_impact")],
-            [True, True, "bad"])
+            [rows["Projection RB"][f] for f in ("is_projection", "has_injury")], [True, True])
+        self.assertEqual(rows["Projection RB"]["team"]["coaching_impact"], "bad")
         self.assertEqual(
-            [rows["Proven WR"][f] for f in ("is_projection", "has_injury", "coaching_impact")],
-            [False, False, "good"])
-        # No view on coaching serializes as null, which draws no icon.
-        self.assertIsNone(rows["Neutral TE"]["coaching_impact"])
+            [rows["Proven WR"][f] for f in ("is_projection", "has_injury")], [False, False])
+        self.assertEqual(rows["Proven WR"]["team"]["coaching_impact"], "good")
+        self.assertIsNone(rows["Neutral TE"]["team"])
 
 
 class TargetTierCsvTests(TestCase):
