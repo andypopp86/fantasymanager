@@ -1,45 +1,58 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { applyBudgetChanges } from "../lib/mutations";
 import { POSITION_BG_COLORS, POSITION_FG_COLORS } from "../utils/colors";
 import {
     currentSlotByPlayer,
     diffStagedBudget,
-    initialAssignments,
+    initialStaging,
     isEligible,
     key,
     stagedSpend,
     toStagedSlots,
 } from "../utils/budgetStaging";
-import type { BaselineEntry, StagedOccupant, StagedSlot } from "../utils/budgetStaging";
+import type { BaselineEntry, BudgetChanges, StagedOccupant, StagedSlot } from "../utils/budgetStaging";
 
-type BudgetFromTierModalProps = {
-    // The tier player being worked into the budget.
-    player: { player_id: number | string, name: string, position: string, projected_price: number | string },
+type BudgetStagingModalProps = {
+    // The player being worked into the budget, with the dollars to budget them
+    // at (a projection from the tier board, the winning price when drafting).
+    player: { player_id: number | string, name: string, position: string, price: number },
+    // Set to pin the player to one slot: the drafting path, where the budget
+    // mirrors the roster so the slot isn't a choice. Null lets the user place
+    // them anywhere eligible.
+    pinnedSlot?: string | null,
     draftContext: any,
-    onClose: () => void,
+    title: string,
+    intro: React.ReactNode,
+    confirmLabel: string,
+    cancelLabel: string,
+    // Receives the staged diff. The caller decides what it means — the tier path
+    // just applies it; the drafting path applies it and then submits the pick.
+    onConfirm: (changes: BudgetChanges) => Promise<void> | void,
+    onCancel: () => void,
 };
 
-const money = (value: any) => parseInt(String(value)) || 0;
-
-// Staged budget editor, opened by clicking a player in the tier board.
+// Staged budget editor, shared by both ways of working a player into the plan:
+// clicking a tier player, and drafting into a budget slot someone else holds.
 //
-// The old BudgetConflictModal could only trade one player for one slot, which
-// is the wrong shape for this: adding a target usually means dropping SEVERAL
-// players and MOVING the incumbent rather than losing them. So nothing here is
-// a swap — slots and an "out of the budget" tray are two ends of one staging
-// area, and the whole arrangement is committed at once:
+// It replaced a one-for-one trade, which was the wrong shape for either: making
+// room usually means dropping SEVERAL players and MOVING the incumbent rather
+// than losing them. So nothing here is a swap — slots and an "out of the budget"
+// tray are two ends of one staging area, and the whole arrangement is committed
+// at once:
 //
 //   ✕ on a slot  → its player drops to the tray (that is the removal)
 //   click a tray player, then a slot → places (or moves) them there
-//   whatever is left in the tray when you apply → unbudgeted
+//   whatever is left in the tray when you confirm → unbudgeted
 //
-// Nothing is written until Apply, so a half-finished rearrangement can't leave
-// the plan in a broken state.
-export default function BudgetFromTierModal({ player, draftContext, onClose }: BudgetFromTierModalProps) {
+// Nothing is written until confirm, so a half-finished rearrangement can't leave
+// the plan in a broken state — and on the drafting path, cancelling abandons the
+// pick with the budget untouched.
+export default function BudgetStagingModal({
+    player, pinnedSlot = null, draftContext, title, intro, confirmLabel, cancelLabel, onConfirm, onCancel,
+}: BudgetStagingModalProps) {
     const dialogRef = useRef<HTMLDialogElement>(null);
     useEffect(() => { dialogRef.current?.showModal(); }, []);
 
-    const { draftId, drafterId, managers, budgetedPlayers, draftDetails } = draftContext;
+    const { managers, budgetedPlayers, draftDetails } = draftContext;
     const startingBudget = Number(draftDetails?.starting_budget) || 0;
     const drafter = managers.find((manager: any) => manager.is_drafter);
 
@@ -51,28 +64,15 @@ export default function BudgetFromTierModal({ player, draftContext, onClose }: B
     // a concurrent change to a player you didn't stage survives untouched.
     const [slots] = useState<StagedSlot[]>(() => toStagedSlots(budgetedPlayers));
     const [baseline] = useState<Record<string, BaselineEntry>>(() => currentSlotByPlayer(slots));
-    const alreadyBudgeted = !!baseline[key(player.player_id)];
+    const [opening] = useState(() => initialStaging(slots, drafter?.draft_picks, player, pinnedSlot));
 
-    const [assignments, setAssignments] = useState<Record<string, StagedOccupant | null>>(
-        () => initialAssignments(slots, drafter?.draft_picks),
-    );
+    const [assignments, setAssignments] = useState<Record<string, StagedOccupant | null>>(opening.assignments);
 
-    // Players staged OUT of the budget. The clicked player starts here unless
-    // they're already budgeted, in which case they're just shown in place.
-    const [tray, setTray] = useState<StagedOccupant[]>(() => (
-        alreadyBudgeted ? [] : [{
-            player_id: player.player_id,
-            name: player.name,
-            position: player.position,
-            price: money(player.projected_price),
-            drafted: false,
-        }]
-    ));
+    // Players staged OUT of the budget.
+    const [tray, setTray] = useState<StagedOccupant[]>(opening.tray);
 
     // Selection is tracked by key(), not the raw id — it's only ever compared.
-    const [selectedKey, setSelectedKey] = useState<string | null>(
-        alreadyBudgeted ? null : key(player.player_id),
-    );
+    const [selectedKey, setSelectedKey] = useState<string | null>(opening.selectedKey);
     const [applying, setApplying] = useState(false);
 
     const selected = tray.find((occupant) => key(occupant.player_id) === selectedKey) || null;
@@ -82,7 +82,7 @@ export default function BudgetFromTierModal({ player, draftContext, onClose }: B
     // is what makes "keep them, just not here" cheap).
     const popToTray = (slot: string) => {
         const occupant = assignments[slot];
-        if (!occupant || occupant.drafted) return;
+        if (!occupant || occupant.locked) return;
         setAssignments((prev) => ({ ...prev, [slot]: null }));
         setTray((prev) => [...prev, occupant]);
         setSelectedKey(key(occupant.player_id));
@@ -93,7 +93,7 @@ export default function BudgetFromTierModal({ player, draftContext, onClose }: B
     const placeInSlot = (slot: StagedSlot) => {
         if (!selected || !isEligible(slot, selected)) return;
         const occupant = assignments[slot.slot];
-        if (occupant?.drafted) return;
+        if (occupant?.locked) return;
         setAssignments((prev) => ({ ...prev, [slot.slot]: selected }));
         setTray((prev) => [
             ...prev.filter((entry) => key(entry.player_id) !== key(selected.player_id)),
@@ -115,12 +115,14 @@ export default function BudgetFromTierModal({ player, draftContext, onClose }: B
         .map((occupant) => occupant.name);
     const hasChanges = changes.unbudget.length > 0 || changes.place.length > 0;
 
-    const apply = async () => {
+    // On the drafting path the pinned player is always a placement, so there is
+    // always something to confirm — the pick still has to be submitted even if
+    // the user rearranged nothing.
+    const confirm = async () => {
         if (!hasChanges) return;
         setApplying(true);
         try {
-            await applyBudgetChanges(draftId, drafterId, changes);
-            onClose();
+            await onConfirm(changes);
         } finally {
             setApplying(false);
         }
@@ -141,18 +143,15 @@ export default function BudgetFromTierModal({ player, draftContext, onClose }: B
     return (
         <dialog
             ref={dialogRef}
-            onCancel={(e) => { e.preventDefault(); onClose(); }}
+            onCancel={(e) => { e.preventDefault(); onCancel(); }}
             style={{ position: "fixed", inset: 0, background: "transparent", maxWidth: "100%", maxHeight: "100%" }}
         >
             <div className="fixed inset-0 z-50 overflow-auto bg-black bg-opacity-50 flex items-start justify-center p-4">
                 <div className="bg-white rounded-lg w-full max-w-2xl my-4">
 
                     <div className="px-5 py-3 border-b border-gray-200">
-                        <h2 className="text-lg font-bold">Budget {player.name}</h2>
-                        <p className="text-sm text-gray-600">
-                            Click a player below, then click a slot to place or move them. ✕ takes a player
-                            out of the plan. Nothing is saved until you apply.
-                        </p>
+                        <h2 className="text-lg font-bold">{title}</h2>
+                        <p className="text-sm text-gray-600">{intro}</p>
                     </div>
 
                     <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
@@ -191,7 +190,7 @@ export default function BudgetFromTierModal({ player, draftContext, onClose }: B
                             <tbody>
                                 {slots.map((slot) => {
                                     const occupant = assignments[slot.slot];
-                                    const eligible = isEligible(slot, selected) && !occupant?.drafted;
+                                    const eligible = isEligible(slot, selected) && !occupant?.locked;
                                     return (
                                         <tr key={slot.slot} className="border-b border-gray-100 last:border-0">
                                             <td className="py-1.5 pr-2 font-semibold text-gray-700 w-20">{slot.slot}</td>
@@ -212,8 +211,13 @@ export default function BudgetFromTierModal({ player, draftContext, onClose }: B
                                                             {chip(occupant)}
                                                             <span className="font-semibold">{occupant.name}</span>
                                                             <span className="text-gray-500">${occupant.price}</span>
-                                                            {occupant.drafted && (
-                                                                <span className="text-xs text-gray-500" title="Drafted — locked here">🔒</span>
+                                                            {occupant.locked && (
+                                                                <span
+                                                                    className="text-xs text-gray-500"
+                                                                    title={slot.slot === pinnedSlot
+                                                                        ? "Being drafted here — the budget mirrors the roster"
+                                                                        : "Drafted — locked here"}
+                                                                >🔒</span>
                                                             )}
                                                         </span>
                                                     ) : (
@@ -222,7 +226,7 @@ export default function BudgetFromTierModal({ player, draftContext, onClose }: B
                                                 </button>
                                             </td>
                                             <td className="py-1.5 pl-2 w-8 text-right">
-                                                {occupant && !occupant.drafted && (
+                                                {occupant && !occupant.locked && (
                                                     <button
                                                         className="text-gray-400 hover:text-red-600 px-1"
                                                         onClick={() => popToTray(slot.slot)}
@@ -259,16 +263,16 @@ export default function BudgetFromTierModal({ player, draftContext, onClose }: B
                         <div className="flex justify-end gap-2">
                             <button
                                 className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-md text-sm"
-                                onClick={onClose}
+                                onClick={onCancel}
                             >
-                                Cancel
+                                {cancelLabel}
                             </button>
                             <button
                                 className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md text-sm disabled:opacity-40 disabled:hover:bg-green-500"
-                                onClick={apply}
+                                onClick={confirm}
                                 disabled={!hasChanges || applying}
                             >
-                                {applying ? "Applying…" : "Apply"}
+                                {applying ? "Working…" : confirmLabel}
                             </button>
                         </div>
                     </div>

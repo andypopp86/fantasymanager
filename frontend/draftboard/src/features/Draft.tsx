@@ -14,7 +14,8 @@ import { NominationArea } from "./NominationArea";
 import { BudgetPerSlot } from "./BudgetPerSlot";
 import RebudgetModal from "./RebudgetModal";
 import TargetTiers from "./TargetTiers";
-import BudgetFromTierModal from "./BudgetFromTierModal";
+import BudgetStagingModal from "./BudgetStagingModal";
+import { applyBudgetChanges } from "../lib/mutations";
 import { POSITION_BG_COLORS, POSITION_FG_COLORS } from "../utils/colors";
 
 type DraftProps = {
@@ -267,10 +268,23 @@ export default function Draft({draftDetails}: DraftProps) {
         <RebudgetModal draftContext={draftContext} onClose={() => setShowRebudget(false)} />
     )}
     {tierBudgetPlayer && data.hydrated && (
-        <BudgetFromTierModal
-            player={tierBudgetPlayer}
+        <BudgetStagingModal
+            player={{
+                player_id: tierBudgetPlayer.player_id,
+                name: tierBudgetPlayer.name,
+                position: tierBudgetPlayer.position,
+                price: parseInt(String(tierBudgetPlayer.projected_price)) || 0,
+            }}
             draftContext={draftContext}
-            onClose={() => setTierBudgetPlayer(null)}
+            title={`Budget ${tierBudgetPlayer.name}`}
+            intro="Click a player below, then click a slot to place or move them. ✕ takes a player out of the plan. Nothing is saved until you apply."
+            confirmLabel="Apply"
+            cancelLabel="Cancel"
+            onConfirm={async (changes) => {
+                await applyBudgetChanges(draftContext.draftId, draftContext.drafterId, changes);
+                setTierBudgetPlayer(null);
+            }}
+            onCancel={() => setTierBudgetPlayer(null)}
         />
     )}
     {data.hydrated && (isMobile ? (
