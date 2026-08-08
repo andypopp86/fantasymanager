@@ -187,6 +187,9 @@ export type PlayerDetail = {
     // than production actually delivered:
     is_projection?: boolean,
     has_injury?: boolean,
+    // Their own team's defense helping or hurting THIS player — per-player, not
+    // per-team, since one defense cuts both ways by position.
+    defensive_impact?: "good" | "bad" | null,
     // Coaching is NOT a player field — it lives on the team (a property of the
     // staff) and is read through `team.coaching_impact`. Tri-state like
     // favorite: null = no view, and no icon is drawn.

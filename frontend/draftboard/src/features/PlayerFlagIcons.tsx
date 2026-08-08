@@ -1,6 +1,6 @@
 import React from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faFilm, faFlag, faUserInjured } from "@fortawesome/free-solid-svg-icons";
+import { faFilm, faFlag, faUserInjured, faWind } from "@fortawesome/free-solid-svg-icons";
 import InstantTooltip from "./InstantTooltip";
 import type { PlayerDetail } from "../lib/draft.schemas";
 
@@ -43,6 +43,16 @@ const PLAYER_FLAGS: FlagSpec[] = [
         active: (player) => player.team?.coaching_impact === "bad" },
     { key: "coaching-good", icon: faFlag, color: GOOD, label: "Good coaching",
         active: (player) => player.team?.coaching_impact === "good" },
+    // Their own defense helping or hurting THEM. Set per player, not per team,
+    // because one defense cuts both ways by position: a great defense feeds a
+    // back (protected leads mean running clock), a bad one lifts pass catchers
+    // (trailing teams air it out). Succeeds the old derived "wind at their back"
+    // column in AvailablePlayer, which guessed this from defensive_ranking and
+    // position — same idea, now an explicit human call. Hence faWind.
+    { key: "defense-bad", icon: faWind, color: BAD, label: "Defense hurts them",
+        active: (player) => player.defensive_impact === "bad" },
+    { key: "defense-good", icon: faWind, color: GOOD, label: "Defense helps them",
+        active: (player) => player.defensive_impact === "good" },
 ];
 
 type PlayerFlagIconsProps = {

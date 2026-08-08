@@ -73,8 +73,10 @@ ALLOWED_POSITIONS = {
 }
 
 
-# Null means "no view" — no icon is shown. Only an explicit call registers.
-COACHING_IMPACTS = (
+# Shared by the good/bad judgement flags (NFLTeam.coaching_impact,
+# Player.defensive_impact). Null means "no view" — no icon is drawn. Only an
+# explicit call registers, same tri-state shape as Player.favorite.
+IMPACT_CHOICES = (
     ('good', 'Good'),
     ('bad', 'Bad'),
 )
@@ -97,7 +99,7 @@ class NFLTeam(models.Model):
     # produce. Lives on the TEAM — it's a property of the staff, so setting it
     # once covers every player on the roster. Players read it through
     # `player.team`; null = no view, and no icon is drawn.
-    coaching_impact = models.CharField(max_length=10, choices=COACHING_IMPACTS, null=True, blank=True)
+    coaching_impact = models.CharField(max_length=10, choices=IMPACT_CHOICES, null=True, blank=True)
     playoff_weather_score = models.IntegerField(default=None, blank=True, null=True)
     playoff_schedule = models.IntegerField(default=None, blank=True, null=True)
     early_season_schedule = models.IntegerField(default=None, blank=True, null=True)
@@ -167,6 +169,12 @@ class Player(models.Model):
     is_projection = models.BooleanField(default=False)
     # Carrying an injury worth pricing in.
     has_injury = models.BooleanField(default=False)
+    # Whether their own team's DEFENSE helps or hurts this player's production.
+    # Per-PLAYER, not per-team, because one defense cuts both ways by position: a
+    # great defense feeds a back (leads get protected by running clock), while a
+    # bad one lifts pass catchers (trailing teams have to air it out). So the
+    # call depends on the player, and only a human can make it.
+    defensive_impact = models.CharField(max_length=10, choices=IMPACT_CHOICES, null=True, blank=True)
     # NOTE: coaching lives on NFLTeam.coaching_impact, not here — it's a property
     # of the staff, and players read it through `player.team`.
 

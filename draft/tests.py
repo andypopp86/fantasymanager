@@ -368,9 +368,9 @@ class PlayerProjectionFlagTests(TestCase):
 
         risky = make_player("Projection RB", "RB")
         Player.objects.filter(pk=risky.pk).update(
-            is_projection=True, has_injury=True, team=bad_staff)
+            is_projection=True, has_injury=True, defensive_impact="good", team=bad_staff)
         proven = make_player("Proven WR", "WR")
-        Player.objects.filter(pk=proven.pk).update(team=good_staff)
+        Player.objects.filter(pk=proven.pk).update(defensive_impact="bad", team=good_staff)
         # No team at all must not blow up the lookup — it just draws no icon.
         neutral = make_player("Neutral TE", "TE")
         for player in (risky, proven, neutral):
@@ -381,12 +381,18 @@ class PlayerProjectionFlagTests(TestCase):
             row["player"]["name"]: row["player"]
             for row in (DraftPicksOutputSerializer.serialize(pick) for pick in picks)
         }
+        # The same defense can help one player and hurt another, which is why
+        # defensive_impact is per-player while coaching_impact is per-team.
         self.assertEqual(
-            [rows["Projection RB"][f] for f in ("is_projection", "has_injury")], [True, True])
+            [rows["Projection RB"][f] for f in ("is_projection", "has_injury", "defensive_impact")],
+            [True, True, "good"])
         self.assertEqual(rows["Projection RB"]["team"]["coaching_impact"], "bad")
         self.assertEqual(
-            [rows["Proven WR"][f] for f in ("is_projection", "has_injury")], [False, False])
+            [rows["Proven WR"][f] for f in ("is_projection", "has_injury", "defensive_impact")],
+            [False, False, "bad"])
         self.assertEqual(rows["Proven WR"]["team"]["coaching_impact"], "good")
+        # No view serializes as null (draws no icon), and no team at all is fine.
+        self.assertIsNone(rows["Neutral TE"]["defensive_impact"])
         self.assertIsNone(rows["Neutral TE"]["team"])
 
 

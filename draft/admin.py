@@ -36,14 +36,14 @@ class FlexFilter(admin.SimpleListFilter):
 
 
 class PlayerAdmin(admin.ModelAdmin):
-    list_display = ('player_id', 'year', 'name', 'team', 'target_tier', 'is_projection', 'has_injury', 'favorite', 'nickname',  'position',  'adp_formatted',  'projected_price',  'override_price')
+    list_display = ('player_id', 'year', 'name', 'team', 'target_tier', 'is_projection', 'has_injury', 'defensive_impact', 'favorite', 'nickname',  'position',  'adp_formatted',  'projected_price',  'override_price')
     # Edit tiers and the warning flags straight from the list — setting these a
     # board's worth of players one change-form at a time is unworkable.
     # player_id stays the link column, so it can't be list_editable.
-    list_editable = ('target_tier', 'is_projection', 'has_injury', 'favorite', 'override_price')
+    list_editable = ('target_tier', 'is_projection', 'has_injury', 'defensive_impact', 'favorite', 'override_price')
     search_fields = ('name', 'position', )
-    list_filter = ('position', 'year', 'team', 'target_tier', 'is_projection', 'has_injury', 'favorite')
-    fields = ('player_id', 'notes', 'team', 'year',  'name', 'nickname', 'position',  'adp_formatted',  'projected_price', 'adp_price', 'override_price', 'skepticism', 'favorite', 'target_tier', 'is_projection', 'has_injury', )
+    list_filter = ('position', 'year', 'team', 'target_tier', 'is_projection', 'has_injury', 'defensive_impact', 'favorite')
+    fields = ('player_id', 'notes', 'team', 'year',  'name', 'nickname', 'position',  'adp_formatted',  'projected_price', 'adp_price', 'override_price', 'skepticism', 'favorite', 'target_tier', 'is_projection', 'has_injury', 'defensive_impact', )
     
 class DraftAdmin(admin.ModelAdmin):
     list_display = ('draft_name', 'year', 'drafter', 'projected_draft', 'available_to_spectators', 'date_created')
