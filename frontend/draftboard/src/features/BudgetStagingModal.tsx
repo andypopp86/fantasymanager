@@ -216,8 +216,10 @@ export default function BudgetStagingModal({
                                                                     className="text-xs text-gray-500"
                                                                     title={slot.slot === pinnedSlot
                                                                         ? "Being drafted here — the budget mirrors the roster"
-                                                                        : "Drafted — locked here"}
-                                                                >🔒</span>
+                                                                        : "Already drafted — the pick is final, so this row can't be moved or removed"}
+                                                                >
+                                                                    🔒 {slot.slot === pinnedSlot ? "drafting" : "drafted"}
+                                                                </span>
                                                             )}
                                                         </span>
                                                     ) : (

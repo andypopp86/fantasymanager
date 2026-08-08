@@ -62,13 +62,30 @@ export const currentSlotByPlayer = (slots: StagedSlot[]): Record<string, Baselin
     return map;
 };
 
+// Every player the DRAFTER has actually drafted, by key(). Deliberately keyed on
+// the player, not the slot: a drafted player's budget row starts at the matching
+// slot but can be moved afterwards (the budget panel's drag-reslot, or this
+// modal), and a slot-matched check would quietly stop recognising them as
+// drafted. Only the drafter's own picks — a target an OPPONENT took is not
+// final for the plan, and must stay removable.
+export const draftedPlayerKeys = (drafterDraftPicks: Record<string, any> | undefined): Set<string> => {
+    const keys = new Set<string>();
+    Object.values(drafterDraftPicks || {}).forEach((slotObj: any) => {
+        if (slotObj?.pick?.player_id) keys.add(key(slotObj.pick.player_id));
+    });
+    return keys;
+};
+
 // The staged arrangement as it stands before any edits: every occupied slot
-// keeps its player. A slot whose player is one of the drafter's actual draft
-// picks is `locked`.
+// keeps its player. A player the drafter has already drafted is `locked` —
+// drafting is final, and unbudgeting or moving them here would desync the plan
+// from the real roster (this modal never writes DraftPick, so the pick itself
+// would survive while its budget row wandered off or vanished).
 export const initialAssignments = (
     slots: StagedSlot[],
     drafterDraftPicks: Record<string, any> | undefined,
 ): Record<string, StagedOccupant | null> => {
+    const drafted = draftedPlayerKeys(drafterDraftPicks);
     const assignments: Record<string, StagedOccupant | null> = {};
     slots.forEach(({ slot, pick }) => {
         assignments[slot] = pick.player_id
@@ -78,7 +95,7 @@ export const initialAssignments = (
                 position: pick.position,
                 // Mirrors budgetSpent's rule: the real price wins once paid.
                 price: money(pick.actual_price) || money(pick.projected_price),
-                locked: String(drafterDraftPicks?.[slot]?.pick?.player_id || "") === String(pick.player_id),
+                locked: drafted.has(key(pick.player_id)),
             }
             : null;
     });

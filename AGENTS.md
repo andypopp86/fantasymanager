@@ -587,8 +587,24 @@ commits it. Three things there are load-bearing:
 The modal FREEZES its slot snapshot and baseline on open (`useState` initializer,
 not `useMemo`): `budgetedPlayers` is a live Dexie projection, so a pick landing
 mid-edit would otherwise move the baseline out from under the staged assignments
-and diff against a plan the user never saw. `StagedOccupant.locked` covers both
-already-drafted rows (as in `RebudgetModal`) and the pin.
+and diff against a plan the user never saw.
+
+**The modal edits the BUDGET only — it never writes `DraftPick`.** `applyBudgetChanges`
+reaches only `budgetPick`/`unbudgetPick` → `budget_pick`/`unbudget_pick` →
+`BudgetPlayer`. The one place drafted state changes is `submitPick`, called from
+`DraftBoard` alone (`finalizeDraft`, and `resolveConflict` after the budget is
+arranged). Keep it that way: the two concepts are distinct, and a tier player
+being *budgeted* is not being *drafted*.
+
+That separation is exactly why `StagedOccupant.locked` matters. It covers the pin
+and — via `draftedPlayerKeys` — every player the DRAFTER has already drafted,
+keyed on the PLAYER, not the slot. A slot-matched check looks right (drafting
+budgets at the matching slot) but silently lapses once that budget row is moved
+by the budget panel's drag-reslot or by this modal, and an unlocked drafted
+player can then be unbudgeted — leaving the pick standing with no budget row,
+since nothing here can undo the pick itself. Players an OPPONENT drafted are
+deliberately NOT locked: a stolen target isn't final for the plan and has to stay
+removable.
 
 > Note: `features/PlanChanges.tsx`, `features/PlanChangesModal.tsx`, and the
 > `planChanges` context field are an earlier attempt at surfacing budget overwrites in
