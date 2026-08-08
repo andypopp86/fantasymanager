@@ -73,6 +73,12 @@ ALLOWED_POSITIONS = {
 }
 
 
+# Null means "no view" — no icon is shown. Only an explicit call registers.
+COACHING_IMPACTS = (
+    ('good', 'Good'),
+    ('bad', 'Bad'),
+)
+
 TARGET_TYPES = (
     ('prime', 'Prime'),
     ('starter', 'Starter'),
@@ -146,6 +152,19 @@ class Player(models.Model):
     # top tier, ascending. Edited inline in /admin's player list; surfaced by the
     # target_tiers endpoint / the Tiers page.
     target_tier = models.PositiveIntegerField(default=0)
+    # Hand-set draft-day warning flags, surfaced as icons in the nomination area
+    # (see PLAYER_FLAGS in features/PlayerFlagIcons.tsx) so the drafter doesn't
+    # overextend to win a bid. Adding another: field here + admin + the player
+    # serializer + the PLAYER_FLAGS table.
+    #
+    # This player's price is only justified by a PROJECTION — role, opportunity
+    # or health — rather than production they have actually put up.
+    is_projection = models.BooleanField(default=False)
+    # Carrying an injury worth pricing in.
+    has_injury = models.BooleanField(default=False)
+    # Whether the scheme/staff helps or hurts what they'd otherwise produce.
+    # Tri-state like `favorite`: null = no view, and no icon is drawn.
+    coaching_impact = models.CharField(max_length=10, choices=COACHING_IMPACTS, null=True, blank=True)
 
     def __str__(self) -> str:
         return self.name

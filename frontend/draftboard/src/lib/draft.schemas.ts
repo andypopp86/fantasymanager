@@ -181,6 +181,14 @@ export type PlayerDetail = {
     favorite?: boolean | null,
     notes?: string | null,
     target_type?: string | null,
+    // Hand-set warning flags, rendered as icons when the player is nominated.
+    // The icon/colour/label table is PLAYER_FLAGS in features/PlayerFlagIcons.tsx.
+    // Price only justified by a projection (role, opportunity, health) rather
+    // than production actually delivered:
+    is_projection?: boolean,
+    has_injury?: boolean,
+    // Tri-state like favorite: null = no view, and no icon is drawn.
+    coaching_impact?: "good" | "bad" | null,
     team?: Record<string, any> | null,
     [stat: string]: any, // points, yards, tds, … (stat-selector fields)
 }

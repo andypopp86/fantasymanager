@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../lib/db";
+import PlayerFlagIcons from "./PlayerFlagIcons";
 import { POSITION_BG_COLORS, POSITION_FG_COLORS } from "../utils/colors";
 
 type NominationAreaProps = {
@@ -32,6 +33,9 @@ export const NominationArea = ({ draftContext, draftSend }: NominationAreaProps)
         [draftContext.draftId, hasNomination ? nominatedPlayer.player_id : null],
     );
     const favorite = liveRow ? (liveRow.player?.favorite ?? null) : (nominatedPlayer?.favorite ?? null);
+    // Warning flags come off the live row for the same reason as favorite — so a
+    // player flagged in /admin mid-draft warns as soon as the next refetch lands.
+    const flagPlayer = liveRow?.player ?? nominatedPlayer;
     const nominationBorder = isBudgetedTarget ? "#4ade80"
         : favorite === true ? "#facc15"
         : favorite === false ? "#f87171"
@@ -93,6 +97,11 @@ export const NominationArea = ({ draftContext, draftSend }: NominationAreaProps)
                 )}
                 {hasNomination && (
                     <>
+                        {/* Above the name so the flags are seen before the price
+                            box. Deliberately NOT folded into the border/background
+                            tint — those already encode budgeted and favorite, and
+                            overriding them would trade one signal for another. */}
+                        <PlayerFlagIcons player={flagPlayer} size="2x" className="w-full mb-1 justify-center" />
                         <div
                             draggable="true"
                             onDragStart={handleNominatedDragStart}

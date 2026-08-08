@@ -16,6 +16,7 @@ import RebudgetModal from "./RebudgetModal";
 import TargetTiers from "./TargetTiers";
 import BudgetStagingModal from "./BudgetStagingModal";
 import { applyBudgetChanges } from "../lib/mutations";
+import PlayerFlagIcons from "./PlayerFlagIcons";
 import { POSITION_BG_COLORS, POSITION_FG_COLORS } from "../utils/colors";
 
 type DraftProps = {
@@ -181,9 +182,12 @@ export default function Draft({draftDetails}: DraftProps) {
 
     // On a phone the Nomination panel is a tab away while you're tapping slots
     // on the Board tab, so who's on the block and their price ride along at the
-    // top of every tab.
+    // top of every tab — including the projection marker, since this bar IS the
+    // nomination surface on mobile and the one in NominationArea would sit
+    // unread on another tab.
     const nominationBar = hasNomination && (
         <div className="flex items-center gap-2 px-2 py-1 border-b border-gray-200">
+            <PlayerFlagIcons player={nominatedPlayer} />
             <span
                 className="flex-1 min-w-0 truncate rounded px-2 py-1 text-sm font-semibold"
                 style={{

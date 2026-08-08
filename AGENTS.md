@@ -243,6 +243,39 @@ filter and Rebudget only treat `true` as favorited. Ordering gotcha: Postgres
 sorts nulls first on `DESC`, so rank explicitly (see `favorite_rank` in
 `get_picks`) instead of ordering by `-player__favorite`.
 
+**Player warning flags** — hand-set fields on `Player`, drawn as icons in the
+nomination area so the drafter doesn't misprice a bid. Currently
+`is_projection` (bool — the price is a bet on role/health, not delivered
+production), `has_injury` (bool), and `coaching_impact` (nullable
+`good`/`bad`; null = no view, draws nothing, same tri-state shape as
+`favorite`). All are inline-editable in the /admin player list.
+
+`features/PlayerFlagIcons.tsx` is the single renderer, driven by a `PLAYER_FLAGS`
+table; the nomination panel and the mobile sticky bar both use it, so there's no
+JSX to touch when adding one. **Adding a flag = one table entry + the model field
++ admin (`list_display`/`list_editable`/`list_filter`/`fields`) + the player
+serializer in `api/views/draft.py`.** Two conventions there:
+
+- Each entry carries an `active(player)` PREDICATE, not a field name — that's
+  what lets one enum field drive several differently-coloured icons
+  (`coaching_impact` → red flag or green flag) beside plain booleans.
+- Colour is the VERDICT and comes from the `BAD`/`GOOD` constants, never an
+  ad-hoc hex; the icon is the subject. A glance should read as "how many red
+  marks", with green only where something counts in the player's favour.
+
+FontAwesome free has no projector, whistle, or referee icon (all Pro) — hence
+`faFilm` and `faFlag` as stand-ins. Tooltips use `features/InstantTooltip.tsx`
+(CSS-only `group-hover`), NOT the native `title`, whose ~1s OS-level delay is
+useless mid-bid.
+
+Flags reach the client through the hand-written player serializer inside
+`DraftPicksOutputSerializer`, and from there ride into Dexie untouched (`player`
+is stored wholesale) and out to `nominatedPlayer`. `NominationArea` reads them
+off the LIVE Dexie row, like `favorite`, so flipping one in /admin mid-draft
+shows up on the next refetch. A field silently missing from that serializer means
+the warning simply never fires — hence the passthrough test in
+`draft/tests.py::PlayerProjectionFlagTests`.
+
 **Target tiers** (`Player.target_tier`, non-negative int, default `0` = untiered;
 `1` is the TOP tier and they ascend). Prep-time tiering, not a draft-time write:
 the app has no endpoint that sets it — you tier players **inline in /admin's

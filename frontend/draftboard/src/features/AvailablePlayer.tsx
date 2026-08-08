@@ -4,7 +4,6 @@ import { POSITION_BG_COLORS, POSITION_FG_COLORS } from "../utils/colors";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faHeart as solidHeart, faHeartCrack } from '@fortawesome/free-solid-svg-icons';
 import { faHeart as regularHeart } from '@fortawesome/free-regular-svg-icons';
-import { faEdit, faWind } from "@fortawesome/free-solid-svg-icons";
 
 interface HeartProps {
     favorite: boolean | null | undefined; // true = target, null = neutral, false = avoid
@@ -42,16 +41,6 @@ export default function AvailablePlayer({pick, nominatePlayer, handleDragStart, 
     const strengthOfSchedule = getStrengthOfSchedule(pick);
     const scheduleBG = strengthOfSchedule > 25 ? "bg-red-900" : strengthOfSchedule <= 5 ? "bg-green-900" : "bg-yellow-200";
     const scheduleFG = strengthOfSchedule > 25 ? "text-white" : strengthOfSchedule <= 5 ? "text-white" : "text-black";
-    const hasTheWind = (pick) => {
-        if (!pick.player.team) {
-            return false;
-        } else if (["QB", "WR", "TE"].includes(pick.player.position)) {
-            return pick.player.team.defensive_ranking <= 2;
-        } else if (pick.player.position === "RB") {
-            return pick.player.team.defensive_ranking >= 4;
-        }
-        return false;
-    }
 
     return (
         <>
@@ -74,16 +63,6 @@ export default function AvailablePlayer({pick, nominatePlayer, handleDragStart, 
                 */}
                 <td className="bg-white" onClick={() => postFavorite(pick.player)}>
                     <Heart key={`H${pick.player.player_id}`} favorite={pick.player.favorite} size="sm"/>
-                </td>
-                <td className="bg-white" title={pick.player.notes}>
-                    {pick.player.notes &&
-                    <FontAwesomeIcon icon={faEdit} size="sm" color="blue" />
-                    }
-                </td>
-                <td className="bg-white">
-                    {hasTheWind(pick) &&
-                    <FontAwesomeIcon icon={faWind} size="sm" color="blue" />
-                    }
                 </td>
             </tr>
         )}
