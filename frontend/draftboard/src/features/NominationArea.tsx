@@ -36,6 +36,22 @@ export const NominationArea = ({ draftContext, draftSend }: NominationAreaProps)
     // Warning flags come off the live row for the same reason as favorite — so a
     // player flagged in /admin mid-draft warns as soon as the next refetch lands.
     const flagPlayer = liveRow?.player ?? nominatedPlayer;
+
+    // Walk-away price vs. what the player is "worth". The comparison basis is the
+    // ROW's projected_price — the server-annotated `override_price ||
+    // projected_price`, i.e. the same number the Players list shows as Pos$ —
+    // not player.projected_price, which is the raw column and ignores an
+    // override. Green = you've talked yourself ABOVE market on them, red =
+    // below, so the colour says how far you're willing to stretch.
+    const myPrice = flagPlayer?.my_price == null ? null : parseInt(String(flagPlayer.my_price)) || 0;
+    const projectedPrice = parseInt(String(liveRow?.projected_price ?? nominatedPlayer?.projected_price)) || 0;
+    // Softer than the flag icons' #dc2626 — this is small body text sitting in a
+    // tinted panel, where the full-strength red shouts. #f87171 is the red this
+    // component already uses for the unfavorited border, so the panel stays one
+    // palette.
+    const myPriceColor = myPrice == null || myPrice === projectedPrice ? "#374151"
+        : myPrice < projectedPrice ? "#f87171"
+        : "#16a34a";
     const nominationBorder = isBudgetedTarget ? "#4ade80"
         : favorite === true ? "#facc15"
         : favorite === false ? "#f87171"
@@ -114,6 +130,19 @@ export const NominationArea = ({ draftContext, draftSend }: NominationAreaProps)
                         >
                             {nominatedPlayer.name} ({nominatedPlayer.position})
                         </div>
+                        {/* Directly above the winning-price box, so the number
+                            you're typing is read against your walk-away. */}
+                        {myPrice != null && (
+                            <div className="w-full mb-2 flex items-baseline justify-center gap-2">
+                                <span className="text-xs font-medium text-gray-700">My price</span>
+                                <span className="text-sm font-bold" style={{ color: myPriceColor }}>
+                                    ${myPrice}
+                                </span>
+                                {projectedPrice > 0 && (
+                                    <span className="text-xs text-gray-500">proj ${projectedPrice}</span>
+                                )}
+                            </div>
+                        )}
                         <div className="w-full mb-2">
                             <label className="block text-xs font-medium text-gray-700 mb-1">Winning price</label>
                             <input

@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.db.models import Q
+from django.forms import Textarea
 from draft import models as d
 
 class SuccessFilter(admin.SimpleListFilter):
@@ -36,14 +37,30 @@ class FlexFilter(admin.SimpleListFilter):
 
 
 class PlayerAdmin(admin.ModelAdmin):
-    list_display = ('player_id', 'year', 'name', 'team', 'target_tier', 'is_projection', 'has_injury', 'defensive_impact', 'favorite', 'nickname',  'position',  'adp_formatted',  'projected_price',  'override_price')
+    # Working order: what you set during prep first, reference columns last.
+    list_display = ('name', 'position', 'team', 'year', 'target_tier', 'is_projection', 'has_injury', 'defensive_impact', 'projected_price', 'my_price', 'my_price_rationale', 'adp_formatted', 'favorite', 'override_price', 'player_id')
+    # `name` is the link column, pinned explicitly. Django otherwise links
+    # list_display[0], which is no longer player_id — and a link column may
+    # never be list_editable, so leaving it implicit would break the moment the
+    # first column becomes an editable one.
+    list_display_links = ('name',)
     # Edit tiers and the warning flags straight from the list — setting these a
     # board's worth of players one change-form at a time is unworkable.
-    # player_id stays the link column, so it can't be list_editable.
-    list_editable = ('target_tier', 'is_projection', 'has_injury', 'defensive_impact', 'favorite', 'override_price')
+    list_editable = ('target_tier', 'is_projection', 'has_injury', 'defensive_impact', 'favorite', 'override_price', 'my_price', 'my_price_rationale')
     search_fields = ('name', 'position', )
-    list_filter = ('position', 'year', 'team', 'target_tier', 'is_projection', 'has_injury', 'defensive_impact', 'favorite')
-    fields = ('player_id', 'notes', 'team', 'year',  'name', 'nickname', 'position',  'adp_formatted',  'projected_price', 'adp_price', 'override_price', 'skepticism', 'favorite', 'target_tier', 'is_projection', 'has_injury', 'defensive_impact', )
+    # `team` last on purpose — it renders every team as a link, so leading with
+    # it pushes the short, frequently-used filters below the fold.
+    list_filter = ('position', 'year', 'target_tier', 'is_projection', 'has_injury', 'defensive_impact', 'favorite', 'team')
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        # A default TextField renders as a 10-row textarea, which blows the
+        # changelist rows apart. Shrunk per-FIELD rather than via
+        # formfield_overrides, which would catch `notes` too — that one wants the
+        # room, since it holds multi-line bullets.
+        if db_field.name == 'my_price_rationale':
+            kwargs['widget'] = Textarea(attrs={'rows': 2, 'cols': 28})
+        return super().formfield_for_dbfield(db_field, request, **kwargs)
+    fields = ('name', 'position', 'team', 'year', 'notes', 'target_tier', 'is_projection', 'has_injury', 'defensive_impact', 'projected_price', 'adp_price', 'my_price', 'my_price_rationale', 'skepticism', 'adp_formatted', 'favorite', 'override_price', 'player_id', )
     
 class DraftAdmin(admin.ModelAdmin):
     list_display = ('draft_name', 'year', 'drafter', 'projected_draft', 'available_to_spectators', 'date_created')

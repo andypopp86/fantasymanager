@@ -177,6 +177,10 @@ export type PlayerDetail = {
     position: string,
     projected_price?: number | string,
     adp_price?: number | string,
+    // The drafter's hand-set WALK-AWAY price — stop bidding above this. Null =
+    // no view. Shown in the nomination area, coloured against the effective
+    // projected price.
+    my_price?: number | string | null,
     // Tri-state: true = target, null/undefined = neutral, false = avoid.
     favorite?: boolean | null,
     notes?: string | null,
