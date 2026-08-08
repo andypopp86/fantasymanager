@@ -14,6 +14,7 @@ import { NominationArea } from "./NominationArea";
 import { BudgetPerSlot } from "./BudgetPerSlot";
 import RebudgetModal from "./RebudgetModal";
 import TargetTiers from "./TargetTiers";
+import BudgetFromTierModal from "./BudgetFromTierModal";
 import { POSITION_BG_COLORS, POSITION_FG_COLORS } from "../utils/colors";
 
 type DraftProps = {
@@ -34,6 +35,8 @@ export default function Draft({draftDetails}: DraftProps) {
     const [showRebudget, setShowRebudget] = useState(false);
     // Target tiers ride along under the board (toggled by the Tiers button).
     const [showTiers, setShowTiers] = useState(true);
+    // The tier player whose budget edit is open, if any.
+    const [tierBudgetPlayer, setTierBudgetPlayer] = useState<any>(null);
     // Phones can't show the sidebar beside the board, so the panels become
     // tabs. Nomination survives tab switches (it lives in the flow machine),
     // which is what makes "tap a player, switch to Board, tap a slot" work.
@@ -163,6 +166,7 @@ export default function Draft({draftDetails}: DraftProps) {
             <TargetTiers
                 draftId={draftDetails.id}
                 hidePlayerIds={draftedPlayerIds}
+                onPlayerClick={setTierBudgetPlayer}
                 // One line rather than the page's full explainer — this sits
                 // under the board on every draft, tiered or not.
                 emptyState={
@@ -261,6 +265,13 @@ export default function Draft({draftDetails}: DraftProps) {
     </div>
     {showRebudget && data.hydrated && (
         <RebudgetModal draftContext={draftContext} onClose={() => setShowRebudget(false)} />
+    )}
+    {tierBudgetPlayer && data.hydrated && (
+        <BudgetFromTierModal
+            player={tierBudgetPlayer}
+            draftContext={draftContext}
+            onClose={() => setTierBudgetPlayer(null)}
+        />
     )}
     {data.hydrated && (isMobile ? (
         <>
