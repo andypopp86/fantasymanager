@@ -346,6 +346,56 @@ class TargetTierTests(TestCase):
         )
 
 
+class PlayerProjectionFlagTests(TestCase):
+    """is_projection drives the nomination-area warning, and it only gets there
+    through a hand-written serializer — the kind of passthrough where a field
+    goes missing silently and the warning just never fires."""
+
+    def test_defaults_to_false(self):
+        self.assertFalse(make_player("New RB", "RB").is_projection)
+
+    def test_available_players_carries_every_flag(self):
+        from draft.api.views.draft import DraftPicksOutputSerializer
+        from draft.services.draft.draft import DraftReadService
+
+        from draft.models import NFLTeam
+
+        draft = Draft.objects.create(year=2026, draft_name="projections")
+        # Coaching lives on the TEAM and is read through player.team, so the
+        # nested team serializer has to carry it too.
+        bad_staff = NFLTeam.objects.create(code="BAD", year=2026, coaching_impact="bad")
+        good_staff = NFLTeam.objects.create(code="GUD", year=2026, coaching_impact="good")
+
+        risky = make_player("Projection RB", "RB")
+        Player.objects.filter(pk=risky.pk).update(
+            is_projection=True, has_injury=True, defensive_impact="good", team=bad_staff)
+        proven = make_player("Proven WR", "WR")
+        Player.objects.filter(pk=proven.pk).update(defensive_impact="bad", team=good_staff)
+        # No team at all must not blow up the lookup — it just draws no icon.
+        neutral = make_player("Neutral TE", "TE")
+        for player in (risky, proven, neutral):
+            DraftPick.objects.create(draft=draft, player=player, drafted=False)
+
+        picks = DraftReadService(user=None).get_available_players(draft_id=draft.id)
+        rows = {
+            row["player"]["name"]: row["player"]
+            for row in (DraftPicksOutputSerializer.serialize(pick) for pick in picks)
+        }
+        # The same defense can help one player and hurt another, which is why
+        # defensive_impact is per-player while coaching_impact is per-team.
+        self.assertEqual(
+            [rows["Projection RB"][f] for f in ("is_projection", "has_injury", "defensive_impact")],
+            [True, True, "good"])
+        self.assertEqual(rows["Projection RB"]["team"]["coaching_impact"], "bad")
+        self.assertEqual(
+            [rows["Proven WR"][f] for f in ("is_projection", "has_injury", "defensive_impact")],
+            [False, False, "bad"])
+        self.assertEqual(rows["Proven WR"]["team"]["coaching_impact"], "good")
+        # No view serializes as null (draws no icon), and no team at all is fine.
+        self.assertIsNone(rows["Neutral TE"]["defensive_impact"])
+        self.assertIsNone(rows["Neutral TE"]["team"])
+
+
 class TargetTierCsvTests(TestCase):
     """write_target_tiers_to_csv → update_player_target_tiers is how hand-set
     tiers move from the machine whose /admin has them to the hosted DB, so the

@@ -73,6 +73,14 @@ ALLOWED_POSITIONS = {
 }
 
 
+# Shared by the good/bad judgement flags (NFLTeam.coaching_impact,
+# Player.defensive_impact). Null means "no view" — no icon is drawn. Only an
+# explicit call registers, same tri-state shape as Player.favorite.
+IMPACT_CHOICES = (
+    ('good', 'Good'),
+    ('bad', 'Bad'),
+)
+
 TARGET_TYPES = (
     ('prime', 'Prime'),
     ('starter', 'Starter'),
@@ -87,6 +95,11 @@ class NFLTeam(models.Model):
     name = models.CharField(max_length=100, null=True, blank=True)
     short_name = models.CharField(max_length=50, null=True, blank=True)
     year = models.IntegerField(null=True, blank=True)
+    # Whether the scheme/staff helps or hurts what their players would otherwise
+    # produce. Lives on the TEAM — it's a property of the staff, so setting it
+    # once covers every player on the roster. Players read it through
+    # `player.team`; null = no view, and no icon is drawn.
+    coaching_impact = models.CharField(max_length=10, choices=IMPACT_CHOICES, null=True, blank=True)
     playoff_weather_score = models.IntegerField(default=None, blank=True, null=True)
     playoff_schedule = models.IntegerField(default=None, blank=True, null=True)
     early_season_schedule = models.IntegerField(default=None, blank=True, null=True)
@@ -146,6 +159,24 @@ class Player(models.Model):
     # top tier, ascending. Edited inline in /admin's player list; surfaced by the
     # target_tiers endpoint / the Tiers page.
     target_tier = models.PositiveIntegerField(default=0)
+    # Hand-set draft-day warning flags, surfaced as icons in the nomination area
+    # (see PLAYER_FLAGS in features/PlayerFlagIcons.tsx) so the drafter doesn't
+    # overextend to win a bid. Adding another: field here + admin + the player
+    # serializer + the PLAYER_FLAGS table.
+    #
+    # This player's price is only justified by a PROJECTION — role, opportunity
+    # or health — rather than production they have actually put up.
+    is_projection = models.BooleanField(default=False)
+    # Carrying an injury worth pricing in.
+    has_injury = models.BooleanField(default=False)
+    # Whether their own team's DEFENSE helps or hurts this player's production.
+    # Per-PLAYER, not per-team, because one defense cuts both ways by position: a
+    # great defense feeds a back (leads get protected by running clock), while a
+    # bad one lifts pass catchers (trailing teams have to air it out). So the
+    # call depends on the player, and only a human can make it.
+    defensive_impact = models.CharField(max_length=10, choices=IMPACT_CHOICES, null=True, blank=True)
+    # NOTE: coaching lives on NFLTeam.coaching_impact, not here — it's a property
+    # of the staff, and players read it through `player.team`.
 
     def __str__(self) -> str:
         return self.name

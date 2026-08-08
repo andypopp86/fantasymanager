@@ -181,7 +181,19 @@ export type PlayerDetail = {
     favorite?: boolean | null,
     notes?: string | null,
     target_type?: string | null,
-    team?: Record<string, any> | null,
+    // Hand-set warning flags, rendered as icons when the player is nominated.
+    // The icon/colour/label table is PLAYER_FLAGS in features/PlayerFlagIcons.tsx.
+    // Price only justified by a projection (role, opportunity, health) rather
+    // than production actually delivered:
+    is_projection?: boolean,
+    has_injury?: boolean,
+    // Their own team's defense helping or hurting THIS player — per-player, not
+    // per-team, since one defense cuts both ways by position.
+    defensive_impact?: "good" | "bad" | null,
+    // Coaching is NOT a player field — it lives on the team (a property of the
+    // staff) and is read through `team.coaching_impact`. Tri-state like
+    // favorite: null = no view, and no icon is drawn.
+    team?: (Record<string, any> & { coaching_impact?: "good" | "bad" | null }) | null,
     [stat: string]: any, // points, yards, tds, … (stat-selector fields)
 }
 

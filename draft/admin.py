@@ -36,14 +36,14 @@ class FlexFilter(admin.SimpleListFilter):
 
 
 class PlayerAdmin(admin.ModelAdmin):
-    list_display = ('player_id', 'year', 'name', 'team', 'target_tier', 'favorite', 'nickname',  'position',  'adp_formatted',  'projected_price',  'override_price')
-    # Edit tiers (and the other targeting fields) straight from the list — tiering
-    # a board's worth of players one change-form at a time is unworkable.
+    list_display = ('player_id', 'year', 'name', 'team', 'target_tier', 'is_projection', 'has_injury', 'defensive_impact', 'favorite', 'nickname',  'position',  'adp_formatted',  'projected_price',  'override_price')
+    # Edit tiers and the warning flags straight from the list — setting these a
+    # board's worth of players one change-form at a time is unworkable.
     # player_id stays the link column, so it can't be list_editable.
-    list_editable = ('target_tier', 'favorite', 'override_price')
+    list_editable = ('target_tier', 'is_projection', 'has_injury', 'defensive_impact', 'favorite', 'override_price')
     search_fields = ('name', 'position', )
-    list_filter = ('position', 'year', 'team', 'target_tier', 'favorite')
-    fields = ('player_id', 'notes', 'team', 'year',  'name', 'nickname', 'position',  'adp_formatted',  'projected_price', 'adp_price', 'override_price', 'skepticism', 'favorite', 'target_tier', )
+    list_filter = ('position', 'year', 'team', 'target_tier', 'is_projection', 'has_injury', 'defensive_impact', 'favorite')
+    fields = ('player_id', 'notes', 'team', 'year',  'name', 'nickname', 'position',  'adp_formatted',  'projected_price', 'adp_price', 'override_price', 'skepticism', 'favorite', 'target_tier', 'is_projection', 'has_injury', 'defensive_impact', )
     
 class DraftAdmin(admin.ModelAdmin):
     list_display = ('draft_name', 'year', 'drafter', 'projected_draft', 'available_to_spectators', 'date_created')
@@ -136,9 +136,11 @@ class DraftPlanAdmin(admin.ModelAdmin):
     search_fields = ('name',)
 
 class NFLTeamAdmin(admin.ModelAdmin):
-    list_display = ('code', 'name', 'year', 'playoff_weather_score', 'early_season_schedule', 'playoff_schedule', 'defensive_ranking', 'pass_ranking', 'run_ranking')
-    list_filter = ('code', 'year',)
-    fields = ('code', 'name', 'year', 'playoff_weather_score', 
+    list_display = ('code', 'name', 'year', 'coaching_impact', 'playoff_weather_score', 'early_season_schedule', 'playoff_schedule', 'defensive_ranking', 'pass_ranking', 'run_ranking')
+    # Set the staff's impact straight from the team list — 32 rows, one pass.
+    list_editable = ('coaching_impact',)
+    list_filter = ('code', 'year', 'coaching_impact',)
+    fields = ('code', 'name', 'year', 'coaching_impact', 'playoff_weather_score', 
               'early_season_schedule', 'early_season_qb', 'early_season_rb', 'early_season_wr', 'early_season_te', 'early_season_def',
               'defensive_ranking', 'oline_ranking', 'pass_ranking', 'run_ranking')
     readonly_fields = ('year',)
