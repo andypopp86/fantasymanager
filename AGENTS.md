@@ -100,6 +100,29 @@ Conventions:
   machine event fits.
 - Prefer TypeScript for new files.
 
+## Mobile / touch (the draft board)
+
+`/draft/:draftId` works on a phone. Two things make that possible, and new board
+UI has to respect both:
+
+- **Layout.** `hooks/useIsMobile.ts` (matchMedia `max-width: 1023px`, matching
+  Tailwind's `lg`) is the single switch. Below it `Draft.tsx` renders ONE tree of
+  Players / Board / Budget tabs instead of the sidebar-beside-board
+  `.draftboard-grid` — a JS switch, not `lg:hidden`, so the panels aren't
+  mounted twice with duplicate filter state. A sticky bar carries the nomination
+  (player + winning price + cancel) across tabs. In `DraftBoard`, the position
+  rail is a flex sibling of the horizontally-scrolling manager grid, NOT its
+  first column: a `position: sticky` grid item can't leave its own grid area, so
+  as a column it scrolls away.
+- **Tap fallback.** Touch fires no HTML5 drag events, so every drag has a tap
+  equivalent, wired on desktop too (one code path): tap a player row to nominate
+  (re-nominating while someone is on the block replaces them), tap an empty
+  eligible draft/budget slot to place the nominated player, add to the WatchList
+  from its header button. Tapping a FILLED slot keeps its old meaning —
+  undraft/unbudget. Drop and tap share the same validation helper
+  (`placeNomination` in `DraftBoard`), and eligible empty slots are outlined
+  blue while a nomination is live.
+
 ## Auth & roles
 
 **Everything requires login.** The SPA entrypoint (`react_draft_entrypoint`)

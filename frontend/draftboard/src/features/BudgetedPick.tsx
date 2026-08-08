@@ -11,6 +11,35 @@ export default function BudgetedPick({ positionSlot, pickSlot, handleDrop, draft
             mutations.unbudgetPick(draftId, drafterId, playerId);
         }
     }
+
+    // Tap equivalent of dropping a player here (touch fires no drag events):
+    // an empty slot takes whoever is on the block, a filled one still clears.
+    const nominated = draftContext.nominatedPlayer;
+    const hasNomination = !!(nominated && nominated.player_id);
+    const isEmpty = !pickSlot.pick.player_id;
+    const isTapTarget = isEmpty && hasNomination
+        && !!pickSlot.allowed_positions?.includes(nominated.position);
+
+    const handleClick = () => {
+        if (!isEmpty) {
+            unbudgetPick(draftContext.draftId, draftContext.drafterId, pickSlot.pick.player_id);
+            return;
+        }
+        if (!hasNomination) return;
+        if (!isTapTarget) {
+            alert(`${nominated.position} is not eligible for ${positionSlot}.`);
+            return;
+        }
+        // Budgets are planned at the projected price, matching the drop path;
+        // the nomination's live winning price only applies to actual picks.
+        mutations.budgetPick(
+            draftContext.draftId,
+            draftContext.drafterId,
+            nominated,
+            positionSlot,
+            nominated.projected_price ?? draftContext.nominationPrice,
+        );
+    }
     const [isDragOver, setIsDragOver] = useState(false);
     const handleDragOver = (e) => { 
         e.preventDefault();
@@ -34,9 +63,14 @@ export default function BudgetedPick({ positionSlot, pickSlot, handleDrop, draft
     return (
         <tr key={pickSlot.pick.player_id} className="font-small border border-gray" style={
             {
-                background: isDragOver ? "blue" : playerHasBeenDraftedByManagerBGColor(pickSlot, drafterPlayerIds),
+                // Rows can't carry a ring/outline reliably, so an open slot the
+                // nominated player fits gets a blue tint instead.
+                background: isDragOver ? "blue"
+                    : isTapTarget ? "#dbeafe"
+                    : playerHasBeenDraftedByManagerBGColor(pickSlot, drafterPlayerIds),
                 color: POSITION_FG_COLORS[positionSlot]}
-            } onClick={() => unbudgetPick(draftContext.draftId, draftContext.drafterId, pickSlot.pick.player_id)} 
+            } onClick={handleClick}
+            title={isTapTarget ? `Budget ${nominated.name} at ${positionSlot}` : undefined}
             onDrop={(e) => {handleDrop(e); setIsDragOver(false)}}
             onDragOver={(e) => handleDragOver(e)}
             onDragLeave={handleDragLeave}

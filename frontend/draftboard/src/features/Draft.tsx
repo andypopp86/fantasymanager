@@ -8,10 +8,12 @@ import { AvailablePlayers } from "../features/AvailablePlayers";
 import WatchedPlayers from "../features/WatchedPlayers";
 import { useDraftState } from "../hooks/useDraftState";
 import { useDraftData } from "../hooks/useDraftData";
+import { useIsMobile } from "../hooks/useIsMobile";
 import { BudgetedPicks } from "./BudgetedPicks";
 import { NominationArea } from "./NominationArea";
 import { BudgetPerSlot } from "./BudgetPerSlot";
 import RebudgetModal from "./RebudgetModal";
+import { POSITION_BG_COLORS, POSITION_FG_COLORS } from "../utils/colors";
 
 type DraftProps = {
     draftDetails: any
@@ -29,6 +31,11 @@ export default function Draft({draftDetails}: DraftProps) {
     // its usual place in the sidebar.
     const [showWatchList, setShowWatchList] = useState(false);
     const [showRebudget, setShowRebudget] = useState(false);
+    // Phones can't show the sidebar beside the board, so the panels become
+    // tabs. Nomination survives tab switches (it lives in the flow machine),
+    // which is what makes "tap a player, switch to Board, tap a slot" work.
+    const isMobile = useIsMobile();
+    const [mobileTab, setMobileTab] = useState<"players" | "board" | "budget">("players");
     const { data: playersData } = useQuery({
         queryKey: ["available_players", draftDetails.id],
         queryFn: () =>
@@ -95,14 +102,72 @@ export default function Draft({draftDetails}: DraftProps) {
         draftDetails,
     };
 
+    const btnClass = "btn border border-gray-400 rounded-md px-3 py-1.5 text-sm hover:bg-gray-100 active:bg-gray-200";
+    const nominatedPlayer = flowContext.nominatedPlayer;
+    const hasNomination = !!(nominatedPlayer && nominatedPlayer.player_id);
+
+    // The four panels, built once and placed differently per layout so the
+    // mobile and desktop arrangements can't drift apart (and so switching tabs
+    // doesn't remount a second AvailablePlayers with its own filter state).
+    const playersPanel = <AvailablePlayers draftContext={draftContext} draftSend={draftSend} />;
+    const watchPanel = showWatchList
+        ? <WatchedPlayers draftContext={draftContext} draftSend={draftSend} onHide={() => setShowWatchList(false)} />
+        : null;
+    const budgetPanel = (
+        <div className="flex flex-col gap-2">
+            <NominationArea draftContext={draftContext} draftSend={draftSend} />
+            <BudgetPerSlot draftContext={draftContext} />
+            <BudgetedPicks draftContext={draftContext} draftSend={draftSend} />
+        </div>
+    );
+    const boardPanel = <DraftBoard draftContext={draftContext} draftSend={draftSend} />;
+
+    // On a phone the Nomination panel is a tab away while you're tapping slots
+    // on the Board tab, so who's on the block and their price ride along at the
+    // top of every tab.
+    const nominationBar = hasNomination && (
+        <div className="flex items-center gap-2 px-2 py-1 border-b border-gray-200">
+            <span
+                className="flex-1 min-w-0 truncate rounded px-2 py-1 text-sm font-semibold"
+                style={{
+                    background: POSITION_BG_COLORS[nominatedPlayer.position],
+                    color: POSITION_FG_COLORS[nominatedPlayer.position],
+                }}
+            >
+                {nominatedPlayer.name} ({nominatedPlayer.position})
+            </span>
+            <input
+                type="number"
+                min={1}
+                className="w-20 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:border-blue-500"
+                value={flowContext.nominationPrice}
+                onChange={(e) => draftSend({ type: "set_nomination_price", price: parseInt(e.target.value) || 0 })}
+                title="Winning price"
+            />
+            <button
+                className="border border-gray-400 rounded-md px-2 py-1 text-sm bg-white"
+                onClick={() => draftSend({ type: "cancel_nomination" })}
+                title="Cancel nomination"
+            >
+                ✕
+            </button>
+        </div>
+    );
+
+    const tabs = [
+        { key: "players", label: "Players" },
+        { key: "board", label: "Board" },
+        { key: "budget", label: "Budget" },
+    ] as const;
+
   return (
     <>
-    <div className="grid grid-cols-12 gap-4">
-      <div className="col-span-3 sm:col-span-3 md:col-span-3 lg:col-span-3 xl:col-span-3 flex gap-2">
-        <button className={"btn border border-gray-400 rounded-md px-2 py-1 hover:bg-gray-100 active:bg-gray-200"} onClick={() => navigate("/")}>Back</button>
+    <div className="flex flex-wrap items-center gap-2 p-1">
+      <div className="flex flex-wrap gap-2">
+        <button className={btnClass} onClick={() => navigate("/")}>Back</button>
         {!showWatchList && (
             <button
-                className={"btn border border-gray-400 rounded-md px-2 py-1 hover:bg-gray-100 active:bg-gray-200"}
+                className={btnClass}
                 onClick={() => setShowWatchList(true)}
                 title="Show WatchList"
             >
@@ -110,50 +175,75 @@ export default function Draft({draftDetails}: DraftProps) {
             </button>
         )}
         <button
-            className={"btn border border-gray-400 rounded-md px-2 py-1 hover:bg-gray-100 active:bg-gray-200"}
+            className={btnClass}
             onClick={() => navigate(`/draft/${draftDetails.id}/plan`)}
             title="Merge a saved plan into the budget"
         >
             Plans
         </button>
         <button
-            className={"btn border border-gray-400 rounded-md px-2 py-1 hover:bg-gray-100 active:bg-gray-200"}
+            className={btnClass}
             onClick={() => setShowRebudget(true)}
             title="Suggest a budget from favorited players by strategy"
         >
             Rebudget
         </button>
       </div>
-      <div className="col-span-9 sm:col-span-9 md:col-span-9 lg:col-span-9 xl:col-span-9 flex">
+      <div className="flex w-full lg:w-auto lg:flex-1 gap-1">
         {data.pendingWrites > 0 && (
             <p className="w-1/3 bg-orange-200 text-center text-sm font-semibold flex items-center justify-center">
                 ⏳ {data.pendingWrites} change{data.pendingWrites === 1 ? "" : "s"} waiting to sync
             </p>
         )}
-        <p className="flex-1 bg-green-200 text-center text-lg font-bold">{draftDetails.draft_name}</p>
+        <p className="flex-1 bg-green-200 text-center text-lg font-bold truncate">{draftDetails.draft_name}</p>
       </div>
     </div>
     {showRebudget && data.hydrated && (
         <RebudgetModal draftContext={draftContext} onClose={() => setShowRebudget(false)} />
     )}
-    {data.hydrated && (
-        <div className="draftboard-grid">
-            <div className="draft-sidebar flex gap-2">
-                <AvailablePlayers draftContext={draftContext} draftSend={draftSend} />
-                {showWatchList && (
-                    <WatchedPlayers draftContext={draftContext} draftSend={draftSend} onHide={() => setShowWatchList(false)} />
-                )}
-                <div className="flex flex-col gap-2">
-                    <NominationArea draftContext={draftContext} draftSend={draftSend} />
-                    <BudgetPerSlot draftContext={draftContext} />
-                    <BudgetedPicks draftContext={draftContext} draftSend={draftSend} />
+    {data.hydrated && (isMobile ? (
+        <>
+            <div className="sticky top-0 z-30 bg-white border-b border-gray-300 shadow-sm">
+                {nominationBar}
+                <div className="flex">
+                    {tabs.map((tab) => (
+                        <button
+                            key={tab.key}
+                            onClick={() => setMobileTab(tab.key)}
+                            className={"flex-1 py-2 text-sm font-semibold bg-white rounded-none border-b-2 " + (
+                                mobileTab === tab.key
+                                    ? "border-blue-500 text-blue-600"
+                                    : "border-transparent text-gray-500"
+                            )}
+                        >
+                            {tab.label}
+                        </button>
+                    ))}
                 </div>
             </div>
+            <div className="p-1">
+                {mobileTab === "players" && playersPanel}
+                {mobileTab === "board" && boardPanel}
+                {mobileTab === "budget" && (
+                    <div className="flex flex-col gap-2">
+                        {budgetPanel}
+                        {watchPanel}
+                    </div>
+                )}
+            </div>
+        </>
+    ) : (
+        <div className="draftboard-grid">
+            <div className="draft-sidebar flex gap-2">
+                {playersPanel}
+                {watchPanel}
+                {budgetPanel}
+            </div>
             <div className="draft-main">
-                <DraftBoard draftContext={draftContext} draftSend={draftSend}/>
+                {boardPanel}
             </div>
         </div>
-    )}
+    ))}
     </>
   )
 }

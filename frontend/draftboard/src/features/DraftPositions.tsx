@@ -24,7 +24,7 @@ export const DraftPositions = ({draftContext, hiddenRows, setHiddenRows}) => {
         <>
             {draftContext && draftContext.budgetedPlayers && 
             <>
-                <div className="border border-gray-300 rounded" style={{ fontSize: "0.875rem" }}>
+                <div className="w-12 shrink-0 bg-white border border-gray-300 rounded" style={{ fontSize: "0.875rem" }}>
                     <div className="flex justify-center border-b border-gray-300 bg-gray-100">
                         <span className="text-xs py-0.5 font-semibold">&nbsp;</span>
                     </div>

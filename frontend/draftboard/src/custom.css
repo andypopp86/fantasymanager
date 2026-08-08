@@ -1,12 +1,24 @@
+/* Mobile-first: one column, stacked. The side-by-side sidebar/board layout
+   only appears once there's room for it (Draft.tsx uses the same 1024px
+   breakpoint via useIsMobile to switch to tabs below it). */
 .draftboard-grid {
     display: grid;
     grid-template-areas:
-        "sidebar main";
-    grid-template-columns: auto auto;
-    grid-template-rows: 1fr;
+        "sidebar"
+        "main";
+    grid-template-columns: minmax(0, 1fr);
     gap: 10px;
-    height: 100vh;
     width: 100%;
+}
+
+@media (min-width: 1024px) {
+    .draftboard-grid {
+        grid-template-areas:
+            "sidebar main";
+        grid-template-columns: auto auto;
+        grid-template-rows: 1fr;
+        height: 100vh;
+    }
 }
 
 .draft-slot {
@@ -56,4 +68,29 @@
 .component-header {
     font-size: 1rem;
     font-weight: bold;
+}
+
+/* The board is as wide as there are managers; on a phone only the manager
+   columns scroll sideways — the position rail sits outside this box so the
+   labels stay put (a sticky grid item can't leave its own grid area). */
+.draft-board-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* iOS zooms the page whenever a focused input is under 16px, which throws the
+   board off-screen mid-draft. Only the form controls are bumped — the dense
+   .font-small tables stay small. */
+@media (max-width: 1023px) {
+    input,
+    select {
+        font-size: 16px;
+    }
+
+    /* index.css centers the app vertically (Vite template default). On a phone
+       that leaves dead space above the header whenever the panel happens to be
+       shorter than the viewport. */
+    body {
+        align-items: flex-start;
+    }
 }

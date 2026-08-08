@@ -6,6 +6,7 @@ import BudgetConflictModal from "./BudgetConflictModal";
 import * as mutations from "../lib/mutations";
 import { findBudgetedPositionSlotByPlayerId } from "../utils/draftHelpers";
 import { autoSlotAssignments } from "../utils/reordering";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 type DraftBoardProps = {
     draftContext: any,
@@ -18,6 +19,7 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
     // How many rows to hide from the top of the board, to make room for
     // drag-and-drop into the remaining (lower) slots as the draft fills up.
     const [hiddenRows, setHiddenRows] = useState(0);
+    const isMobile = useIsMobile();
     // Auto-slot one manager's drafted players by price/position.
     const shuffleTeam = (manager: any) => {
         const players = Object.values(manager.draft_picks || {})
@@ -28,9 +30,11 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
         mutations.reslotPicks(draftContext.draftId, manager.manager_id, assignments);
     };
 
-    // Drop the nominated player onto a specific manager's slot to register the DraftPick.
-    const handleDrop = (e, positionSlot: string, manager: any) => {
-        e.preventDefault();
+    // Put the nominated player in a specific manager's slot, registering the
+    // DraftPick. Reached by dropping a dragged card (mouse) or by tapping an
+    // empty slot while a player is on the block (touch) — same validation
+    // either way.
+    const placeNomination = (positionSlot: string, manager: any) => {
         const player = draftContext.nominatedPlayer;
         const price = draftContext.nominationPrice;
         const managerId = manager.manager_id;
@@ -73,6 +77,11 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
         }
 
         finalizeDraft({ player, price, positionSlot, manager });
+    }
+
+    const handleDrop = (e, positionSlot: string, manager: any) => {
+        e.preventDefault();
+        placeNomination(positionSlot, manager);
     }
 
     // Straightforward (non-conflicting) pick: the mutation mirrors it into the
@@ -145,11 +154,17 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
             {draftContext.managers.length > 0 && 
             <>
             <div className="component-header">Draft Board</div>
+            {/* Twelve managers can't share a phone's width, so on mobile each
+                column keeps a legible minimum and the manager grid scrolls
+                sideways. The position rail is a sibling of the scroll box, not
+                a column in it, so the labels stay next to whatever you tap. */}
+            <div className="flex gap-1">
+            <DraftPositions draftContext={draftContext} hiddenRows={hiddenRows} setHiddenRows={setHiddenRows} />
+            <div className="draft-board-scroll flex-1 min-w-0">
             <div
                 className="grid gap-1"
-                style={{ gridTemplateColumns: `3rem repeat(${draftContext.managers.length}, minmax(0, 1fr))` }}
+                style={{ gridTemplateColumns: `repeat(${draftContext.managers.length}, ${isMobile ? "minmax(6.5rem, 1fr)" : "minmax(0, 1fr)"})` }}
             >
-            <DraftPositions draftContext={draftContext} hiddenRows={hiddenRows} setHiddenRows={setHiddenRows} />
             {draftContext.managers.map((manager, index) => (
                 <div key={index} className="border border-gray-300 rounded">
                     <div className="flex justify-center border-b border-gray-300 bg-gray-100">
@@ -162,7 +177,7 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
                     <div className={"text-lg text-center font-semibold font-small"} style={cannotAfford(manager)
                         ? {backgroundColor: "black", color: "white"}
                         : {backgroundColor: MANAGER_BG_COLORS[manager.manager_position], color: MANAGER_FG_COLORS[manager.manager_position]}}>
-                        <h2 >{manager.manager_name}</h2>
+                        <h2 className="truncate px-1">{manager.manager_name}</h2>
                         <p style={cannotAfford(manager) ? {textDecoration: "line-through"} : undefined}>${manager.manager_budget}</p>
                     </div>
                 <div className="mt-1">
@@ -179,12 +194,15 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
                             draftContext={draftContext}
                             draftSend={draftSend}
                             handleDrop={handleDrop}
+                            placeNomination={placeNomination}
                         />
                     ))}
                     </ul>
                 </div>
                 </div>
             ))}
+            </div>
+            </div>
             </div>
             </>
             }

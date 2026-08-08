@@ -1,8 +1,13 @@
 import React, { useEffect } from "react";
 import AvailablePlayer from "./AvailablePlayer.tsx";
 import { useState } from "react";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 export const AvailablePlayers = ({draftContext, draftSend}) => {
+    // On a phone the filter form would push the player list off-screen, so it
+    // starts collapsed behind a toggle there and stays open on desktop.
+    const isMobile = useIsMobile();
+    const [showFilters, setShowFilters] = useState(!isMobile);
     const nominatePlayer = (player) => {
         draftSend({ type: 'nominate_player', player });
     }
@@ -143,7 +148,18 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
     }
     return (
         <div>
-            <div className="component-header">Available Players</div>
+            <div className="component-header flex items-center justify-between gap-2">
+                <span>Available Players</span>
+                {isMobile && (
+                    <button
+                        className="border border-gray-400 rounded px-2 py-0.5 text-xs font-normal hover:bg-gray-100"
+                        onClick={() => setShowFilters((shown) => !shown)}
+                    >
+                        {showFilters ? "Hide filters ▴" : "Filters ▾"}
+                    </button>
+                )}
+            </div>
+            {showFilters && (
             <table className="table">
                 <tbody>
                     <tr>
@@ -218,8 +234,8 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
                         </td>
                     </tr>
                     <tr>
-                    <td><button className={"px-1 py-0 bg-blue-500 text-white rounded-md shadow-md hover:bg-blue-600"} onClick={handleFilterChange}>Filter</button></td>
-                    <td><button className={"px-1 py-0 bg-gray-300 text-gray-800 rounded-md shadow-md hover:bg-gray-400"} onClick={clearFilter}>Clear</button></td>
+                    <td><button className={"px-2 py-1 bg-blue-500 text-white rounded-md shadow-md hover:bg-blue-600"} onClick={handleFilterChange}>Filter</button></td>
+                    <td><button className={"px-2 py-1 bg-gray-300 text-gray-800 rounded-md shadow-md hover:bg-gray-400"} onClick={clearFilter}>Clear</button></td>
                     </tr>
                     <tr>
                         <td>
@@ -237,8 +253,9 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
                     </tr>
                 </tbody>
             </table>
+            )}
             <div className="max-h-[70vh] overflow-y-auto">
-            <table>
+            <table className="w-full lg:w-auto">
                 <thead className="sticky top-0 bg-white z-10">
                     <tr className="component-subheader">
                         <th>Player Name</th>

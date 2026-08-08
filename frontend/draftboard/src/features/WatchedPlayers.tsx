@@ -16,6 +16,18 @@ export default function WatchedPlayers({draftContext, draftSend, onHide}) {
     };
     const handleDragLeave = () => setIsDragOver(false);
 
+    // Touch has no drag, so the nominated player can be added from the header
+    // button instead of dropped in.
+    const nominated = draftContext.nominatedPlayer;
+    const hasNomination = !!(nominated && nominated.player_id);
+    const alreadyWatched = (playerId) => draftContext.watchedPlayers?.some(
+        (w) => String(w.player_id) === String(playerId)
+    );
+    const addNominated = () => {
+        if (!hasNomination || alreadyWatched(nominated.player_id)) return;
+        watchPick(draftContext.draftId, drafter.manager_id, nominated, nominated.projected_price);
+    };
+
     // Drop an available player here to add them to the WatchList.
     const handleDrop = (e) => {
         e.preventDefault();
@@ -36,8 +48,17 @@ export default function WatchedPlayers({draftContext, draftSend, onHide}) {
             onDrop={handleDrop}
             style={{ backgroundColor: isDragOver ? "#dbeafe" : undefined }}
         >
-            <div className="component-header flex items-center justify-between">
+            <div className="component-header flex items-center justify-between gap-2">
                 <span>WatchList</span>
+                {hasNomination && !alreadyWatched(nominated.player_id) && (
+                    <button
+                        className="flex-1 min-w-0 truncate border border-gray-400 rounded px-1 py-0.5 text-xs font-normal hover:bg-gray-100"
+                        onClick={addNominated}
+                        title={`Add ${nominated.name} to the WatchList`}
+                    >
+                        ＋ {nominated.name}
+                    </button>
+                )}
                 <button
                     className="border border-gray-400 rounded px-1 text-xs hover:bg-gray-100"
                     onClick={onHide}
@@ -46,7 +67,7 @@ export default function WatchedPlayers({draftContext, draftSend, onHide}) {
                     Hide
                 </button>
             </div>
-            <table>
+            <table className="w-full lg:w-auto">
                 <thead>
                     <tr className="component-subheader">
                         <th>Player Name</th>

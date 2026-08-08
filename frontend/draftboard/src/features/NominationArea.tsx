@@ -89,7 +89,7 @@ export const NominationArea = ({ draftContext, draftSend }: NominationAreaProps)
                 onDrop={handleDrop}
             >
                 {!hasNomination && (
-                    <p className="text-gray-400 text-center text-sm">Drag a player here to nominate</p>
+                    <p className="text-gray-400 text-center text-sm">Tap a player (or drag one here) to nominate</p>
                 )}
                 {hasNomination && (
                     <>
@@ -122,7 +122,7 @@ export const NominationArea = ({ draftContext, draftSend }: NominationAreaProps)
                                 ))}
                             </ul>
                         )}
-                        <p className="text-gray-500 text-xs text-center mb-2">Drag the card to a slot to draft</p>
+                        <p className="text-gray-500 text-xs text-center mb-2">Tap an open slot — or drag the card to one — to draft</p>
                         <div className="flex gap-2">
                             <button
                                 className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-3 py-1 rounded-md text-sm"
