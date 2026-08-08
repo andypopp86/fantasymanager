@@ -216,7 +216,7 @@ Each budget slot holds either a *planned target* (projected price) or an
 *actually-drafted* player. `budgetSpent = Σ (actual_price || projected_price)`;
 remainder = `starting_budget − budgetSpent`. Because it mirrors the roster,
 **drafting a player to the drafter's team overwrites the matching budget slot** —
-this is intentional, and the `BudgetConflictModal` (see below) exists so a *different*
+this is intentional, and `BudgetStagingModal` (see below) exists so a *different*
 budgeted player isn't lost silently.
 
 **A budget pick is one row per (draft, manager, player)** on the server
@@ -317,36 +317,8 @@ The tier strip renders after `.draftboard-grid` as a full-width sibling, under
 the sidebar and board together (a user preference — it's a wide horizontal
 strip). That placement is only gap-free because of the track sizing above.
 
-**Clicking a tier player opens `BudgetFromTierModal`** — a STAGED, whole-plan
-budget editor, not a swap. `BudgetConflictModal` (still live, on the drafting
-path) can only trade one player for one slot, and that's the wrong shape here:
-working a target in usually means dropping several players and MOVING the
-incumbent rather than losing them. So slots and an "out of the budget" tray are
-two ends of one staging area — ✕ drops a player to the tray, clicking a tray
-player then a slot places or moves them, and whatever is still in the tray on
-Apply gets unbudgeted. Nothing is written until Apply.
-
-The pure logic is `utils/budgetStaging.ts` (same split as
-`strategyShuffle.ts`/`RebudgetModal`); `lib/mutations.ts::applyBudgetChanges`
-commits it. Three things there are load-bearing:
-
-- **`unbudget` is REMOVALS ONLY — never movers.** `budget_pick` get_or_creates
-  on `(draft, manager, player)` so re-budgeting MOVES the row, but
-  `unbudget_pick` nulls the row's `manager`, so unbudget-then-budget on one
-  player no longer matches and creates a SECOND `BudgetPlayer` row. A mover is
-  re-placed and nothing else.
-- That's only safe because staging guarantees **every displaced player is either
-  re-placed or removed** — never dropped. `budgetPick` clears the target slot in
-  Dexie only, with no server counterpart, so an orphaned row reclaims its slot
-  on the next hydrate.
-- Removals are applied before placements, sequentially (the write queue replays
-  FIFO).
-
-The modal FREEZES its slot snapshot and baseline on open (`useState` initializer,
-not `useMemo`): `budgetedPlayers` is a live Dexie projection, so a pick landing
-mid-edit would otherwise move the baseline out from under the staged
-assignments and diff against a plan the user never saw. Drafted budget rows are
-flagged and locked, as in `RebudgetModal`.
+**Clicking a tier player opens `BudgetStagingModal`** — see its own section
+below; it's shared with the drafting path.
 
 **Winning-price gotcha:** the nominated-player object (`draftContext.nominatedPlayer`)
 has NO `.price` — the winning bid lives in `draftContext.nominationPrice`, threaded
@@ -567,17 +539,76 @@ scale in `utils/colors.getBudgetPerSlotColors`: ≤1 bright red, 1–2 orange-re
 `budget_pick` / `unbudget_pick`, `reslot_picks` / `reslot_budget`, `watch`,
 `available_players`, `manager_picks`, `budgeted_picks`, `watched_picks`.
 
-**BudgetConflictModal** (`features/BudgetConflictModal.tsx`): raised from
-`DraftBoard.handleDrop` when the drafter drafts into a budget slot already holding a
-*different* player. Lets the owner keep the displaced player (move to an eligible open
-slot) and drop other budgeted players to fit the remaining budget. Confirm is advisory
-(always enabled). The resolution is applied by `DraftBoard.resolveConflict` as a
-sequence of `lib/mutations.ts` calls (unbudget drops → move displaced → budget the
-drafted player → submit).
+**BudgetStagingModal** (`features/BudgetStagingModal.tsx`) — ONE staged editor
+behind both ways of working a player into the budget. It replaced
+`BudgetConflictModal` (deleted), which could only trade one player for one slot;
+making room usually means dropping SEVERAL players and MOVING the incumbent
+rather than losing them.
+
+Nothing in it is a swap. Slots and an "out of the budget" tray are two ends of
+one staging area: ✕ drops a player to the tray (and arms them, so removing and
+moving are the same gesture), clicking a tray player then a slot places or moves
+them, and whatever is still in the tray on confirm gets unbudgeted. **Nothing is
+written until confirm** — which is what lets the drafting path treat Cancel as
+"abandon the pick, touch nothing".
+
+Two entry points, differing only in `pinnedSlot` (`utils/budgetStaging.ts::initialStaging`):
+
+- **Tier board** (`Draft.tsx`, `TargetTiersPage.tsx`) — `pinnedSlot` null. The
+  player starts in the tray, armed, priced from the projection; the user picks
+  the slot. Confirm just applies.
+- **Drafting** (`DraftBoard.tsx`, when the drafter drafts into a budget slot
+  holding a *different* player) — `pinnedSlot` is the drafted slot, because the
+  budget MIRRORS the roster so the slot isn't a choice. The player is pre-placed
+  there, locked, at the WINNING price; whoever they displaced starts in the tray
+  pre-armed. Confirm applies the rearrangement and then `submitPick`s
+  (`DraftBoard.resolveConflict`) — the budget must be arranged BEFORE submit,
+  since the server's submit view reads the budget slot to record `PlanChange`s.
+  Either way `initialStaging` first clears the incoming player from any slot they
+  already hold, so drafting someone already budgeted elsewhere can't stage them
+  twice.
+
+The pure logic is `utils/budgetStaging.ts` (same split as
+`strategyShuffle.ts`/`RebudgetModal`); `lib/mutations.ts::applyBudgetChanges`
+commits it. Three things there are load-bearing:
+
+- **`unbudget` is REMOVALS ONLY — never movers.** `budget_pick` get_or_creates
+  on `(draft, manager, player)` so re-budgeting MOVES the row, but
+  `unbudget_pick` nulls the row's `manager`, so unbudget-then-budget on one
+  player no longer matches and creates a SECOND `BudgetPlayer` row. A mover is
+  re-placed and nothing else.
+- That's only safe because staging guarantees **every displaced player is either
+  re-placed or removed** — never dropped. `budgetPick` clears the target slot in
+  Dexie only, with no server counterpart, so an orphaned row reclaims its slot
+  on the next hydrate.
+- Removals are applied before placements, sequentially (the write queue replays
+  FIFO).
+
+The modal FREEZES its slot snapshot and baseline on open (`useState` initializer,
+not `useMemo`): `budgetedPlayers` is a live Dexie projection, so a pick landing
+mid-edit would otherwise move the baseline out from under the staged assignments
+and diff against a plan the user never saw.
+
+**The modal edits the BUDGET only — it never writes `DraftPick`.** `applyBudgetChanges`
+reaches only `budgetPick`/`unbudgetPick` → `budget_pick`/`unbudget_pick` →
+`BudgetPlayer`. The one place drafted state changes is `submitPick`, called from
+`DraftBoard` alone (`finalizeDraft`, and `resolveConflict` after the budget is
+arranged). Keep it that way: the two concepts are distinct, and a tier player
+being *budgeted* is not being *drafted*.
+
+That separation is exactly why `StagedOccupant.locked` matters. It covers the pin
+and — via `draftedPlayerKeys` — every player the DRAFTER has already drafted,
+keyed on the PLAYER, not the slot. A slot-matched check looks right (drafting
+budgets at the matching slot) but silently lapses once that budget row is moved
+by the budget panel's drag-reslot or by this modal, and an unlocked drafted
+player can then be unbudgeted — leaving the pick standing with no budget row,
+since nothing here can undo the pick itself. Players an OPPONENT drafted are
+deliberately NOT locked: a stolen target isn't final for the plan and has to stay
+removable.
 
 > Note: `features/PlanChanges.tsx`, `features/PlanChangesModal.tsx`, and the
 > `planChanges` context field are an earlier attempt at surfacing budget overwrites in
-> the UI — **never rendered/wired**; `BudgetConflictModal` superseded the intent.
+> the UI — **never rendered/wired**; the conflict/staging modal superseded the intent.
 > (The *backend* half — the `PlanChange` model + `update_plan_changes` — DOES run on
 > every drafter pick.) Consolidate rather than extend the dead frontend pieces.
 

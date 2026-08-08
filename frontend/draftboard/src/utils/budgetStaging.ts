@@ -1,4 +1,4 @@
-// Pure staging logic behind BudgetFromTierModal — the modal owns the clicking,
+// Pure staging logic behind BudgetStagingModal — the modal owns the clicking,
 // this owns what the clicks MEAN. Same split as strategyShuffle.ts/RebudgetModal.
 
 export type StagedOccupant = {
@@ -11,9 +11,11 @@ export type StagedOccupant = {
     name: string,
     position: string,
     price: number,
-    // An actually-drafted player mirrored into the budget. Locked: moving or
-    // removing it here would desync the plan from the real roster.
-    drafted: boolean,
+    // Pinned to its slot — no ✕, and it can't be displaced by a placement.
+    // Two reasons: an already-drafted player mirrored into the budget (moving
+    // them would desync the plan from the real roster), or the pick being
+    // drafted right now, whose slot the budget mirrors by definition.
+    locked: boolean,
 };
 
 // Identity for maps/comparisons only. Object keys are strings anyway, so this
@@ -60,13 +62,30 @@ export const currentSlotByPlayer = (slots: StagedSlot[]): Record<string, Baselin
     return map;
 };
 
+// Every player the DRAFTER has actually drafted, by key(). Deliberately keyed on
+// the player, not the slot: a drafted player's budget row starts at the matching
+// slot but can be moved afterwards (the budget panel's drag-reslot, or this
+// modal), and a slot-matched check would quietly stop recognising them as
+// drafted. Only the drafter's own picks — a target an OPPONENT took is not
+// final for the plan, and must stay removable.
+export const draftedPlayerKeys = (drafterDraftPicks: Record<string, any> | undefined): Set<string> => {
+    const keys = new Set<string>();
+    Object.values(drafterDraftPicks || {}).forEach((slotObj: any) => {
+        if (slotObj?.pick?.player_id) keys.add(key(slotObj.pick.player_id));
+    });
+    return keys;
+};
+
 // The staged arrangement as it stands before any edits: every occupied slot
-// keeps its player. A slot whose player is the drafter's actual draft pick is
-// flagged `drafted` and is locked in the UI.
+// keeps its player. A player the drafter has already drafted is `locked` —
+// drafting is final, and unbudgeting or moving them here would desync the plan
+// from the real roster (this modal never writes DraftPick, so the pick itself
+// would survive while its budget row wandered off or vanished).
 export const initialAssignments = (
     slots: StagedSlot[],
     drafterDraftPicks: Record<string, any> | undefined,
 ): Record<string, StagedOccupant | null> => {
+    const drafted = draftedPlayerKeys(drafterDraftPicks);
     const assignments: Record<string, StagedOccupant | null> = {};
     slots.forEach(({ slot, pick }) => {
         assignments[slot] = pick.player_id
@@ -76,11 +95,70 @@ export const initialAssignments = (
                 position: pick.position,
                 // Mirrors budgetSpent's rule: the real price wins once paid.
                 price: money(pick.actual_price) || money(pick.projected_price),
-                drafted: String(drafterDraftPicks?.[slot]?.pick?.player_id || "") === String(pick.player_id),
+                locked: drafted.has(key(pick.player_id)),
             }
             : null;
     });
     return assignments;
+};
+
+export type Incoming = {
+    player_id: number | string,
+    name: string,
+    position: string,
+    price: number,
+};
+
+export type Staging = {
+    assignments: Record<string, StagedOccupant | null>,
+    tray: StagedOccupant[],
+    selectedKey: string | null,
+};
+
+// Opening state for the modal, for both entry points.
+//
+// `pinnedSlot` is what separates them. Budgeting from the tier board leaves it
+// null: the player starts in the tray and the user picks a slot. Drafting sets
+// it, because the budget MIRRORS the roster — the drafted player's slot isn't a
+// choice, so they're pre-placed and locked, and whoever they displaced starts in
+// the tray already armed (that displacement being the whole reason we stopped).
+//
+// Either way the incoming player is first cleared from any slot they already
+// occupy, so a player budgeted at RB1 and drafted into FLEX1 can't end up staged
+// in both.
+export const initialStaging = (
+    slots: StagedSlot[],
+    drafterDraftPicks: Record<string, any> | undefined,
+    incoming: Incoming,
+    pinnedSlot: string | null,
+): Staging => {
+    const assignments = initialAssignments(slots, drafterDraftPicks);
+    const incomingKey = key(incoming.player_id);
+
+    const existingSlot = Object.keys(assignments)
+        .find((slot) => assignments[slot] && key(assignments[slot]!.player_id) === incomingKey) || null;
+
+    if (!pinnedSlot) {
+        // Already budgeted somewhere: show them in place rather than asking the
+        // user to re-place a player who is already in the plan.
+        if (existingSlot) return { assignments, tray: [], selectedKey: null };
+        return {
+            assignments,
+            tray: [{ ...incoming, locked: false }],
+            selectedKey: incomingKey,
+        };
+    }
+
+    if (existingSlot && existingSlot !== pinnedSlot) assignments[existingSlot] = null;
+    const displaced = assignments[pinnedSlot];
+    assignments[pinnedSlot] = { ...incoming, locked: true };
+
+    const wasSamePlayer = displaced && key(displaced.player_id) === incomingKey;
+    return {
+        assignments,
+        tray: displaced && !wasSamePlayer ? [displaced] : [],
+        selectedKey: displaced && !wasSamePlayer ? key(displaced.player_id) : null,
+    };
 };
 
 export const isEligible = (slot: StagedSlot, occupant: StagedOccupant | null): boolean =>

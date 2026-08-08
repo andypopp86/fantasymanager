@@ -4,7 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { draftRetrieve } from "../lib/data";
 import { useDraftData } from "../hooks/useDraftData";
 import TargetTiers from "./TargetTiers";
-import BudgetFromTierModal from "./BudgetFromTierModal";
+import BudgetStagingModal from "./BudgetStagingModal";
+import { applyBudgetChanges } from "../lib/mutations";
 
 // /draft/:draftId/tiers — the target board on its own page (the full-width view
 // of the same section that sits under the draft board). All the rendering lives
@@ -61,10 +62,23 @@ export default function TargetTiersPage() {
             </div>
 
             {budgetPlayer && canBudget && (
-                <BudgetFromTierModal
-                    player={budgetPlayer}
+                <BudgetStagingModal
+                    player={{
+                        player_id: budgetPlayer.player_id,
+                        name: budgetPlayer.name,
+                        position: budgetPlayer.position,
+                        price: parseInt(String(budgetPlayer.projected_price)) || 0,
+                    }}
                     draftContext={draftContext}
-                    onClose={() => setBudgetPlayer(null)}
+                    title={`Budget ${budgetPlayer.name}`}
+                    intro="Click a player below, then click a slot to place or move them. ✕ takes a player out of the plan. Nothing is saved until you apply."
+                    confirmLabel="Apply"
+                    cancelLabel="Cancel"
+                    onConfirm={async (changes) => {
+                        await applyBudgetChanges(draftId, data.drafterId, changes);
+                        setBudgetPlayer(null);
+                    }}
+                    onCancel={() => setBudgetPlayer(null)}
                 />
             )}
         </div>

@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { MANAGER_BG_COLORS, MANAGER_FG_COLORS } from "../utils/colors";
 import { DraftBoardSlot } from "./DraftBoardSlot";
 import { DraftPositions } from "./DraftPositions";
-import BudgetConflictModal from "./BudgetConflictModal";
+import BudgetStagingModal from "./BudgetStagingModal";
 import * as mutations from "../lib/mutations";
 import { findBudgetedPositionSlotByPlayerId } from "../utils/draftHelpers";
 import { autoSlotAssignments } from "../utils/reordering";
@@ -109,28 +109,14 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
         }
     }
 
-    // Owner confirmed the conflict modal: persist the budget changes (keep the
-    // displaced player in its new slot, drop the chosen picks, move the drafted
-    // player in), then submit the pick.
-    const resolveConflict = async ({ keptSlot, removeSlots }) => {
-        const { player, price, positionSlot, manager, displaced } = pendingConflict;
-        const { draftId, drafterId, budgetedPlayers } = draftContext;
+    // Owner confirmed the staging modal: commit the whole rearrangement (which
+    // already includes budgeting the drafted player at their pinned slot), then
+    // submit the pick. Cancelling writes nothing and abandons the pick.
+    const resolveConflict = async (changes) => {
+        const { player, price, positionSlot, manager } = pendingConflict;
+        const { draftId, drafterId } = draftContext;
 
-        for (const slot of removeSlots) {
-            const playerId = budgetedPlayers[slot]?.pick?.player_id;
-            if (playerId) await mutations.unbudgetPick(draftId, drafterId, playerId);
-        }
-        if (displaced.player_id) {
-            if (keptSlot) {
-                // Move the displaced player to its new slot (one budget row per player).
-                await mutations.budgetPick(draftId, drafterId, displaced, keptSlot, displaced.projected_price);
-            } else {
-                // Not kept: drop it from the budget, else its row still claims this
-                // slot on the server and reappears on the next refetch.
-                await mutations.unbudgetPick(draftId, drafterId, displaced.player_id);
-            }
-        }
-        await mutations.budgetPick(draftId, drafterId, player, positionSlot, price);
+        await mutations.applyBudgetChanges(draftId, drafterId, changes);
 
         setPendingConflict(null);
         mutations.submitPick(draftId, manager.manager_id, player, price, positionSlot).then(handleSubmitResult);
@@ -143,9 +129,28 @@ export const DraftBoard = ({draftContext, draftSend}: DraftBoardProps) => {
     return (
         <>
             {pendingConflict && (
-                <BudgetConflictModal
-                    pending={pendingConflict}
+                <BudgetStagingModal
+                    player={{
+                        player_id: pendingConflict.player.player_id,
+                        name: pendingConflict.player.name,
+                        position: pendingConflict.player.position,
+                        // The winning price, not a projection — this player is
+                        // actually being bought.
+                        price: Number(pendingConflict.price),
+                    }}
+                    pinnedSlot={pendingConflict.positionSlot}
                     draftContext={draftContext}
+                    title={`Drafting ${pendingConflict.player.name} — $${pendingConflict.price}`}
+                    intro={
+                        <>
+                            <b>{pendingConflict.positionSlot}</b> was budgeted for{" "}
+                            <b>{pendingConflict.displaced.player_name}</b>. Give them another slot, or leave
+                            them out — and drop anyone else you need to, to fit the budget. Nothing is saved
+                            until you draft.
+                        </>
+                    }
+                    confirmLabel="Draft"
+                    cancelLabel="Cancel draft"
                     onConfirm={resolveConflict}
                     onCancel={() => setPendingConflict(null)}
                 />
