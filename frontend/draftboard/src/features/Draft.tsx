@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { draftAvailablePlayersRetrieve, draftManagerPicksRetrieve, draftBudgetedPicksRetrieve, draftWatchedPicksRetrieve } from "../lib/data";
 import { hydrateDraft } from "../lib/db";
@@ -13,6 +13,7 @@ import { BudgetedPicks } from "./BudgetedPicks";
 import { NominationArea } from "./NominationArea";
 import { BudgetPerSlot } from "./BudgetPerSlot";
 import RebudgetModal from "./RebudgetModal";
+import TargetTiers from "./TargetTiers";
 import { POSITION_BG_COLORS, POSITION_FG_COLORS } from "../utils/colors";
 
 type DraftProps = {
@@ -31,6 +32,8 @@ export default function Draft({draftDetails}: DraftProps) {
     // its usual place in the sidebar.
     const [showWatchList, setShowWatchList] = useState(false);
     const [showRebudget, setShowRebudget] = useState(false);
+    // Target tiers ride along under the board (toggled by the Tiers button).
+    const [showTiers, setShowTiers] = useState(true);
     // Phones can't show the sidebar beside the board, so the panels become
     // tabs. Nomination survives tab switches (it lives in the flow machine),
     // which is what makes "tap a player, switch to Board, tap a slot" work.
@@ -122,6 +125,55 @@ export default function Draft({draftDetails}: DraftProps) {
     );
     const boardPanel = <DraftBoard draftContext={draftContext} draftSend={draftSend} />;
 
+    // Anyone's drafted players, from the LOCAL rows — a pick submitted this
+    // session hides its player from the tiers immediately, instead of lingering
+    // until the section's next 15s server poll.
+    const draftedPlayerIds = useMemo(() => {
+        const ids = new Set<string>();
+        data.managers.forEach((manager: any) => {
+            Object.values(manager.draft_picks || {}).forEach((pickSlot: any) => {
+                if (pickSlot.pick.player_id) ids.add(String(pickSlot.pick.player_id));
+            });
+        });
+        return ids;
+    }, [data.managers]);
+
+    // Sits below the board in both layouts. Collapsed away entirely when off, so
+    // a draft with no tiering costs nothing.
+    const tiersPanel = showTiers && (
+        <div className="mt-2 border border-gray-300 rounded-lg overflow-hidden">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 border-b border-gray-300">
+                <span className="font-semibold text-gray-700 text-sm">Target Tiers</span>
+                <Link
+                    className="text-xs text-blue-600 underline"
+                    to={`/draft/${draftDetails.id}/tiers`}
+                    title="Open the full-page tier board"
+                >
+                    full page ↗
+                </Link>
+                <span className="flex-1" />
+                <button
+                    className="text-xs border border-gray-300 rounded-md px-2 py-1 bg-white hover:bg-gray-200"
+                    onClick={() => setShowTiers(false)}
+                    title="Hide target tiers"
+                >
+                    Hide ✕
+                </button>
+            </div>
+            <TargetTiers
+                draftId={draftDetails.id}
+                hidePlayerIds={draftedPlayerIds}
+                // One line rather than the page's full explainer — this sits
+                // under the board on every draft, tiered or not.
+                emptyState={
+                    <p className="px-3 py-2 text-xs text-gray-500">
+                        Nothing tiered yet — set <span className="font-mono">target_tier</span> on players in /admin.
+                    </p>
+                }
+            />
+        </div>
+    );
+
     // On a phone the Nomination panel is a tab away while you're tapping slots
     // on the Board tab, so who's on the block and their price ride along at the
     // top of every tab.
@@ -181,6 +233,15 @@ export default function Draft({draftDetails}: DraftProps) {
         >
             Plans
         </button>
+        {!showTiers && (
+            <button
+                className={btnClass}
+                onClick={() => setShowTiers(true)}
+                title="Show undrafted targets by tier under the board"
+            >
+                Tiers ▾
+            </button>
+        )}
         <button
             className={btnClass}
             onClick={() => setShowRebudget(true)}
@@ -223,7 +284,12 @@ export default function Draft({draftDetails}: DraftProps) {
             </div>
             <div className="p-1">
                 {mobileTab === "players" && playersPanel}
-                {mobileTab === "board" && boardPanel}
+                {mobileTab === "board" && (
+                    <>
+                        {boardPanel}
+                        {tiersPanel}
+                    </>
+                )}
                 {mobileTab === "budget" && (
                     <div className="flex flex-col gap-2">
                         {budgetPanel}
@@ -233,16 +299,23 @@ export default function Draft({draftDetails}: DraftProps) {
             </div>
         </>
     ) : (
-        <div className="draftboard-grid">
-            <div className="draft-sidebar flex gap-2">
-                {playersPanel}
-                {watchPanel}
-                {budgetPanel}
+        <>
+            <div className="draftboard-grid">
+                <div className="draft-sidebar flex gap-2">
+                    {playersPanel}
+                    {watchPanel}
+                    {budgetPanel}
+                </div>
+                <div className="draft-main">
+                    {boardPanel}
+                </div>
             </div>
-            <div className="draft-main">
-                {boardPanel}
-            </div>
-        </div>
+            {/* Full page width, under the sidebar and board together. Safe to
+                sit outside the grid only because the grid's tracks no longer
+                share free space (see custom.css) — under the old `auto auto`
+                this left a blank gap beside the budget panel. */}
+            {tiersPanel}
+        </>
     ))}
     </>
   )

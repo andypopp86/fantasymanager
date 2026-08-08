@@ -103,6 +103,42 @@ the code+year lookup fix, chase the refresh with
 `railway ssh --service app -- python manage.py relink_player_teams_for_current_year`
 (idempotent) to repoint any players stuck on another season's team row.
 
+## Push target tiers up (run the DEPLOYED command via railway ssh)
+
+`Player.target_tier` is set by hand in /admin (inline in the player list), which
+means it lives on whichever machine you did the tiering on. Move it with a CSV
+that ships in the build — same rule as everything else here: **never point a
+local process at the hosted DB.**
+
+```bash
+# 1. On the machine whose /admin has the tiers (dev Mac or the Windows laptop):
+.venv/bin/python manage.py write_target_tiers_to_csv     # → <year>_target_tiers.csv at repo root
+
+# 2. Commit the CSV and deploy, or the file never reaches the container.
+git add 2026_target_tiers.csv && git commit -m "chore: refresh target tiers"
+railway up --service app
+
+# 3. Apply it inside the container. Check first, then commit:
+railway ssh --service app -- python manage.py update_player_target_tiers --dry-run
+railway ssh --service app -- python manage.py update_player_target_tiers
+```
+
+The CSV lives at the **repo root**, not `data/` — `data/` is stripped from both
+the Docker and Railway builds. `.railwayignore` carries a `!*_target_tiers.csv`
+exemption for the same reason the missing-players CSVs have one.
+
+- **The file is the source of truth.** Players it doesn't list are reset to tier
+  0, so clearing a tier locally clears it on the server too. Pass `--no-clear`
+  to only apply the listed tiers and leave everything else alone.
+- Matching is on `(player_id, year)` — Player's `unique_together`, and stable
+  across the local / Windows / hosted copies, unlike the pk. player_ids in the
+  file with no row for that year are reported and skipped.
+- `--year` defaults to the current year. `--dry-run` reports the same counts
+  inside a rolled-back transaction.
+- It updates via `queryset.update()` on purpose: `Player.save()` rewrites
+  `projected_price` to `max(price or 0, 1)`, so a save-based import would
+  silently reprice every player with a null price.
+
 ## Pull data back down (after using the hosted instance for real picks)
 
 ```powershell

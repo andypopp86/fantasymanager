@@ -29,7 +29,12 @@ a:hover {
 body {
   margin: 0;
   display: flex;
-  place-items: center;
+  /* Was Vite's `place-items: center`. On a flex body only its align-items half
+     ever applied, and centering vertically CLIPS the top of any content taller
+     than the viewport — an overflowing centered flex item overflows both ways
+     and the page cannot scroll back up to it. The board page is now that tall
+     (the target-tiers strip sits under the board), so align to the start. */
+  align-items: flex-start;
   min-width: 320px;
   min-height: 100vh;
 }

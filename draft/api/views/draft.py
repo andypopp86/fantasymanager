@@ -265,6 +265,38 @@ class DraftAvailablePlayersAPI(APIView):
         output_data = [DraftPicksOutputSerializer.serialize(player) for player in players]
         return Response(output_data, status=status.HTTP_200_OK)
 
+class TargetTierPlayerOutputSerializer(BaseSerializer):
+    player_id = serializers.IntegerField(source="player.player_id")
+    name = serializers.CharField(source="player.name")
+    position = serializers.CharField(source="player.position")
+    target_tier = serializers.IntegerField(source="player.target_tier")
+    adp_formatted = serializers.DecimalField(max_digits=8, decimal_places=2, source="player.adp_formatted")
+    favorite = serializers.BooleanField(allow_null=True, source="player.favorite")
+    notes = serializers.CharField(allow_null=True, source="player.notes")
+    team = serializers.CharField(allow_null=True, source="player.team.code", default=None)
+    # Annotated on the queryset: override_price when set, else projected_price.
+    projected_price = serializers.DecimalField(max_digits=8, decimal_places=2)
+
+
+class TargetTierOutputSerializer(BaseSerializer):
+    tier = serializers.IntegerField()
+    players = serializers.SerializerMethodField()
+
+    def get_players(self, instance):
+        return [TargetTierPlayerOutputSerializer.serialize(pick) for pick in instance["picks"]]
+
+
+class DraftTargetTiersAPI(APIView):
+    permission_classes = [IsDrafter]
+
+    def get(self, request, draft_id):
+        tiers = DraftReadService(
+            user=request.user
+        ).get_target_tiers(draft_id=draft_id)
+        output_data = [TargetTierOutputSerializer.serialize(tier) for tier in tiers]
+        return Response(output_data, status=status.HTTP_200_OK)
+
+
 class DraftPicksAPI(APIView):
     permission_classes = [IsSpectatorVisible]
     def get(self, request, draft_id):
