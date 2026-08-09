@@ -421,6 +421,46 @@ class PlayerProjectionFlagTests(TestCase):
         self.assertNotIn("my_price_rationale", rows["Priced RB"])
 
 
+class PlayerTeamFilterTests(TestCase):
+    """NFLTeam is one row per (code, year), so the stock FK filter lists a code
+    once per season with nothing to tell them apart. The admin filter keys on the
+    CODE instead — ARI is Arizona in every season."""
+
+    def setUp(self):
+        from draft.admin import PlayerTeamFilter
+        from draft.models import NFLTeam
+
+        self.filter_class = PlayerTeamFilter
+        self.ari_2024 = NFLTeam.objects.create(code="ARI", year=2024)
+        self.ari_2026 = NFLTeam.objects.create(code="ARI", year=2026)
+        self.den_2026 = NFLTeam.objects.create(code="DEN", year=2026)
+
+        self.old_cardinal = make_player("Old Cardinal", "RB", year=2024)
+        self.new_cardinal = make_player("New Cardinal", "WR")
+        self.bronco = make_player("Bronco", "TE")
+        Player.objects.filter(pk=self.old_cardinal.pk).update(team=self.ari_2024)
+        Player.objects.filter(pk=self.new_cardinal.pk).update(team=self.ari_2026)
+        Player.objects.filter(pk=self.bronco.pk).update(team=self.den_2026)
+
+    def build(self, value):
+        instance = self.filter_class.__new__(self.filter_class)
+        instance.used_parameters = {self.filter_class.parameter_name: value} if value else {}
+        return instance
+
+    def test_lookups_list_each_code_once(self):
+        lookups = self.build(None).lookups(None, None)
+        codes = [code for code, _ in lookups]
+        self.assertEqual(codes, ["ARI", "DEN"])  # deduped and sorted
+
+    def test_filtering_by_code_spans_every_season_of_that_team(self):
+        filtered = self.build("ARI").queryset(None, Player.objects.all())
+        self.assertCountEqual(
+            filtered.values_list("name", flat=True), ["Old Cardinal", "New Cardinal"])
+
+    def test_no_selection_is_a_no_op(self):
+        self.assertEqual(self.build(None).queryset(None, Player.objects.all()).count(), 3)
+
+
 class TargetTierCsvTests(TestCase):
     """write_target_tiers_to_csv → update_player_target_tiers is how hand-set
     tiers move from the machine whose /admin has them to the hosted DB, so the
