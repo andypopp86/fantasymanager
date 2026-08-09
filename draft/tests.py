@@ -421,6 +421,51 @@ class PlayerProjectionFlagTests(TestCase):
         self.assertNotIn("my_price_rationale", rows["Priced RB"])
 
 
+class MyPriceVarianceFilterTests(TestCase):
+    """Buckets my_price against the EFFECTIVE projected price
+    (`override_price or projected_price`) — the same basis the board colours
+    against. Using the raw projected_price column instead would mis-bucket every
+    player carrying an override."""
+
+    def setUp(self):
+        from draft.admin import MyPriceVarianceFilter
+        self.filter_class = MyPriceVarianceFilter
+
+        def priced(name, projected, my_price=None, override=None):
+            player = make_player(name, "RB")
+            Player.objects.filter(pk=player.pk).update(
+                projected_price=projected, my_price=my_price, override_price=override)
+            return player
+
+        priced("Above", 30, my_price=40)
+        priced("Below", 30, my_price=20)
+        priced("Equal", 30, my_price=30)
+        priced("Unpriced", 30)
+        # my_price 35 is ABOVE the raw 30 but BELOW the 50 override that
+        # actually governs — the case a naive comparison gets backwards.
+        priced("Overridden", 30, my_price=35, override=50)
+
+    def build(self, value):
+        instance = self.filter_class.__new__(self.filter_class)
+        instance.used_parameters = {self.filter_class.parameter_name: value} if value else {}
+        return instance
+
+    def names(self, value):
+        return sorted(
+            self.build(value).queryset(None, Player.objects.all()).values_list("name", flat=True))
+
+    def test_above_below_and_equal(self):
+        self.assertEqual(self.names("above"), ["Above"])
+        self.assertEqual(self.names("below"), ["Below", "Overridden"])
+        self.assertEqual(self.names("equal"), ["Equal"])
+
+    def test_unset_finds_the_unpriced(self):
+        self.assertEqual(self.names("unset"), ["Unpriced"])
+
+    def test_no_selection_is_a_no_op(self):
+        self.assertEqual(len(self.names(None)), 5)
+
+
 class PlayerTeamFilterTests(TestCase):
     """NFLTeam is one row per (code, year), so the stock FK filter lists a code
     once per season with nothing to tell them apart. The admin filter keys on the
