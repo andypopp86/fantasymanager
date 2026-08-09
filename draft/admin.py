@@ -36,6 +36,30 @@ class FlexFilter(admin.SimpleListFilter):
             return queryset
 
 
+class PlayerTeamFilter(admin.SimpleListFilter):
+    """Filter players by team CODE, not by the team FK.
+
+    NFLTeam is one row per (code, year) — the attributes change season to season
+    — so the stock `team` filter lists ARI, ARI, ARI… with nothing on screen to
+    tell the years apart, and picking the wrong one silently returns nobody. The
+    CODE is the stable identity: ARI is Arizona in every season. Pair this with
+    the Year filter when a single season is what you want.
+    """
+    title = 'Team'
+    parameter_name = 'team_code'
+
+    def lookups(self, request, model_admin):
+        codes = (d.NFLTeam.objects
+                 .exclude(code__isnull=True).exclude(code='')
+                 .order_by('code').values_list('code', flat=True).distinct())
+        return [(code, code) for code in codes]
+
+    def queryset(self, request, queryset):
+        if not self.value():
+            return queryset
+        return queryset.filter(team__code=self.value())
+
+
 class PlayerAdmin(admin.ModelAdmin):
     # Working order: what you set during prep first, reference columns last.
     list_display = ('name', 'position', 'team', 'year', 'target_tier', 'is_projection', 'has_injury', 'defensive_impact', 'projected_price', 'my_price', 'my_price_rationale', 'adp_formatted', 'favorite', 'override_price', 'player_id')
@@ -48,9 +72,9 @@ class PlayerAdmin(admin.ModelAdmin):
     # board's worth of players one change-form at a time is unworkable.
     list_editable = ('target_tier', 'is_projection', 'has_injury', 'defensive_impact', 'favorite', 'override_price', 'my_price', 'my_price_rationale')
     search_fields = ('name', 'position', )
-    # `team` last on purpose — it renders every team as a link, so leading with
-    # it pushes the short, frequently-used filters below the fold.
-    list_filter = ('position', 'year', 'target_tier', 'is_projection', 'has_injury', 'defensive_impact', 'favorite', 'team')
+    # Team last on purpose — it renders every code as a link, so leading with it
+    # pushes the short, frequently-used filters below the fold.
+    list_filter = ('position', 'year', 'target_tier', 'is_projection', 'has_injury', 'defensive_impact', 'favorite', PlayerTeamFilter)
 
     def formfield_for_dbfield(self, db_field, request, **kwargs):
         # A default TextField renders as a 10-row textarea, which blows the
