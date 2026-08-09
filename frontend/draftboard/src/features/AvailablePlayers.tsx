@@ -26,7 +26,8 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
     const [priceFilterValue, setPriceFilterValue] = useState(undefined);
     const [budgetedFilterValue, setBudgetedFilterValue] = useState("off");
     const [favoriteFilterValue, setFavoriteFilterValue] = useState("off");
-    const [targetTypeFilterValue, setTargetTypeFilterValue] = useState("");
+    // "" | "above" | "below" | "equal" — my_price against the projected price.
+    const [priceVarFilterValue, setPriceVarFilterValue] = useState("");
     const [filteredPlayers, setFilteredPlayers] = useState(draftContext.undraftedPlayers);
 
     const checkName = (player) => {
@@ -44,8 +45,18 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
     const checkBudget = (player) => {
         return budgetedPlayerIds.includes(player.player.player_id);
     }
-    const checkTargetType = (player) => {
-        return player.player.target_type === targetTypeFilterValue;
+    // Compares against the ROW's projected_price — the server-annotated
+    // `override_price || projected_price`, the same basis the nomination area
+    // colours my_price against. A player with no my_price can't be compared, so
+    // they drop out whenever a variance option is selected.
+    const checkPriceVariance = (player) => {
+        const raw = player.player.my_price;
+        if (raw === null || raw === undefined || raw === "") return false;
+        const mine = parseInt(String(raw)) || 0;
+        const projected = parseInt(String(player.projected_price)) || 0;
+        if (priceVarFilterValue === "above") return mine > projected;
+        if (priceVarFilterValue === "below") return mine < projected;
+        return mine === projected;
     }
     const checkFavorite = (player) => {
         return !!player.player.favorite;
@@ -70,7 +81,7 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
         if (priceFilterValue !== undefined && priceFilterValue > 0) { predicates.push(checkPrice); }
         if (budgetedFilterValue === "on") { predicates.push(checkBudget); }
         if (favoriteFilterValue === "on") { predicates.push(checkFavorite); }
-        if (targetTypeFilterValue !== "") { predicates.push(checkTargetType); }
+        if (priceVarFilterValue !== "") { predicates.push(checkPriceVariance); }
         if (predicates.length === 0) {
             setFilteredPlayers(draftContext.undraftedPlayers);
             return;
@@ -98,8 +109,8 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
         const newValue = filterValue === "on" ? "off" : "on";
         setFavoriteFilterValue(newValue);
     }
-    const handleTargetTypeFilterChange = (filterValue) => {
-        setTargetTypeFilterValue(filterValue);
+    const handlePriceVarFilterChange = (filterValue) => {
+        setPriceVarFilterValue(filterValue);
     }
 
     // Resets every filter input (they're all controlled) and the results.
@@ -110,7 +121,7 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
         setPriceFilterValue(undefined);
         setBudgetedFilterValue("off");
         setFavoriteFilterValue("off");
-        setTargetTypeFilterValue("");
+        setPriceVarFilterValue("");
         setFilteredPlayers(draftContext.undraftedPlayers);
     }
 
@@ -219,17 +230,14 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
                         </td>
                     </tr>
                     <tr>
-                        <td scope="row">Target:</td>
+                        <td scope="row">My $:</td>
                         <td>
-                            <select style={{width: "100px"}} value={targetTypeFilterValue}
-                                onChange={(e) => handleTargetTypeFilterChange(e.target.value)}>
+                            <select style={{width: "100px"}} value={priceVarFilterValue}
+                                onChange={(e) => handlePriceVarFilterChange(e.target.value)}>
                                 <option value="">All</option>
-                                <option value="prime">Prime</option>
-                                <option value="starter">Starter</option>
-                                <option value="streamer">Streamer</option>
-                                <option value="sleeper">Sleeper</option>
-                                <option value="catalyst">Catalyst</option>
-                                <option value="undraftable">Undraftable</option>
+                                <option value="above">Above proj</option>
+                                <option value="below">Below proj</option>
+                                <option value="equal">Equal</option>
                             </select>
                         </td>
                     </tr>

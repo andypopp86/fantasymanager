@@ -1,5 +1,5 @@
 from django.contrib import admin
-from django.db.models import Q
+from django.db.models import Case, F, Q, When
 from django.forms import Textarea
 from draft import models as d
 
@@ -34,6 +34,44 @@ class FlexFilter(admin.SimpleListFilter):
             return queryset.filter(position__in=['QB', 'Def'])
         else:
             return queryset
+
+
+class MyPriceVarianceFilter(admin.SimpleListFilter):
+    """Where the drafter's walk-away price sits against the projection.
+
+    Compares my_price to `override_price or projected_price` — the same
+    effective price the board colours against, NOT the raw projected_price
+    column, which would mis-bucket every player carrying an override. Players
+    with no my_price can't be compared, so they only appear under "Not set".
+    """
+    title = 'My price vs projected'
+    parameter_name = 'my_price_var'
+
+    def lookups(self, request, model_admin):
+        return [
+            ('above', 'Above projected'),
+            ('below', 'Below projected'),
+            ('equal', 'Equal'),
+            ('unset', 'Not set'),
+        ]
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if not value:
+            return queryset
+        if value == 'unset':
+            return queryset.filter(my_price__isnull=True)
+        priced = queryset.filter(my_price__isnull=False).annotate(
+            _effective_price=Case(
+                When(override_price__isnull=False, then=F('override_price')),
+                default=F('projected_price'),
+            )
+        )
+        if value == 'above':
+            return priced.filter(my_price__gt=F('_effective_price'))
+        if value == 'below':
+            return priced.filter(my_price__lt=F('_effective_price'))
+        return priced.filter(my_price=F('_effective_price'))
 
 
 class PlayerTeamFilter(admin.SimpleListFilter):
@@ -74,7 +112,7 @@ class PlayerAdmin(admin.ModelAdmin):
     search_fields = ('name', 'position', )
     # Team last on purpose — it renders every code as a link, so leading with it
     # pushes the short, frequently-used filters below the fold.
-    list_filter = ('position', 'year', 'target_tier', 'is_projection', 'has_injury', 'defensive_impact', 'favorite', PlayerTeamFilter)
+    list_filter = ('position', 'year', 'target_tier', 'is_projection', 'has_injury', 'defensive_impact', 'favorite', MyPriceVarianceFilter, PlayerTeamFilter)
 
     def formfield_for_dbfield(self, db_field, request, **kwargs):
         # A default TextField renders as a 10-row textarea, which blows the
