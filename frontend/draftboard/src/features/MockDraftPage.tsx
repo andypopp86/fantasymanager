@@ -35,6 +35,13 @@ export default function MockDraftPage() {
     const [selected, setSelected] = useState<MockDraftPlayer | null>(null);
     const [search, setSearch] = useState("");
     const [positionFilter, setPositionFilter] = useState<string | null>(null);
+    // Same filter semantics as the board's AvailablePlayers: price is a CEILING
+    // (max the pick may cost), team comes from the loaded players rather than a
+    // hardcoded list, and Favorite counts only `true` — the tri-state's neutral
+    // (null) and avoid (false) are both "not a favorite".
+    const [maxPrice, setMaxPrice] = useState("");
+    const [teamFilter, setTeamFilter] = useState("");
+    const [favoriteOnly, setFavoriteOnly] = useState(false);
     const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
     const [savedPlan, setSavedPlan] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -81,14 +88,35 @@ export default function MockDraftPage() {
             }));
     }, [mock, selected]);
 
+    // Options come from the loaded players, so a team with nobody left available
+    // never shows up in the dropdown.
+    const teamCodes = useMemo(
+        () => [...new Set((players || []).map((player) => player.team).filter(Boolean))].sort() as string[],
+        [players],
+    );
+
     const visiblePlayers = useMemo(() => {
         const term = search.trim().toLowerCase();
+        const ceiling = parseFloat(maxPrice);
         return (players || []).filter((player) => {
             if (positionFilter && player.position !== positionFilter) return false;
             if (term && !player.name.toLowerCase().includes(term)) return false;
+            if (teamFilter && player.team !== teamFilter) return false;
+            if (!isNaN(ceiling) && ceiling > 0 && priceOf(player) > ceiling) return false;
+            if (favoriteOnly && player.favorite !== true) return false;
             return true;
         });
-    }, [players, search, positionFilter]);
+    }, [players, search, positionFilter, teamFilter, maxPrice, favoriteOnly]);
+
+    const filtersActive = !!(search || positionFilter || teamFilter || maxPrice || favoriteOnly);
+
+    const clearFilters = () => {
+        setSearch("");
+        setPositionFilter(null);
+        setTeamFilter("");
+        setMaxPrice("");
+        setFavoriteOnly(false);
+    };
 
     const placeIn = (slot: string) => {
         if (!selected) return;
@@ -253,26 +281,74 @@ export default function MockDraftPage() {
 
                     {/* Player list */}
                     <div>
-                        <h2 className="px-4 py-2 bg-gray-200 text-xs uppercase tracking-wide text-gray-600 font-semibold">Players</h2>
-                        <div className="px-4 py-2 flex items-center gap-2 flex-wrap border-b border-gray-200">
-                            <input
-                                className="border border-gray-300 rounded-md px-2 py-1 text-sm flex-1 min-w-32"
-                                placeholder="Search players"
-                                value={search}
-                                onChange={(event) => setSearch(event.target.value)}
-                            />
-                            {POSITION_FILTERS.map((position) => (
+                        <h2 className="px-4 py-2 bg-gray-200 text-xs uppercase tracking-wide text-gray-600 font-semibold flex items-center justify-between">
+                            <span>Players</span>
+                            <span className="font-normal normal-case tracking-normal text-gray-500">
+                                {visiblePlayers.length}{filtersActive ? ` of ${players?.length ?? 0}` : ""} available
+                            </span>
+                        </h2>
+                        <div className="px-4 py-2 border-b border-gray-200 flex flex-col gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <input
+                                    className="border border-gray-300 rounded-md px-2 py-1 text-sm flex-1 min-w-32"
+                                    placeholder="Search players"
+                                    value={search}
+                                    onChange={(event) => setSearch(event.target.value)}
+                                />
+                                {POSITION_FILTERS.map((position) => (
+                                    <button
+                                        key={position}
+                                        className={
+                                            "text-xs rounded-full px-2 py-1 border " +
+                                            (positionFilter === position
+                                                ? "bg-gray-800 text-white border-gray-800"
+                                                : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50")
+                                        }
+                                        onClick={() => setPositionFilter(positionFilter === position ? null : position)}
+                                    >{position}</button>
+                                ))}
+                            </div>
+                            <div className="flex items-center gap-3 flex-wrap text-xs text-gray-600">
+                                <label className="flex items-center gap-1">
+                                    Max $
+                                    <input
+                                        type="number"
+                                        className="w-16 border border-gray-300 rounded-md px-1 py-1 text-xs"
+                                        placeholder="any"
+                                        value={maxPrice}
+                                        onChange={(event) => setMaxPrice(event.target.value)}
+                                        title="Hide players whose price is above this"
+                                    />
+                                </label>
+                                <label className="flex items-center gap-1">
+                                    Team
+                                    <select
+                                        className="border border-gray-300 rounded-md px-1 py-1 text-xs bg-white"
+                                        value={teamFilter}
+                                        onChange={(event) => setTeamFilter(event.target.value)}
+                                    >
+                                        <option value="">All</option>
+                                        {teamCodes.map((code) => (
+                                            <option key={code} value={code}>{code}</option>
+                                        ))}
+                                    </select>
+                                </label>
+                                <label className="flex items-center gap-1 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        className="w-3.5 h-3.5 accent-red-500"
+                                        checked={favoriteOnly}
+                                        onChange={() => setFavoriteOnly((on) => !on)}
+                                    />
+                                    Favorites only ♥
+                                </label>
+                                <span className="flex-1" />
                                 <button
-                                    key={position}
-                                    className={
-                                        "text-xs rounded-full px-2 py-1 border " +
-                                        (positionFilter === position
-                                            ? "bg-gray-800 text-white border-gray-800"
-                                            : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50")
-                                    }
-                                    onClick={() => setPositionFilter(positionFilter === position ? null : position)}
-                                >{position}</button>
-                            ))}
+                                    className="border border-gray-300 rounded-md px-2 py-1 bg-white hover:bg-gray-50 disabled:opacity-40"
+                                    disabled={!filtersActive}
+                                    onClick={clearFilters}
+                                >Clear</button>
+                            </div>
                         </div>
                         <div className="max-h-[32rem] overflow-y-auto">
                             <table className="w-full text-sm">

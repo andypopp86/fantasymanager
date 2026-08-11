@@ -553,7 +553,11 @@ a user.
   `draft/services/draft/mock_draft.py`.
 - UI: `features/MockDraftList.tsx` (a section on the dashboard, staff only —
   create takes just a name) and `features/MockDraftPage.tsx` at `/mocks/:mockId`
-  — roster on the left, player list (search + position chips) on the right. Click
+  — roster on the left, player list on the right. Its filters mirror the board's
+  `AvailablePlayers` set and semantics (name search, position chips, max price as
+  a CEILING on `override_price || projected_price`, a team dropdown built from the
+  loaded players, and Favorites-only counting `favorite === true` alone), but
+  apply LIVE rather than behind a Filter button. Click
   a player, then click an eligible slot; eligible empty slots are outlined blue,
   which is the board's tap-to-place idiom. "Save as plan" prompts for a name and
   posts `create_plan`. It reads the server DIRECTLY through React Query — **not**
