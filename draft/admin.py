@@ -214,6 +214,23 @@ class DraftPlanAdmin(admin.ModelAdmin):
     list_filter = ('year',)
     search_fields = ('name',)
 
+class MockPickInline(admin.TabularInline):
+    model = d.MockPick
+    extra = 0
+    autocomplete_fields = ('player',)
+
+
+class MockDraftAdmin(admin.ModelAdmin):
+    list_display = ('name', 'year', 'starting_budget', 'budget_spent', 'filled_slots', 'last_update_time')
+    list_filter = ('year',)
+    search_fields = ('name',)
+    inlines = (MockPickInline,)
+
+    @admin.display(description='Slots filled')
+    def filled_slots(self, obj):
+        return obj.picks.count()
+
+
 class NFLTeamAdmin(admin.ModelAdmin):
     list_display = ('code', 'name', 'year', 'coaching_impact', 'playoff_weather_score', 'early_season_schedule', 'playoff_schedule', 'defensive_ranking', 'pass_ranking', 'run_ranking')
     # Set the staff's impact straight from the team list — 32 rows, one pass.
@@ -266,6 +283,7 @@ admin.site.register(d.WatchPick, WatchPickAdmin)
 admin.site.register(d.Matchup, MatchupAdmin)
 admin.site.register(d.BudgetPlayer, BudgetPlayerAdmin)
 admin.site.register(d.DraftPlan, DraftPlanAdmin)
+admin.site.register(d.MockDraft, MockDraftAdmin)
 admin.site.register(d.HistoricalDraftPicks, HistoricalDraftPickAdmin)
 admin.site.register(d.HistoricalPlayerStats, HistoricalPlayerStatsAdmin)
 admin.site.register(d.PlayerStats, PlayerStatsAdmin)

@@ -235,6 +235,59 @@ export type DraftPlanOutput = {
     slots: Record<SlotName, DraftPlanPlayer | null>,
 }
 
+// ---- Mock drafts (/api/drafts/draft/mocks/) --------------------------------
+// One roster of slots, no managers — a sketchpad whose whole purpose is being
+// saved as a DraftPlan. Read straight from the server (React Query), NOT
+// through Dexie: it's prep-time work, never draft-day offline work.
+
+export type MockPick = {
+    id: number,
+    player_id: number,
+    name: string,
+    position: string,
+    team: string | null,
+    // The mock's own budgeted number for this slot…
+    price: number,
+    // …versus the player's effective market price (override || projected).
+    projected_price: number | string,
+}
+
+export type MockDraftSlot = {
+    order: number,
+    allowed_positions: string[],
+    pick: MockPick | null,
+}
+
+export type MockDraftSummary = {
+    id: number,
+    name: string,
+    year: number,
+    starting_budget: number,
+    budget_spent: number,
+    budget_remaining: number,
+    filled_slots: number,
+    total_slots: number,
+    date_created: string,
+    last_update_time: string,
+}
+
+export type MockDraftDetail = MockDraftSummary & {
+    slots: Record<SlotName, MockDraftSlot>,
+}
+
+// A player still available to a mock draft (its year, minus its own picks).
+export type MockDraftPlayer = {
+    player_id: number,
+    name: string,
+    position: string,
+    team: string | null,
+    adp_formatted: number | string,
+    favorite: boolean | null,
+    target_tier: number,
+    my_price: number | string | null,
+    projected_price: number | string,
+}
+
 // ---- Target tiers (/api/drafts/draft/<id>/target_tiers/) ------------------
 // Manual tiering of Player.target_tier (1 = best tier; 0 = untiered, omitted).
 // The server only returns players still UNDRAFTED in that draft.

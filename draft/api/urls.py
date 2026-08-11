@@ -29,6 +29,16 @@ draft_urlpatterns = [
     path("plans/<int:plan_id>/delete/", api_views.DraftPlanDeleteAPI.as_view(), name="draft_plan_delete"),
     path("<int:draft_id>/create_plan/", api_views.DraftPlanCreateFromDraftAPI.as_view(), name="draft_plan_create"),
 
+    # mock drafts (a single roster of slots, no managers — a plan sketchpad)
+    path("mocks/", api_views.MockDraftListAPI.as_view(), name="mock_draft_list"),
+    path("mocks/create/", api_views.MockDraftCreateAPI.as_view(), name="mock_draft_create"),
+    path("mocks/<int:mock_draft_id>/", api_views.MockDraftDetailAPI.as_view(), name="mock_draft_detail"),
+    path("mocks/<int:mock_draft_id>/delete/", api_views.MockDraftDeleteAPI.as_view(), name="mock_draft_delete"),
+    path("mocks/<int:mock_draft_id>/available_players/", api_views.MockDraftAvailablePlayersAPI.as_view(), name="mock_draft_available_players"),
+    path("mocks/<int:mock_draft_id>/pick/<int:player_id>/", api_views.MockDraftSetPickAPI.as_view(), name="mock_draft_set_pick"),
+    path("mocks/<int:mock_draft_id>/clear_slot/", api_views.MockDraftClearSlotAPI.as_view(), name="mock_draft_clear_slot"),
+    path("mocks/<int:mock_draft_id>/create_plan/", api_views.MockDraftCreatePlanAPI.as_view(), name="mock_draft_create_plan"),
+
     # writes
     path("<int:draft_id>/submit_pick/<int:manager_id>/<int:player_id>/", api_views.DraftSubmitPickAPI.as_view(), name="draft_submit_pick"),
     path("<int:draft_id>/unsubmit_pick/<int:manager_id>/<int:player_id>/", api_views.DraftUnsubmitPickAPI.as_view(), name="draft_unsubmit_pick"),

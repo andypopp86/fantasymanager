@@ -6,8 +6,9 @@ from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import TestCase
 
-from draft.models import DRAFT_PLAN_SLOTS, Draft, DraftPick, DraftPlan, Manager, Player
+from draft.models import DRAFT_PLAN_SLOTS, Draft, DraftPick, DraftPlan, Manager, MockDraft, Player
 from draft.services.draft.draft_plan import DraftPlanWriteService
+from draft.services.draft.mock_draft import MockDraftReadService, MockDraftWriteService
 
 
 def make_drafter_user():
@@ -618,3 +619,144 @@ class FavoriteCycleTests(TestCase):
         for expected in (True, False, None, True):
             player = service.favorite_player(self.draft.id, self.player.player_id)
             self.assertEqual(player.favorite, expected)
+
+
+class MockDraftTests(TestCase):
+    """A MockDraft is one roster of slots with no managers; the rules worth
+    asserting are the two uniqueness directions (move vs. replace), slot
+    eligibility, and the budget arithmetic."""
+
+    def setUp(self):
+        self.mock = MockDraft.objects.create(name="sketch", year=2026, starting_budget=200)
+        self.qb = make_player("Mock QB", "QB")
+        self.rb = make_player("Mock RB", "RB")
+        self.other_rb = make_player("Other Mock RB", "RB")
+        self.service = MockDraftWriteService(user=None)
+
+    def set_pick(self, player, slot, price=10):
+        return self.service.set_pick(self.mock.id, player.player_id, slot, price)
+
+    def test_budget_tracks_the_picks(self):
+        self.set_pick(self.qb, "QB1", price=30)
+        self.set_pick(self.rb, "RB1", price=45)
+
+        self.assertEqual(self.mock.budget_spent, 75)
+        self.assertEqual(self.mock.budget_remaining, 125)
+
+    def test_repicking_a_player_moves_them(self):
+        self.set_pick(self.rb, "RB1")
+        self.set_pick(self.rb, "FLEX1")
+
+        slots = self.mock.slot_picks()
+        self.assertIsNone(slots["RB1"])
+        self.assertEqual(slots["FLEX1"].player, self.rb)
+        self.assertEqual(self.mock.picks.count(), 1)
+
+    def test_filling_a_taken_slot_replaces_its_occupant(self):
+        self.set_pick(self.rb, "RB1")
+        self.set_pick(self.other_rb, "RB1")
+
+        self.assertEqual(self.mock.slot_picks()["RB1"].player, self.other_rb)
+        self.assertEqual(self.mock.picks.count(), 1)
+
+    def test_ineligible_slot_is_rejected(self):
+        from rest_framework.exceptions import ValidationError
+        with self.assertRaises(ValidationError):
+            self.set_pick(self.qb, "RB1")
+        self.assertEqual(self.mock.picks.count(), 0)
+
+    def test_clear_slot_empties_it(self):
+        self.set_pick(self.qb, "QB1")
+        self.service.clear_slot(self.mock.id, "QB1")
+
+        self.assertIsNone(self.mock.slot_picks()["QB1"])
+
+    def test_slot_picks_covers_every_slot(self):
+        self.assertEqual(tuple(self.mock.slot_picks().keys()), DRAFT_PLAN_SLOTS)
+
+    def test_available_players_excludes_picked_and_other_years(self):
+        self.set_pick(self.rb, "RB1")
+        make_player("Last Year WR", "WR", year=2025)
+
+        available = MockDraftReadService(user=None).get_available_players(self.mock.id)
+
+        names = [player.name for player in available]
+        self.assertNotIn("Mock RB", names)
+        self.assertNotIn("Last Year WR", names)
+        self.assertIn("Mock QB", names)
+
+    def test_available_players_excludes_unslottable_positions(self):
+        make_player("Mock K", "K")
+
+        available = MockDraftReadService(user=None).get_available_players(self.mock.id)
+
+        self.assertNotIn("Mock K", [player.name for player in available])
+
+    def test_create_plan_from_mock_draft(self):
+        self.set_pick(self.qb, "QB1", price=30)
+        self.set_pick(self.rb, "FLEX1", price=20)
+
+        plan = DraftPlanWriteService(user=None).create_from_mock_draft(self.mock.id, name="from mock")
+
+        self.assertEqual(plan.year, 2026)
+        self.assertEqual(plan.qb1, self.qb)
+        self.assertEqual(plan.flex1, self.rb)
+        self.assertIsNone(plan.rb1)
+
+    def test_plan_survives_mock_deletion(self):
+        self.set_pick(self.qb, "QB1")
+        plan = DraftPlanWriteService(user=None).create_from_mock_draft(self.mock.id, name="keeper")
+
+        self.service.delete_mock_draft(self.mock.id)
+
+        plan.refresh_from_db()
+        self.assertEqual(plan.qb1, self.qb)
+
+
+class MockDraftAPITests(TestCase):
+
+    def setUp(self):
+        self.client.force_login(make_drafter_user())
+        self.qb = make_player("Api Mock QB", "QB")
+
+    def test_create_pick_and_plan_roundtrip(self):
+        created = self.client.post(
+            "/api/drafts/draft/mocks/create/",
+            {"params": {"name": "api sketch", "starting_budget": 150}},
+            content_type="application/json",
+        )
+        self.assertEqual(created.status_code, 201)
+        mock_id = created.data["id"]
+        self.assertIsNone(created.data["slots"]["QB1"]["pick"])
+        self.assertEqual(list(created.data["slots"]["QB1"]["allowed_positions"]), ["QB"])
+
+        available = self.client.get(f"/api/drafts/draft/mocks/{mock_id}/available_players/")
+        self.assertEqual([player["name"] for player in available.data], ["Api Mock QB"])
+
+        picked = self.client.post(
+            f"/api/drafts/draft/mocks/{mock_id}/pick/{self.qb.player_id}/",
+            {"params": {"position_slot": "QB1", "price": 40}},
+            content_type="application/json",
+        )
+        self.assertEqual(picked.status_code, 200)
+        self.assertEqual(picked.data["slots"]["QB1"]["pick"]["name"], "Api Mock QB")
+        self.assertEqual(picked.data["budget_spent"], 40)
+        self.assertEqual(picked.data["budget_remaining"], 110)
+
+        plan = self.client.post(
+            f"/api/drafts/draft/mocks/{mock_id}/create_plan/",
+            {"params": {"name": "plan from mock"}},
+            content_type="application/json",
+        )
+        self.assertEqual(plan.status_code, 201)
+        self.assertEqual(plan.data["slots"]["QB1"]["name"], "Api Mock QB")
+
+    def test_spectator_cannot_reach_mock_drafts(self):
+        self.client.force_login(make_spectator_user())
+        mock = MockDraft.objects.create(name="private", year=2026)
+
+        self.assertEqual(self.client.get("/api/drafts/draft/mocks/").status_code, 403)
+        self.assertEqual(self.client.get(f"/api/drafts/draft/mocks/{mock.id}/").status_code, 403)
+        self.assertEqual(
+            self.client.post(f"/api/drafts/draft/mocks/{mock.id}/delete/").status_code, 403,
+        )

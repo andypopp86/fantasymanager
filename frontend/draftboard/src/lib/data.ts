@@ -12,7 +12,10 @@ import type { DraftRetrieveOutput,
     DraftCreateParams,
     DraftPlanOutput,
     TargetTierOutput,
-    CurrentUserOutput
+    CurrentUserOutput,
+    MockDraftSummary,
+    MockDraftDetail,
+    MockDraftPlayer
 } from "./draft.schemas";
 
 // DRF's SessionAuthentication enforces CSRF only on authenticated requests,
@@ -366,5 +369,111 @@ export const draftRetrieve = <
     ): Promise<TData> => {
       return axios.default.post(`/api/drafts/draft/plans/${plan_id}/delete/`, {
           options,
+      })
+    }
+
+    // ---- Mock drafts ------------------------------------------------------
+    // A single roster of slots with no managers, built to be saved as a plan.
+    // These read/write the server DIRECTLY (React Query) rather than through
+    // Dexie — prep-time work, so the offline write queue has no part in it.
+    // Every write answers with the full mock detail, so callers can seed the
+    // cache from the response instead of refetching.
+
+    export const mockDraftsRetrieve = <
+    TData = AxiosResponse<MockDraftSummary[]>,
+    >(
+      params?: { year?: number },
+      options?: AxiosRequestConfig,
+    ): Promise<TData> => {
+      return axios.default.get(`/api/drafts/draft/mocks/`, {
+          ...options,
+          params: { ...params, ...options?.params },
+      })
+    }
+
+    export const mockDraftRetrieve = <
+    TData = AxiosResponse<MockDraftDetail>,
+    >(
+      mock_draft_id: number,
+      options?: AxiosRequestConfig,
+    ): Promise<TData> => {
+      return axios.default.get(`/api/drafts/draft/mocks/${mock_draft_id}/`, {
+          ...options,
+      })
+    }
+
+    export const mockDraftCreate = <
+    TData = AxiosResponse<MockDraftDetail>,
+    >(
+      params: { name: string, starting_budget?: number, year?: number },
+      options?: AxiosRequestConfig,
+    ): Promise<TData> => {
+      return axios.default.post(`/api/drafts/draft/mocks/create/`, {
+          options,
+          params,
+      })
+    }
+
+    export const mockDraftDelete = <
+    TData = AxiosResponse<void>,
+    >(
+      mock_draft_id: number,
+      options?: AxiosRequestConfig,
+    ): Promise<TData> => {
+      return axios.default.post(`/api/drafts/draft/mocks/${mock_draft_id}/delete/`, {
+          options,
+      })
+    }
+
+    export const mockDraftAvailablePlayersRetrieve = <
+    TData = AxiosResponse<MockDraftPlayer[]>,
+    >(
+      mock_draft_id: number,
+      options?: AxiosRequestConfig,
+    ): Promise<TData> => {
+      return axios.default.get(`/api/drafts/draft/mocks/${mock_draft_id}/available_players/`, {
+          ...options,
+      })
+    }
+
+    // Places OR moves the player: they leave whatever slot they were in, and
+    // whoever held the target slot is dropped from the mock (server-side).
+    export const mockDraftSetPick = <
+    TData = AxiosResponse<MockDraftDetail>,
+    >(
+      mock_draft_id: number,
+      player_id: number,
+      params: { position_slot: string, price: number },
+      options?: AxiosRequestConfig,
+    ): Promise<TData> => {
+      return axios.default.post(`/api/drafts/draft/mocks/${mock_draft_id}/pick/${player_id}/`, {
+          options,
+          params,
+      })
+    }
+
+    export const mockDraftClearSlot = <
+    TData = AxiosResponse<MockDraftDetail>,
+    >(
+      mock_draft_id: number,
+      params: { position_slot: string },
+      options?: AxiosRequestConfig,
+    ): Promise<TData> => {
+      return axios.default.post(`/api/drafts/draft/mocks/${mock_draft_id}/clear_slot/`, {
+          options,
+          params,
+      })
+    }
+
+    export const mockDraftCreatePlan = <
+    TData = AxiosResponse<DraftPlanOutput>,
+    >(
+      mock_draft_id: number,
+      params: { name: string },
+      options?: AxiosRequestConfig,
+    ): Promise<TData> => {
+      return axios.default.post(`/api/drafts/draft/mocks/${mock_draft_id}/create_plan/`, {
+          options,
+          params,
       })
     }
