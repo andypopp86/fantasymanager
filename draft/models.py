@@ -170,6 +170,11 @@ class Player(models.Model):
     # top tier, ascending. Edited inline in /admin's player list; surfaced by the
     # target_tiers endpoint / the Tiers page.
     target_tier = models.PositiveIntegerField(default=0)
+    # Completed NFL seasons. HAND-SET in /admin (no importer touches it), so 0
+    # means "rookie OR not yet filled in" — the two aren't distinguishable, which
+    # is why the apps' filters treat it as a plain number rather than inferring
+    # rookie status from it.
+    years_experience = models.PositiveIntegerField(default=0)
     # Hand-set draft-day warning flags, surfaced as icons in the nomination area
     # (see PLAYER_FLAGS in features/PlayerFlagIcons.tsx) so the drafter doesn't
     # overextend to win a bid. Adding another: field here + admin + the player

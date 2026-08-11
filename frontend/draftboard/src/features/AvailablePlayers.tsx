@@ -28,6 +28,16 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
     const [favoriteFilterValue, setFavoriteFilterValue] = useState("off");
     // "" | "above" | "below" | "equal" — my_price against the projected price.
     const [priceVarFilterValue, setPriceVarFilterValue] = useState("");
+    // years_experience: a mode ("eq" | "lte") plus a value. Kept as a separate
+    // pair rather than folded into the price-style ceiling because 0 is a
+    // MEANINGFUL value here (a rookie, or a player not filled in yet) — so an
+    // empty VALUE is what turns the filter off, not a zero.
+    //
+    // "lte" spans 1..N, EXCLUDING 0: since 0 doubles as "not filled in yet",
+    // a search for young players would otherwise return every unset player.
+    // "eq" with 0 is how you go looking for the zeros deliberately.
+    const [expModeFilterValue, setExpModeFilterValue] = useState("eq");
+    const [expFilterValue, setExpFilterValue] = useState("");
     const [filteredPlayers, setFilteredPlayers] = useState(draftContext.undraftedPlayers);
 
     const checkName = (player) => {
@@ -61,6 +71,11 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
     const checkFavorite = (player) => {
         return !!player.player.favorite;
     }
+    const checkExperience = (player) => {
+        const years = parseInt(String(player.player.years_experience ?? 0)) || 0;
+        const target = parseInt(expFilterValue);
+        return expModeFilterValue === "lte" ? years >= 1 && years <= target : years === target;
+    }
     const budgetedPlayerIds = Object.keys(draftContext.budgetedPlayers).map((slot) => {
         const budgetedPlayerId = draftContext.budgetedPlayers[slot].pick.player_id;
         return budgetedPlayerId ;
@@ -82,6 +97,7 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
         if (budgetedFilterValue === "on") { predicates.push(checkBudget); }
         if (favoriteFilterValue === "on") { predicates.push(checkFavorite); }
         if (priceVarFilterValue !== "") { predicates.push(checkPriceVariance); }
+        if (expFilterValue !== "" && !isNaN(parseInt(expFilterValue))) { predicates.push(checkExperience); }
         if (predicates.length === 0) {
             setFilteredPlayers(draftContext.undraftedPlayers);
             return;
@@ -122,6 +138,8 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
         setBudgetedFilterValue("off");
         setFavoriteFilterValue("off");
         setPriceVarFilterValue("");
+        setExpModeFilterValue("eq");
+        setExpFilterValue("");
         setFilteredPlayers(draftContext.undraftedPlayers);
     }
 
@@ -239,6 +257,23 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
                                 <option value="below">Below proj</option>
                                 <option value="equal">Equal</option>
                             </select>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td scope="row">Exp:</td>
+                        <td>
+                            <select style={{width: "44px"}} value={expModeFilterValue}
+                                onChange={(e) => setExpModeFilterValue(e.target.value)}
+                                title="= exactly this many years; ≤ 1 through this many (0/unset excluded — use = 0 for those)">
+                                <option value="eq">=</option>
+                                <option value="lte">&le;</option>
+                            </select>
+                            <input type="number" min="0" style={{width: "52px"}}
+                                className="ml-1 py-1 px-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:border-blue-500"
+                                placeholder="any"
+                                value={expFilterValue}
+                                onChange={(e) => setExpFilterValue(e.target.value)}
+                                onKeyDown={handleFilterKeyDown} />
                         </td>
                     </tr>
                     <tr>

@@ -289,6 +289,22 @@ shows up on the next refetch. A field silently missing from that serializer mean
 the warning simply never fires — hence the passthrough test in
 `draft/tests.py::PlayerProjectionFlagTests`.
 
+**Years experience** (`Player.years_experience`, non-negative int, default `0`) —
+completed NFL seasons, **hand-set in /admin** (`list_editable`, `list_filter`);
+no importer writes it, so `0` means "rookie OR not filled in yet" and the two are
+not distinguishable. Filter-only: nothing renders it. Both apps filter it with the
+same **mode + value pair** — `=` or `≤`, and an empty VALUE (not a zero) is what
+turns the filter off, since 0 is a meaningful selection here. **`≤ N` spans 1…N
+and EXCLUDES 0** — the filter's job is finding young players, and because 0 also
+means "not filled in yet" a ceiling that included it would return every unset
+player; `= 0` is how you go after the zeros deliberately (so `≤ 0` matches
+nobody, by design). It rides to the
+board through `DraftPicksOutputSerializer`'s player serializer (and so into Dexie
+with the rest of `player`) and to the mock page through
+`MockDraftPlayerOutputSerializer`; a field missing from either means the filter
+silently matches nothing, hence the passthrough asserts in
+`draft/tests.py::YearsExperienceTests`.
+
 **Target tiers** (`Player.target_tier`, non-negative int, default `0` = untiered;
 `1` is the TOP tier and they ascend). Prep-time tiering, not a draft-time write:
 the app has no endpoint that sets it — you tier players **inline in /admin's

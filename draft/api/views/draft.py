@@ -231,6 +231,8 @@ class DraftPicksOutputSerializer(BaseSerializer):
         favorite = serializers.BooleanField(allow_null=True)
         notes = serializers.CharField()
         target_type = serializers.CharField(allow_null=True, required=False)
+        # Hand-set in /admin; the board filters on it (0 = rookie or unfilled).
+        years_experience = serializers.IntegerField()
         # Hand-set warning flags, rendered as icons in the nomination area.
         is_projection = serializers.BooleanField()
         has_injury = serializers.BooleanField()
