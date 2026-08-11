@@ -185,6 +185,9 @@ export type PlayerDetail = {
     favorite?: boolean | null,
     notes?: string | null,
     target_type?: string | null,
+    // Completed NFL seasons, hand-set in /admin (0 = rookie OR not yet filled
+    // in). Filter-only — nothing renders it.
+    years_experience?: number,
     // Hand-set warning flags, rendered as icons when the player is nominated.
     // The icon/colour/label table is PLAYER_FLAGS in features/PlayerFlagIcons.tsx.
     // Price only justified by a projection (role, opportunity, health) rather
@@ -284,6 +287,8 @@ export type MockDraftPlayer = {
     adp_formatted: number | string,
     favorite: boolean | null,
     target_tier: number,
+    // Completed NFL seasons, hand-set in /admin. 0 = rookie OR not yet filled in.
+    years_experience: number,
     my_price: number | string | null,
     projected_price: number | string,
 }

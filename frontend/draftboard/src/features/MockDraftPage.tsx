@@ -42,6 +42,11 @@ export default function MockDraftPage() {
     const [maxPrice, setMaxPrice] = useState("");
     const [teamFilter, setTeamFilter] = useState("");
     const [favoriteOnly, setFavoriteOnly] = useState(false);
+    // years_experience: mode ("eq" | "lte") + value, same pair as the board. An
+    // empty VALUE is what turns it off — 0 is meaningful here (a rookie, or a
+    // player not filled in yet), so it can't double as "no filter".
+    const [expMode, setExpMode] = useState("eq");
+    const [expYears, setExpYears] = useState("");
     const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
     const [savedPlan, setSavedPlan] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -98,17 +103,22 @@ export default function MockDraftPage() {
     const visiblePlayers = useMemo(() => {
         const term = search.trim().toLowerCase();
         const ceiling = parseFloat(maxPrice);
+        const years = parseInt(expYears);
         return (players || []).filter((player) => {
             if (positionFilter && player.position !== positionFilter) return false;
             if (term && !player.name.toLowerCase().includes(term)) return false;
             if (teamFilter && player.team !== teamFilter) return false;
             if (!isNaN(ceiling) && ceiling > 0 && priceOf(player) > ceiling) return false;
             if (favoriteOnly && player.favorite !== true) return false;
+            if (!isNaN(years)) {
+                const experience = player.years_experience ?? 0;
+                if (expMode === "lte" ? experience > years : experience !== years) return false;
+            }
             return true;
         });
-    }, [players, search, positionFilter, teamFilter, maxPrice, favoriteOnly]);
+    }, [players, search, positionFilter, teamFilter, maxPrice, favoriteOnly, expMode, expYears]);
 
-    const filtersActive = !!(search || positionFilter || teamFilter || maxPrice || favoriteOnly);
+    const filtersActive = !!(search || positionFilter || teamFilter || maxPrice || favoriteOnly || expYears);
 
     const clearFilters = () => {
         setSearch("");
@@ -116,6 +126,8 @@ export default function MockDraftPage() {
         setTeamFilter("");
         setMaxPrice("");
         setFavoriteOnly(false);
+        setExpMode("eq");
+        setExpYears("");
     };
 
     const placeIn = (slot: string) => {
@@ -332,6 +344,26 @@ export default function MockDraftPage() {
                                             <option key={code} value={code}>{code}</option>
                                         ))}
                                     </select>
+                                </label>
+                                <label className="flex items-center gap-1">
+                                    Exp
+                                    <select
+                                        className="border border-gray-300 rounded-md px-1 py-1 text-xs bg-white"
+                                        value={expMode}
+                                        onChange={(event) => setExpMode(event.target.value)}
+                                        title="Exactly, or at most, this many completed seasons"
+                                    >
+                                        <option value="eq">=</option>
+                                        <option value="lte">≤</option>
+                                    </select>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        className="w-14 border border-gray-300 rounded-md px-1 py-1 text-xs"
+                                        placeholder="any"
+                                        value={expYears}
+                                        onChange={(event) => setExpYears(event.target.value)}
+                                    />
                                 </label>
                                 <label className="flex items-center gap-1 cursor-pointer">
                                     <input

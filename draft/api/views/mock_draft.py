@@ -73,6 +73,7 @@ class MockDraftPlayerOutputSerializer(BaseSerializer):
     adp_formatted = serializers.DecimalField(max_digits=8, decimal_places=2)
     favorite = serializers.BooleanField(allow_null=True)
     target_tier = serializers.IntegerField()
+    years_experience = serializers.IntegerField()
     my_price = serializers.DecimalField(max_digits=8, decimal_places=2, allow_null=True)
     # Annotated on the queryset: override_price when set, else projected_price.
     projected_price = serializers.DecimalField(max_digits=8, decimal_places=2, source='effective_price')

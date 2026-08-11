@@ -100,7 +100,7 @@ class PlayerTeamFilter(admin.SimpleListFilter):
 
 class PlayerAdmin(admin.ModelAdmin):
     # Working order: what you set during prep first, reference columns last.
-    list_display = ('name', 'position', 'team', 'year', 'target_tier', 'is_projection', 'has_injury', 'defensive_impact', 'projected_price', 'my_price', 'my_price_rationale', 'adp_formatted', 'favorite', 'override_price', 'player_id')
+    list_display = ('name', 'position', 'team', 'year', 'target_tier', 'years_experience', 'is_projection', 'has_injury', 'defensive_impact', 'projected_price', 'my_price', 'my_price_rationale', 'adp_formatted', 'favorite', 'override_price', 'player_id')
     # `name` is the link column, pinned explicitly. Django otherwise links
     # list_display[0], which is no longer player_id — and a link column may
     # never be list_editable, so leaving it implicit would break the moment the
@@ -108,11 +108,11 @@ class PlayerAdmin(admin.ModelAdmin):
     list_display_links = ('name',)
     # Edit tiers and the warning flags straight from the list — setting these a
     # board's worth of players one change-form at a time is unworkable.
-    list_editable = ('target_tier', 'is_projection', 'has_injury', 'defensive_impact', 'favorite', 'override_price', 'my_price', 'my_price_rationale')
+    list_editable = ('target_tier', 'years_experience', 'is_projection', 'has_injury', 'defensive_impact', 'favorite', 'override_price', 'my_price', 'my_price_rationale')
     search_fields = ('name', 'position', )
     # Team last on purpose — it renders every code as a link, so leading with it
     # pushes the short, frequently-used filters below the fold.
-    list_filter = ('position', 'year', 'target_tier', 'is_projection', 'has_injury', 'defensive_impact', 'favorite', MyPriceVarianceFilter, PlayerTeamFilter)
+    list_filter = ('position', 'year', 'target_tier', 'years_experience', 'is_projection', 'has_injury', 'defensive_impact', 'favorite', MyPriceVarianceFilter, PlayerTeamFilter)
 
     def formfield_for_dbfield(self, db_field, request, **kwargs):
         # A default TextField renders as a 10-row textarea, which blows the
@@ -122,7 +122,7 @@ class PlayerAdmin(admin.ModelAdmin):
         if db_field.name == 'my_price_rationale':
             kwargs['widget'] = Textarea(attrs={'rows': 2, 'cols': 28})
         return super().formfield_for_dbfield(db_field, request, **kwargs)
-    fields = ('name', 'position', 'team', 'year', 'notes', 'target_tier', 'is_projection', 'has_injury', 'defensive_impact', 'projected_price', 'adp_price', 'my_price', 'my_price_rationale', 'skepticism', 'adp_formatted', 'favorite', 'override_price', 'player_id', )
+    fields = ('name', 'position', 'team', 'year', 'notes', 'target_tier', 'years_experience', 'is_projection', 'has_injury', 'defensive_impact', 'projected_price', 'adp_price', 'my_price', 'my_price_rationale', 'skepticism', 'adp_formatted', 'favorite', 'override_price', 'player_id', )
     
 class DraftAdmin(admin.ModelAdmin):
     list_display = ('draft_name', 'year', 'drafter', 'projected_draft', 'available_to_spectators', 'date_created')

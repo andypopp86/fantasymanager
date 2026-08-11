@@ -422,6 +422,49 @@ class PlayerProjectionFlagTests(TestCase):
         self.assertNotIn("my_price_rationale", rows["Priced RB"])
 
 
+class YearsExperienceTests(TestCase):
+    """Hand-set field whose only job is to be filtered on, in both apps — so
+    what's worth asserting is that it survives the two hand-written serializers
+    that carry it there."""
+
+    def test_defaults_to_zero(self):
+        self.assertEqual(make_player("Rookie RB", "RB").years_experience, 0)
+
+    def test_available_players_carries_it(self):
+        from draft.api.views.draft import DraftPicksOutputSerializer
+        from draft.services.draft.draft import DraftReadService
+
+        draft = Draft.objects.create(year=2026, draft_name="experience")
+        vet = make_player("Vet WR", "WR")
+        Player.objects.filter(pk=vet.pk).update(years_experience=7)
+        rookie = make_player("Rook WR", "WR")
+        for player in (vet, rookie):
+            DraftPick.objects.create(draft=draft, player=player, drafted=False)
+
+        picks = DraftReadService(user=None).get_available_players(draft_id=draft.id)
+        rows = {
+            row["player"]["name"]: row["player"]
+            for row in (DraftPicksOutputSerializer.serialize(pick) for pick in picks)
+        }
+        self.assertEqual(rows["Vet WR"]["years_experience"], 7)
+        self.assertEqual(rows["Rook WR"]["years_experience"], 0)
+
+    def test_mock_draft_players_carry_it(self):
+        from draft.api.views.mock_draft import MockDraftPlayerOutputSerializer
+        from draft.services.draft.mock_draft import MockDraftReadService
+
+        mock = MockDraft.objects.create(name="experience", year=2026)
+        vet = make_player("Mock Vet TE", "TE")
+        Player.objects.filter(pk=vet.pk).update(years_experience=4)
+
+        players = MockDraftReadService(user=None).get_available_players(mock.id)
+        rows = {
+            row["name"]: row
+            for row in (MockDraftPlayerOutputSerializer.serialize(player) for player in players)
+        }
+        self.assertEqual(rows["Mock Vet TE"]["years_experience"], 4)
+
+
 class MyPriceVarianceFilterTests(TestCase):
     """Buckets my_price against the EFFECTIVE projected price
     (`override_price or projected_price`) — the same basis the board colours
@@ -751,12 +794,49 @@ class MockDraftAPITests(TestCase):
         self.assertEqual(plan.status_code, 201)
         self.assertEqual(plan.data["slots"]["QB1"]["name"], "Api Mock QB")
 
-    def test_spectator_cannot_reach_mock_drafts(self):
+    def test_spectator_cannot_reach_any_mock_draft_endpoint(self):
+        """Mock drafts are the drafter's private sketchpad — there is no
+        spectator-visible flag for them, unlike Draft.available_to_spectators.
+        Every endpoint is enumerated because one view missing its
+        permission_classes is a hole nothing else would catch."""
         self.client.force_login(make_spectator_user())
         mock = MockDraft.objects.create(name="private", year=2026)
+        player = make_player("Hidden RB", "RB")
 
-        self.assertEqual(self.client.get("/api/drafts/draft/mocks/").status_code, 403)
-        self.assertEqual(self.client.get(f"/api/drafts/draft/mocks/{mock.id}/").status_code, 403)
-        self.assertEqual(
-            self.client.post(f"/api/drafts/draft/mocks/{mock.id}/delete/").status_code, 403,
-        )
+        gets = [
+            "/api/drafts/draft/mocks/",
+            f"/api/drafts/draft/mocks/{mock.id}/",
+            f"/api/drafts/draft/mocks/{mock.id}/available_players/",
+        ]
+        posts = [
+            ("/api/drafts/draft/mocks/create/", {"name": "nope"}),
+            (f"/api/drafts/draft/mocks/{mock.id}/delete/", {}),
+            (f"/api/drafts/draft/mocks/{mock.id}/pick/{player.player_id}/",
+             {"position_slot": "RB1", "price": 5}),
+            (f"/api/drafts/draft/mocks/{mock.id}/clear_slot/", {"position_slot": "RB1"}),
+            (f"/api/drafts/draft/mocks/{mock.id}/create_plan/", {"name": "nope"}),
+        ]
+        for url in gets:
+            self.assertEqual(self.client.get(url).status_code, 403, url)
+        for url, params in posts:
+            response = self.client.post(url, {"params": params}, content_type="application/json")
+            self.assertEqual(response.status_code, 403, url)
+
+        # Nothing leaked through as a side effect.
+        self.assertEqual(MockDraft.objects.count(), 1)
+        self.assertEqual(mock.picks.count(), 0)
+        self.assertEqual(DraftPlan.objects.count(), 0)
+
+    def test_spectator_draft_list_is_unaffected_by_mocks(self):
+        """The dashboard a spectator lands on: still only drafts flagged
+        available_to_spectators, and MockDrafts are not among them (they aren't
+        Drafts at all, so they can't leak into that list)."""
+        visible = Draft.objects.create(year=2026, draft_name="the real one", available_to_spectators=True)
+        Draft.objects.create(year=2026, draft_name="mockup draft", available_to_spectators=False)
+        MockDraft.objects.create(name="sketch", year=2026)
+        self.client.force_login(make_spectator_user())
+
+        response = self.client.get("/api/drafts/draft/drafts")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([draft["draft_name"] for draft in response.data], [visible.draft_name])
