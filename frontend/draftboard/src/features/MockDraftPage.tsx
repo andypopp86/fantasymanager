@@ -44,7 +44,9 @@ export default function MockDraftPage() {
     const [favoriteOnly, setFavoriteOnly] = useState(false);
     // years_experience: mode ("eq" | "lte") + value, same pair as the board. An
     // empty VALUE is what turns it off — 0 is meaningful here (a rookie, or a
-    // player not filled in yet), so it can't double as "no filter".
+    // player not filled in yet), so it can't double as "no filter". And "lte"
+    // spans 1..N, EXCLUDING 0, because 0 also means "not filled in yet" and
+    // would otherwise flood a young-player search; "eq" 0 finds those on purpose.
     const [expMode, setExpMode] = useState("eq");
     const [expYears, setExpYears] = useState("");
     const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
@@ -112,7 +114,10 @@ export default function MockDraftPage() {
             if (favoriteOnly && player.favorite !== true) return false;
             if (!isNaN(years)) {
                 const experience = player.years_experience ?? 0;
-                if (expMode === "lte" ? experience > years : experience !== years) return false;
+                const matches = expMode === "lte"
+                    ? experience >= 1 && experience <= years
+                    : experience === years;
+                if (!matches) return false;
             }
             return true;
         });
@@ -351,7 +356,7 @@ export default function MockDraftPage() {
                                         className="border border-gray-300 rounded-md px-1 py-1 text-xs bg-white"
                                         value={expMode}
                                         onChange={(event) => setExpMode(event.target.value)}
-                                        title="Exactly, or at most, this many completed seasons"
+                                        title="= exactly this many seasons; ≤ 1 through this many (0/unset excluded — use = 0 for those)"
                                     >
                                         <option value="eq">=</option>
                                         <option value="lte">≤</option>

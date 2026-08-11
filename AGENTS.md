@@ -294,7 +294,11 @@ completed NFL seasons, **hand-set in /admin** (`list_editable`, `list_filter`);
 no importer writes it, so `0` means "rookie OR not filled in yet" and the two are
 not distinguishable. Filter-only: nothing renders it. Both apps filter it with the
 same **mode + value pair** — `=` or `≤`, and an empty VALUE (not a zero) is what
-turns the filter off, since 0 is a meaningful selection here. It rides to the
+turns the filter off, since 0 is a meaningful selection here. **`≤ N` spans 1…N
+and EXCLUDES 0** — the filter's job is finding young players, and because 0 also
+means "not filled in yet" a ceiling that included it would return every unset
+player; `= 0` is how you go after the zeros deliberately (so `≤ 0` matches
+nobody, by design). It rides to the
 board through `DraftPicksOutputSerializer`'s player serializer (and so into Dexie
 with the rest of `player`) and to the mock page through
 `MockDraftPlayerOutputSerializer`; a field missing from either means the filter

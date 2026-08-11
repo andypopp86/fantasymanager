@@ -32,6 +32,10 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
     // pair rather than folded into the price-style ceiling because 0 is a
     // MEANINGFUL value here (a rookie, or a player not filled in yet) — so an
     // empty VALUE is what turns the filter off, not a zero.
+    //
+    // "lte" spans 1..N, EXCLUDING 0: since 0 doubles as "not filled in yet",
+    // a search for young players would otherwise return every unset player.
+    // "eq" with 0 is how you go looking for the zeros deliberately.
     const [expModeFilterValue, setExpModeFilterValue] = useState("eq");
     const [expFilterValue, setExpFilterValue] = useState("");
     const [filteredPlayers, setFilteredPlayers] = useState(draftContext.undraftedPlayers);
@@ -70,7 +74,7 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
     const checkExperience = (player) => {
         const years = parseInt(String(player.player.years_experience ?? 0)) || 0;
         const target = parseInt(expFilterValue);
-        return expModeFilterValue === "lte" ? years <= target : years === target;
+        return expModeFilterValue === "lte" ? years >= 1 && years <= target : years === target;
     }
     const budgetedPlayerIds = Object.keys(draftContext.budgetedPlayers).map((slot) => {
         const budgetedPlayerId = draftContext.budgetedPlayers[slot].pick.player_id;
@@ -260,7 +264,7 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
                         <td>
                             <select style={{width: "44px"}} value={expModeFilterValue}
                                 onChange={(e) => setExpModeFilterValue(e.target.value)}
-                                title="Exactly, or at most, this many years">
+                                title="= exactly this many years; ≤ 1 through this many (0/unset excluded — use = 0 for those)">
                                 <option value="eq">=</option>
                                 <option value="lte">&le;</option>
                             </select>
