@@ -5,6 +5,7 @@ import { draftListRetrieve, logout } from "../lib/data";
 import type { CurrentUserOutput } from "../lib/draft.schemas";
 
 import DraftList from "../features/DraftList";
+import MockDraftList from "../features/MockDraftList";
 
 export const DraftDashboard = ({ me }: { me: CurrentUserOutput }) => {
     const navigate = useNavigate();
@@ -39,6 +40,9 @@ export const DraftDashboard = ({ me }: { me: CurrentUserOutput }) => {
                 </button>
             )}
             <DraftList draftList={draftListData} readOnly={!me.is_staff} />
+            {/* Mock drafts are the drafter's plan sketchpad — nothing for a
+                spectator to see, and the API refuses them anyway. */}
+            {me.is_staff && <MockDraftList />}
         </>
     );
 }

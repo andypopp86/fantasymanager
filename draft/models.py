@@ -464,6 +464,76 @@ class DraftPlan(models.Model):
         return {slot: getattr(self, slot.lower()) for slot in DRAFT_PLAN_SLOTS}
 
 
+class MockDraft(models.Model):
+    """A one-roster practice draft: the 16 canonical slots, a player and a price
+    in each, and nothing else — no managers, no opponents, no per-player
+    DraftPick rows.
+
+    It exists because sketching a roster shape used to mean creating a whole
+    empty Draft (which fans out a DraftPick per player) just to snapshot it as a
+    DraftPlan. A MockDraft is that sketch on its own: fill slots from the player
+    list, watch the budget, then save it as a plan
+    (`DraftPlanWriteService.create_from_mock_draft`).
+
+    Deliberately NOT tied to a Draft or a user, for the same reason DraftPlan
+    isn't — any draft can end up pulling in the plan it produces.
+    """
+    name = models.CharField(max_length=100)
+    year = models.IntegerField()
+    starting_budget = models.IntegerField(default=200)
+    # The M2M is the through model below; it's declared so `mock.players` reads
+    # naturally, but every write goes through MockPick (slot + price live there).
+    players = models.ManyToManyField(Player, through='MockPick', related_name='mock_drafts')
+    date_created = models.DateTimeField(auto_now_add=True)
+    last_update_time = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ('-year', '-date_created', 'name')
+
+    def __str__(self):
+        return '%s - %s' % (self.year, self.name)
+
+    def save(self, *args, **kwargs):
+        if not self.year:
+            self.year = timezone.now().year
+        super().save(*args, **kwargs)
+
+    def slot_picks(self):
+        """Slot name -> MockPick (or None), in board order."""
+        picks_by_slot = {pick.position_slot: pick for pick in self.picks.all()}
+        return {slot: picks_by_slot.get(slot) for slot in DRAFT_PLAN_SLOTS}
+
+    @property
+    def budget_spent(self):
+        return sum(pick.price or 0 for pick in self.picks.all())
+
+    @property
+    def budget_remaining(self):
+        return self.starting_budget - self.budget_spent
+
+
+class MockPick(models.Model):
+    """One filled slot of a MockDraft — the through row of MockDraft.players.
+
+    Unique BOTH ways: one player per slot, and one slot per player (so moving a
+    player updates their row instead of duplicating them).
+    """
+    mock_draft = models.ForeignKey(MockDraft, on_delete=models.CASCADE, related_name='picks')
+    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='mock_picks')
+    position_slot = models.CharField(max_length=50, choices=BUDGET_POSITIONS)
+    price = models.IntegerField(default=0)
+    last_update_time = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = (
+            ('mock_draft', 'position_slot'),
+            ('mock_draft', 'player'),
+        )
+
+    def __str__(self):
+        return '%s - %s - %s' % (self.position_slot, self.player.name, self.price)
+
+
 class PlayerStats(models.Model):
     year = models.IntegerField()
     player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='player_stats')

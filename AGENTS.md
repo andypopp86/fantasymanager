@@ -521,6 +521,49 @@ refetch). Plan players are priced `override_price || projected_price`. The page
 reads the draft via `useDraftData`, so the board must have been opened once to
 hydrate Dexie.
 
+**MockDraft / MockPick (`draft/models.py`)** — a plan sketchpad: ONE roster of the
+16 canonical slots, a player and a price in each, and nothing else. No managers,
+no opponents, no per-player `DraftPick` fan-out. It exists because the only way
+to author a `DraftPlan` used to be creating a whole empty `Draft` and drafting
+into it; a MockDraft gets to the same plan directly
+(`DraftPlanWriteService.create_from_mock_draft`, which shares its slot-copy with
+`create_from_draft` via `build_plan`). Like DraftPlan it has NO FK to a draft or
+a user.
+
+- `MockPick` is the M2M through row of `MockDraft.players`, `unique_together`
+  BOTH ways: `(mock_draft, position_slot)` and `(mock_draft, player)`. So
+  `MockDraftWriteService.set_pick` resolves both collisions itself — the player
+  MOVES if they already sit in another slot, and the incumbent of the target slot
+  is DROPPED (the client shows slot contents, so picking a filled slot is a
+  deliberate replacement). Slot eligibility reuses
+  `validate_slot_eligibility`, so the same `ALLOWED_POSITIONS` rules apply.
+- `price` on MockPick is the mock's OWN budgeted number, editable per slot; the
+  serializer also sends `projected_price` (`override_price || projected_price`)
+  so the UI can show cost against market. `budget_spent` / `budget_remaining` are
+  model properties over the picks — nothing is stored.
+- Availability comes straight from `Player` (the mock's `year`, minus its own
+  picks, minus positions no slot can hold — see `SLOTTABLE_POSITIONS`), NOT from
+  DraftPick like a real draft's available_players.
+- Endpoints, all `IsDrafter`, under `/api/drafts/draft/mocks/`: `` (list,
+  `?year=`), `create/`, `<id>/`, `<id>/delete/`, `<id>/available_players/`,
+  `<id>/pick/<player_id>/` (`{position_slot, price}`), `<id>/clear_slot/`
+  (`{position_slot}`), `<id>/create_plan/` (`{name}`). Every write answers with
+  the FULL mock detail (slots + budget), so the client seeds its cache from the
+  response instead of refetching. Services in
+  `draft/services/draft/mock_draft.py`.
+- UI: `features/MockDraftList.tsx` (a section on the dashboard, staff only —
+  create takes just a name) and `features/MockDraftPage.tsx` at `/mocks/:mockId`
+  — roster on the left, player list on the right. Its filters mirror the board's
+  `AvailablePlayers` set and semantics (name search, position chips, max price as
+  a CEILING on `override_price || projected_price`, a team dropdown built from the
+  loaded players, and Favorites-only counting `favorite === true` alone), but
+  apply LIVE rather than behind a Filter button. Click
+  a player, then click an eligible slot; eligible empty slots are outlined blue,
+  which is the board's tap-to-place idiom. "Save as plan" prompts for a name and
+  posts `create_plan`. It reads the server DIRECTLY through React Query — **not**
+  Dexie and not the offline write queue — because mocks are prep-time work, same
+  reasoning as Target Tiers.
+
 **Running backend tests**: `.venv/bin/python manage.py test draft --keepdb` —
 requires the `fantasymanager-db` Docker container running
 (`docker start fantasymanager-db`, Postgres on :5434). `fantasy/settings.py` sets
