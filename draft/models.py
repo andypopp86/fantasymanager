@@ -256,25 +256,61 @@ class Draft(models.Model):
         super(Draft, self).delete(*args, **kwargs)
 
     def add_missing_players(self):
-        player_names = list(Player.objects.filter(year=self.year).exclude(position='K').values_list('name', flat=True))
-        pick_names = list(DraftPick.objects.filter(draft=self).values_list('player__name', flat=True))
-        missing_players = []
-        for player_name in player_names:
-            if player_name not in pick_names:
-                added_player = Player.objects.filter(name=player_name).order_by('id').first()
-                missing_players.append(added_player)
-        players_to_add = []
-        for player_to_add in missing_players:
-            dp = DraftPick(
-                draft=self,
-                player=player_to_add
-            )
-            try:
-                dp.save()
-            except Exception as exc:
-                logger.error(f"could not save {dp.player.id} {dp.player.name}")
+        """Backfill this draft's available-player pool.
 
-        DraftPick.objects.bulk_create(players_to_add)
+        Returns the `Player`s whose rows this call created, so a caller can say
+        WHO was added rather than just how many (the admin action lists them).
+
+        A draft's pool is its own `DraftPick` rows (available = `drafted` False),
+        written when the draft is created — so a player who enters the DB
+        afterwards (a new FFC feed entry, say) has no row here and cannot be
+        nominated until this runs. Idempotent: run it after every ADP refresh.
+
+        **Keyed on `(player_id, year)`** — Player's real identity
+        (`unique_together`), and the only key stable across the local, Windows
+        and hosted copies. The previous version matched on NAME, which broke two
+        ways on any DB holding more than one season: two different players
+        sharing a name collapsed into one (the second never got a row), and the
+        re-lookup dropped the year filter and took `order_by('id').first()`, so
+        it attached the OLDEST row of that name — a previous season's player,
+        carrying that season's team and price.
+        """
+        # NB two different things are called player_id here: DraftPick.player_id
+        # is the FK column (a Player PK), while Player.player_id is the external
+        # FFC id. The identity we dedupe on is the latter, paired with the year.
+        already_in_draft = set(
+            DraftPick.objects
+            .filter(draft=self)
+            .values_list('player__player_id', 'player__year')
+        )
+        missing = [
+            player
+            for player in Player.objects.filter(year=self.year).exclude(position='K')
+            if (player.player_id, player.year) not in already_in_draft
+        ]
+        if not missing:
+            return []
+
+        before_pks = set(
+            DraftPick.objects.filter(draft=self).values_list('player_id', flat=True)
+        )
+        # One INSERT rather than a save() per player (~1,200 on the hosted DB).
+        # bulk_create skips DraftPick.save(), whose only job is guarding DRAFTED
+        # rows — everything created here is undrafted by definition — and
+        # `created`/`last_update_time` still populate through their fields'
+        # auto_now hooks. ignore_conflicts keeps this idempotent against the
+        # ('draft', 'player') unique constraint even if two runs overlap, which
+        # is what the old bare `except` around save() was really doing.
+        DraftPick.objects.bulk_create(
+            [DraftPick(draft=self, player=player) for player in missing],
+            ignore_conflicts=True,
+        )
+        # Diffed rather than assumed: with ignore_conflicts, `missing` would
+        # over-report anything a concurrent run got in first.
+        created_pks = set(
+            DraftPick.objects.filter(draft=self).values_list('player_id', flat=True)
+        ) - before_pks
+        return [player for player in missing if player.pk in created_pks]
 
     def draft_rounds(self):
         """

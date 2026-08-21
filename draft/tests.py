@@ -465,6 +465,67 @@ class YearsExperienceTests(TestCase):
         self.assertEqual(rows["Mock Vet TE"]["years_experience"], 4)
 
 
+class AddMissingPlayersTests(TestCase):
+    """`Draft.add_missing_players` backfills the draft's available pool, keyed on
+    (player_id, year). The identity key is the whole point of the method, so
+    that's what these assert — plus the two ways the old name-matching failed.
+    """
+
+    def setUp(self):
+        self.draft = Draft.objects.create(year=2026, draft_name="pool")
+        self.existing = make_player("Already In", "RB")
+        DraftPick.objects.create(draft=self.draft, player=self.existing, drafted=False)
+
+    def test_adds_only_players_missing_for_the_drafts_year(self):
+        new_player = make_player("Brand New", "WR")
+        make_player("Wrong Year", "WR", year=2025)
+
+        created = self.draft.add_missing_players()
+
+        self.assertEqual([player.pk for player in created], [new_player.pk])
+        self.assertEqual(
+            set(DraftPick.objects.filter(draft=self.draft).values_list('player__name', flat=True)),
+            {"Already In", "Brand New"},
+        )
+
+    def test_excludes_kickers(self):
+        make_player("Kick Er", "K")
+        self.assertEqual(self.draft.add_missing_players(), [])
+
+    def test_is_idempotent(self):
+        make_player("Brand New", "WR")
+        self.assertEqual(len(self.draft.add_missing_players()), 1)
+        # Second run has nothing left to do, and doesn't duplicate the first.
+        self.assertEqual(self.draft.add_missing_players(), [])
+        self.assertEqual(DraftPick.objects.filter(draft=self.draft).count(), 2)
+
+    def test_previous_season_row_of_the_same_name_is_neither_reused_nor_blocking(self):
+        """The old version matched on NAME: it looked the player up without a
+        year filter and took order_by('id').first(), so it attached the OLDEST
+        row of that name — a previous season's player — and a name already in
+        the draft blocked the real player from ever being added."""
+        old_row = make_player("Same Name", "RB", year=2025, player_id=900)
+        current_row = make_player("Same Name", "RB", year=2026, player_id=900)
+        # The stale row is already in the draft, exactly the state that used to
+        # make the current-year player look present.
+        DraftPick.objects.create(draft=self.draft, player=old_row, drafted=False)
+
+        created = self.draft.add_missing_players()
+
+        self.assertEqual([player.pk for player in created], [current_row.pk])
+        pick = DraftPick.objects.get(draft=self.draft, player=current_row)
+        self.assertEqual(pick.player.year, 2026)
+        self.assertFalse(pick.drafted)
+
+    def test_two_different_players_sharing_a_name_both_get_rows(self):
+        first = make_player("Twin Name", "WR", player_id=801)
+        second = make_player("Twin Name", "TE", player_id=802)
+
+        created = self.draft.add_missing_players()
+
+        self.assertEqual({player.pk for player in created}, {first.pk, second.pk})
+
+
 class RiskFieldsTests(TestCase):
     """Hand-scored risk. The score is filtered on and the summary is READ during
     the bidding, so both have to survive the hand-written player serializer —
