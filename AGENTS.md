@@ -813,9 +813,8 @@ the budget row.
   PLAYER for the same reason.
 - **The Backups ▸ / Hide ✕ toggle** (in the table's header, state in
   `Draft.tsx`) is SHOW/HIDE, not narrow/widen: hidden means the three columns
-  aren't rendered at all, and the count rides on the show label since that's
-  when you can't see the shelves. There is only ONE shown rendering — a
-  truncating fixed-width name plus the price. Showing them adds
+  aren't rendered at all. There is only ONE shown rendering — a truncating
+  fixed-width name plus the price. Showing them adds
   `.backups-shown` to `.draftboard-grid` on desktop, which raises the sidebar
   track's cap from `fit-content(45vw)` to `fit-content(65vw)`. Only the CAP
   moves — the track stays content-sized, so nothing stretches — and since the

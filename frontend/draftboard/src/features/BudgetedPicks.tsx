@@ -55,8 +55,6 @@ export const BudgetedPicks = ({draftContext, draftSend, backupsShown = false, on
     }, [draftContext.managers]);
 
     const backupsBySlot = draftContext.backupsBySlot || {};
-    const backupCount = Object.values(backupsBySlot)
-        .reduce((acc, shelf) => acc + shelf.filter(Boolean).length, 0);
     const ranks = Array.from({ length: BACKUP_DEPTH }, (_, index) => index + 1);
 
     return (
@@ -64,10 +62,9 @@ export const BudgetedPicks = ({draftContext, draftSend, backupsShown = false, on
             <div className="component-header flex justify-between items-center gap-2">
                 <span>Budgeted Players</span>
                 <span className="flex items-center gap-2">
-                    {/* Hidden by default and hidden means GONE, not narrowed —
-                        the columns cost real width, which comes off the board.
-                        The count rides on the show label because that's when you
-                        can't see the shelves. */}
+                    {/* Hidden by default, and hidden means GONE rather than
+                        narrowed — the columns cost real width, which comes off
+                        the board. */}
                     <button
                         className="border border-gray-400 rounded px-1 text-xs font-normal hover:bg-gray-100"
                         onClick={onToggleBackups}
@@ -75,7 +72,7 @@ export const BudgetedPicks = ({draftContext, draftSend, backupsShown = false, on
                             ? "Hide the backup columns"
                             : "Show a shelf of alternates per slot (takes width from the board)"}
                     >
-                        {backupsShown ? "Hide ✕" : `Backups ▸${backupCount > 0 ? ` (${backupCount})` : ""}`}
+                        {backupsShown ? "Hide ✕" : "Backups ▸"}
                     </button>
                     <button
                         className="text-sm leading-none hover:opacity-70"
