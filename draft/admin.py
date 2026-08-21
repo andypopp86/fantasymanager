@@ -141,6 +141,11 @@ class PlayerAdmin(admin.ModelAdmin):
     # board's worth of players one change-form at a time is unworkable.
     list_editable = ('target_tier', 'years_experience', 'risk_score', 'risk_summary', 'is_projection', 'has_injury', 'defensive_impact', 'favorite', 'override_price', 'my_price', 'my_price_rationale')
     search_fields = ('name', 'position', )
+    # The change form is long (prices, flags, tiers, risk); putting the submit
+    # row at the top too saves scrolling to the bottom to commit one edit.
+    # NOTE: this is the CHANGE FORM only — Django has no equivalent for the
+    # changelist's inline-edit Save, which stays at the bottom of the list.
+    save_on_top = True
     # Team last on purpose — it renders every code as a link, so leading with it
     # pushes the short, frequently-used filters below the fold.
     list_filter = ('position', 'year', 'target_tier', 'years_experience', 'risk_score', RiskBandFilter, 'is_projection', 'has_injury', 'defensive_impact', 'favorite', MyPriceVarianceFilter, PlayerTeamFilter)

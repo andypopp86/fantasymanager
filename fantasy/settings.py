@@ -54,6 +54,24 @@ CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[])
 INTERNAL_IPS = ['localhost', '127.0.0.1']  # debug toolbar
 
 # ---------------------------------------------------------------------------
+# Request limits
+# ---------------------------------------------------------------------------
+
+# /admin's player list is edited INLINE, a page at a time: 11 list_editable
+# fields x 100 rows (list_per_page), and every row also posts its pk and an
+# action checkbox — about 1,300 fields, over Django's 1,000 default, so saving
+# the list view failed outright with TooManyFieldsSent. Raised rather than
+# worked around by paginating smaller or dropping editable columns, because
+# bulk inline editing IS the prep workflow (tiers, risk, favorites).
+#
+# The cap exists to bound the cost of parsing a hostile form post. Every
+# request that can reach this many fields is behind @login_required and the
+# staff-only admin, and the new ceiling still bounds a runaway request, so the
+# guard is loosened, not removed. Headroom is deliberate: adding an editable
+# column or bumping list_per_page must not resurrect a confusing 400.
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 5000
+
+# ---------------------------------------------------------------------------
 # Apps & middleware
 # ---------------------------------------------------------------------------
 
