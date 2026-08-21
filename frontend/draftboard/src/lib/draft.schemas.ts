@@ -349,6 +349,28 @@ export type BudgetPickRow = {
     status: string,
 }
 
+// Backups — LOCAL ONLY, no server counterpart.every budget slot gets its own
+// shelf of pre-picked alternates: when an opponent takes the WR1 target, the
+// WR1 shelf already says who replaces them, so the swap is one click instead of
+// a plan rebuilt under time pressure.
+//
+// `slot` is the BUDGET slot being backed up (QB1, WR1, BENCH3 …) and `rank` is
+// the depth position on that slot's shelf (1..BACKUP_DEPTH), so a row is
+// addressed by (slot, rank). Because a backup stands in for one specific slot,
+// it must satisfy that slot's `allowed_positions` like any other candidate for
+// it.
+export const BACKUP_DEPTH = 3;
+
+export type BackupPickRow = {
+    draftId: number,
+    player_id: number | string,
+    slot: SlotName,
+    rank: number,
+    player_name: string,
+    position: string,
+    projected_price: number | string,
+}
+
 export type WatchPickRow = {
     draftId: number,
     player_id: number | string,

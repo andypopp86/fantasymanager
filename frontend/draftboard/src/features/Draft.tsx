@@ -39,6 +39,11 @@ export default function Draft({draftDetails}: DraftProps) {
     const [showTiers, setShowTiers] = useState(true);
     // The tier player whose budget edit is open, if any.
     const [tierBudgetPlayer, setTierBudgetPlayer] = useState<any>(null);
+    // Backups are extra columns ON the budget table (BudgetedPicks), not a panel
+    // of their own, and they're off by default: showing them ADDS columns, and
+    // on desktop also raises the sidebar's width cap so the room they need comes
+    // off the board rather than squeezing the tables beside them.
+    const [backupsShown, setBackupsShown] = useState(false);
     // Phones can't show the sidebar beside the board, so the panels become
     // tabs. Nomination survives tab switches (it lives in the flow machine),
     // which is what makes "tap a player, switch to Board, tap a slot" work.
@@ -125,7 +130,12 @@ export default function Draft({draftDetails}: DraftProps) {
         <div className="flex flex-col gap-2">
             <NominationArea draftContext={draftContext} draftSend={draftSend} />
             <BudgetPerSlot draftContext={draftContext} />
-            <BudgetedPicks draftContext={draftContext} draftSend={draftSend} />
+            <BudgetedPicks
+                draftContext={draftContext}
+                draftSend={draftSend}
+                backupsShown={backupsShown}
+                onToggleBackups={() => setBackupsShown((prev) => !prev)}
+            />
         </div>
     );
     const boardPanel = <DraftBoard draftContext={draftContext} draftSend={draftSend} />;
@@ -329,7 +339,7 @@ export default function Draft({draftDetails}: DraftProps) {
         </>
     ) : (
         <>
-            <div className="draftboard-grid">
+            <div className={"draftboard-grid" + (backupsShown ? " backups-shown" : "")}>
                 <div className="draft-sidebar flex gap-2">
                     {playersPanel}
                     {watchPanel}
