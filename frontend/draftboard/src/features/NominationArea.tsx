@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../lib/db";
 import PlayerFlagIcons from "./PlayerFlagIcons";
-import { POSITION_BG_COLORS, POSITION_FG_COLORS } from "../utils/colors";
+import { POSITION_BG_COLORS, POSITION_FG_COLORS, getRiskColors } from "../utils/colors";
 
 type NominationAreaProps = {
     draftContext: any;
@@ -52,6 +52,18 @@ export const NominationArea = ({ draftContext, draftSend }: NominationAreaProps)
     const myPriceColor = myPrice == null || myPrice === projectedPrice ? "#374151"
         : myPrice < projectedPrice ? "#f87171"
         : "#16a34a";
+    // Hand-scored risk and its written justification, off the LIVE row for the
+    // same reason as favorite and the flags — reviewing a player in /admin
+    // mid-draft shows up on the next refetch. 0 = not reviewed, which draws
+    // nothing: an unscored player must not read as a safe one.
+    const riskScore = parseInt(String(flagPlayer?.risk_score ?? 0)) || 0;
+    // One bullet per line, with a leading "-", "*" or bullet glyph optional —
+    // the summary is typed by hand in /admin, so accept either habit.
+    const riskBullets = String(flagPlayer?.risk_summary ?? "")
+        .split("\n")
+        .map((line: string) => line.replace(/^\s*[-*•]\s*/, "").trim())
+        .filter(Boolean);
+
     const nominationBorder = isBudgetedTarget ? "#4ade80"
         : favorite === true ? "#facc15"
         : favorite === false ? "#f87171"
@@ -153,6 +165,34 @@ export const NominationArea = ({ draftContext, draftSend }: NominationAreaProps)
                                 onChange={handlePriceChange}
                             />
                         </div>
+                        {/* Under the price box, above notes: the score is a
+                            glance, the bullets are what you read while deciding
+                            whether to keep bidding. */}
+                        {(riskScore > 0 || riskBullets.length > 0) && (
+                            <div className="w-full mb-2">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-xs font-medium text-gray-700">Risk</span>
+                                    {riskScore > 0 ? (
+                                        <span
+                                            className="px-1.5 py-0.5 rounded text-xs font-bold leading-none"
+                                            style={getRiskColors(riskScore)}
+                                            title="Hand-scored 1-10, higher = riskier"
+                                        >
+                                            {riskScore}/10
+                                        </span>
+                                    ) : (
+                                        <span className="text-xs text-gray-400">not scored</span>
+                                    )}
+                                </div>
+                                {riskBullets.length > 0 && (
+                                    <ul className="text-xs text-gray-700 list-disc pl-5">
+                                        {riskBullets.map((bullet: string, index: number) => (
+                                            <li key={index}>{bullet}</li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                        )}
                         {nominatedPlayer.notes && (
                             <ul className="w-full text-xs text-gray-700 list-disc pl-5 mb-2">
                                 {nominatedPlayer.notes.split("\n").map((note, index) => (

@@ -305,6 +305,39 @@ with the rest of `player`) and to the mock page through
 silently matches nothing, hence the passthrough asserts in
 `draft/tests.py::YearsExperienceTests`.
 
+**Risk** (`Player.risk_score` + `Player.risk_summary`) — a hand review, not a
+derived number: no importer writes either field. `risk_score` is **1-10, higher
+= riskier**, and **0 is the default meaning NOT REVIEWED YET** — an unscored
+player is silence, not a clean bill of health, so nothing renders a 0 badge and
+the `≤` filters exclude it (see below). `risk_summary` is the written
+justification, **one bullet per line**; a leading `-`, `*` or `•` is optional
+because the UI strips it, so either typing habit works.
+
+Scored in /admin's player list (both fields are `list_editable`, the summary as
+a 4-row textarea like `my_price_rationale` — score and justification get written
+in the same pass, which is the point of keeping them adjacent). Two filters
+there: the stock `risk_score` (exact values) and `RiskBandFilter`
+(`draft/admin.py`) for bands — not reviewed / reviewed / low 1-3 / medium 4-6 /
+high 7-8 / extreme 9-10. Admin filters are discrete choices, which is why the
+board's mode+value pair becomes bands here.
+
+The board filters risk with the same **mode + value** shape as
+`years_experience` (`=`, `≤`, `≥` plus a value; an empty VALUE turns it off,
+since 0 is meaningful) and for the same reason **`≤ N` spans 1…N and EXCLUDES
+0** — a ceiling that swallowed every unscored player would return the whole
+board. `= 0` is how you go find the unreviewed ones; `≥` needs no special case.
+
+Unlike `my_price_rationale` (prep-time only), the summary **does** ship to the
+client: `NominationArea` renders the score as a badge (`getRiskColors` in
+`utils/colors.tsx` — green ≤3, amber 4-6, red 7-8, dark red 9+) with the bullets
+under it, read off the **live** Dexie row like `favorite` and the flag icons, so
+a player reviewed in /admin mid-draft shows up on the next refetch. Both fields
+ride through `DraftPicksOutputSerializer`'s hand-written player serializer;
+a field missing there means the panel silently shows nothing, hence
+`draft/tests.py::RiskFieldsTests`. NOT added to
+`MockDraftPlayerOutputSerializer` — the mock page has no risk filter, and an
+unused field there would just drift.
+
 **Target tiers** (`Player.target_tier`, non-negative int, default `0` = untiered;
 `1` is the TOP tier and they ascend). Prep-time tiering, not a draft-time write:
 the app has no endpoint that sets it — you tier players **inline in /admin's

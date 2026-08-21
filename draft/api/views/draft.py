@@ -233,6 +233,12 @@ class DraftPicksOutputSerializer(BaseSerializer):
         target_type = serializers.CharField(allow_null=True, required=False)
         # Hand-set in /admin; the board filters on it (0 = rookie or unfilled).
         years_experience = serializers.IntegerField()
+        # Hand-scored risk (1-10, higher = riskier; 0 = not reviewed) plus the
+        # written justification, which the nomination area renders as bullets.
+        # Unlike my_price_rationale this DOES ship: the reasoning is what you
+        # want in front of you while the bidding is live.
+        risk_score = serializers.IntegerField()
+        risk_summary = serializers.CharField(allow_null=True)
         # Hand-set warning flags, rendered as icons in the nomination area.
         is_projection = serializers.BooleanField()
         has_injury = serializers.BooleanField()

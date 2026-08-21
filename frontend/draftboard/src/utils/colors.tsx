@@ -20,6 +20,16 @@ export const getBudgetPerSlotColors = (value: number) => {
     return { backgroundColor: "green", color: "white" };
 }
 
+// Hand-scored risk, 1-10, HIGHER = RISKIER (0 = not reviewed, and gets no
+// badge at all — silence is not "safe"). Same escalation as
+// getBudgetPerSlotColors, read in the other direction.
+export const getRiskColors = (score: number) => {
+    if (score >= 9) return { backgroundColor: "#7f1d1d", color: "white" };
+    if (score >= 7) return { backgroundColor: "#dc2626", color: "white" };
+    if (score >= 4) return { backgroundColor: "#f59e0b", color: "black" };
+    return { backgroundColor: "#16a34a", color: "white" };
+}
+
 export const MANAGER_BG_COLORS = [
     "red", "blue", "green", "orange", "purple", "grey", "yellow", "Goldenrod", "DodgerBlue", "IndianRed", "MediumPurple"
 ]
