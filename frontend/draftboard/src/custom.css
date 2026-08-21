@@ -11,15 +11,6 @@
     width: 100%;
 }
 
-/* Backups expanded (Draft.tsx toggles `.with-backups`): stacked between the
-   sidebar and the board here, a third TRACK on desktop below. */
-.draftboard-grid.with-backups {
-    grid-template-areas:
-        "sidebar"
-        "backups"
-        "main";
-}
-
 /* No height here on purpose. This used to be `height: 100vh`, which pinned the
    board to the viewport and forced anything below it (the target-tiers strip)
    into an inner scroll container — so the page scrollbar did nothing and you
@@ -52,22 +43,18 @@
     align-items: center;
 }
 
-/* The expanded backups get their own middle track. The board is the only
-   `1fr` track, so every rem this one takes comes off the board — which is the
-   point: backups are secondary functionality that only gets room on request.
-   Clamped rather than purely content-sized: a `fit-content` track visibly
-   jitters as cells fill and empty, and the 34vw cap stops a long player name
-   swallowing the board. */
+/* Backups expanded (Draft.tsx toggles `.backups-wide`): the budget table's
+   backup cells widen, and the sidebar needs headroom to show them. Only the CAP
+   moves — the track is still content-sized, so nothing stretches. The board is
+   the only `1fr` track, so the width the sidebar takes comes off the board,
+   which is the point: backups are secondary work that gets room on request. */
 @media (min-width: 1024px) {
-    .draftboard-grid.with-backups {
-        grid-template-areas:
-            "sidebar backups main";
-        grid-template-columns: fit-content(45vw) minmax(22rem, 34vw) minmax(0, 1fr);
+    .draftboard-grid.backups-wide {
+        grid-template-columns: fit-content(65vw) minmax(0, 1fr);
     }
 }
 
 .draft-sidebar { grid-area : sidebar; }
-.draft-backups { grid-area : backups; }
 .draft-main { grid-area : main; }
 
 .font-small { font-size: 0.75rem; }
