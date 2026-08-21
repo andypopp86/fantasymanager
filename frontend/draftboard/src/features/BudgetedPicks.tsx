@@ -9,7 +9,7 @@ import { BACKUP_DEPTH } from "../lib/draft.schemas";
 // than in a panel of their own because a shelf only means anything beside the
 // slot it backs up: "someone took my WR1 target, who replaces them" is one row,
 // not two components to read across.
-export const BudgetedPicks = ({draftContext, draftSend, backupsExpanded = false, onToggleBackups}) => {
+export const BudgetedPicks = ({draftContext, draftSend, backupsShown = false, onToggleBackups}) => {
     // Auto-slot the budgeted roster by price/position.
     const shuffleBudget = () => {
         const players = Object.values(draftContext.budgetedPlayers || {})
@@ -64,14 +64,18 @@ export const BudgetedPicks = ({draftContext, draftSend, backupsExpanded = false,
             <div className="component-header flex justify-between items-center gap-2">
                 <span>Budgeted Players</span>
                 <span className="flex items-center gap-2">
+                    {/* Hidden by default and hidden means GONE, not narrowed —
+                        the columns cost real width, which comes off the board.
+                        The count rides on the show label because that's when you
+                        can't see the shelves. */}
                     <button
                         className="border border-gray-400 rounded px-1 text-xs font-normal hover:bg-gray-100"
                         onClick={onToggleBackups}
-                        title={backupsExpanded
-                            ? "Narrow the backup columns"
-                            : "Widen the backup columns (takes width from the board)"}
+                        title={backupsShown
+                            ? "Hide the backup columns"
+                            : "Show a shelf of alternates per slot (takes width from the board)"}
                     >
-                        {backupsExpanded ? "Backups ⤡" : "Backups ⤢"}{backupCount > 0 ? ` (${backupCount})` : ""}
+                        {backupsShown ? "Hide ✕" : `Backups ▸${backupCount > 0 ? ` (${backupCount})` : ""}`}
                     </button>
                     <button
                         className="text-sm leading-none hover:opacity-70"
@@ -80,8 +84,8 @@ export const BudgetedPicks = ({draftContext, draftSend, backupsExpanded = false,
                     >🔀</button>
                 </span>
             </div>
-            {/* Six columns don't fit a phone; only this table scrolls sideways,
-                the page keeps its own vertical scroll. */}
+            {/* With the backups shown, six columns don't fit a phone; only this
+                table scrolls sideways, the page keeps its own vertical scroll. */}
             <div className="overflow-x-auto">
             <table className="w-full lg:w-auto">
                 <thead>
@@ -89,13 +93,13 @@ export const BudgetedPicks = ({draftContext, draftSend, backupsExpanded = false,
                         <th>Player Name</th>
                         <th>Position</th>
                         <th>Price</th>
-                        {ranks.map((rank) => (
+                        {backupsShown && ranks.map((rank) => (
                             <th
                                 key={rank}
                                 className="border-l border-gray-300"
                                 title={`Backup ${rank} — the alternate that takes this slot if the plan falls through`}
                             >
-                                {backupsExpanded ? `Backup ${rank}` : `B${rank}`}
+                                Backup {rank}
                             </th>
                         ))}
                     </tr>
@@ -107,7 +111,7 @@ export const BudgetedPicks = ({draftContext, draftSend, backupsExpanded = false,
                     <td></td>
                     <td>Remainder</td>
                     <td>Spent</td>
-                    <td colSpan={BACKUP_DEPTH}></td>
+                    {backupsShown && <td colSpan={BACKUP_DEPTH}></td>}
                 </tr>
                 <tr key={'budget_total'} className="font-small" style={
                     {background: "blue", color: 'white'}} 
@@ -115,7 +119,7 @@ export const BudgetedPicks = ({draftContext, draftSend, backupsExpanded = false,
                     <td>Total:</td>
                     <td>{draftContext.draftDetails.starting_budget - draftContext.budgetSpent}</td>
                     <td>{draftContext.budgetSpent}</td>
-                    <td colSpan={BACKUP_DEPTH}></td>
+                    {backupsShown && <td colSpan={BACKUP_DEPTH}></td>}
                 </tr>
                     {Object.entries(draftContext.budgetedPlayers).map(([positionSlot, pickSlot]) => (
                         <BudgetedPick
@@ -127,7 +131,7 @@ export const BudgetedPicks = ({draftContext, draftSend, backupsExpanded = false,
                             draftContext={draftContext}
                             backups={backupsBySlot[positionSlot] || []}
                             takenBy={takenBy}
-                            backupsExpanded={backupsExpanded}
+                            backupsShown={backupsShown}
                         />
                     ))}
                 </tbody>

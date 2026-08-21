@@ -9,9 +9,10 @@ import { BACKUP_DEPTH } from "../lib/draft.schemas";
 export default function BudgetedPick({
     positionSlot, pickSlot, handleDrop, draftSend, draftContext,
     // The slot's shelf of alternates — BACKUP_DEPTH cells rendered as extra
-    // columns on this row. `takenBy` is computed once by the parent (it needs
-    // every manager's picks) rather than per row.
-    backups = [], takenBy = {}, backupsExpanded = false,
+    // columns on this row, and only while the parent is showing them (hidden
+    // means the columns aren't there at all, not narrowed). `takenBy` is
+    // computed once by the parent (it needs every manager's picks), not per row.
+    backups = [], takenBy = {}, backupsShown = false,
 }) {
 
     const unbudgetPick = (draftId, drafterId, playerId) => {
@@ -96,7 +97,7 @@ export default function BudgetedPick({
             <td>{pickSlot.pick.player_name}</td>
             <td>{positionSlot}</td>
             <td>{parseInt(pickSlot.pick.actual_price || pickSlot.pick.projected_price)}</td>
-            {ranks.map((rank) => (
+            {backupsShown && ranks.map((rank) => (
                 <BackupCell
                     key={rank}
                     draftId={draftContext.draftId}
@@ -109,7 +110,6 @@ export default function BudgetedPick({
                     settled={settled}
                     nominated={draftContext.nominatedPlayer}
                     draggedPlayer={draftContext.draggedPlayer}
-                    expanded={backupsExpanded}
                     takenBy={takenBy}
                 />
             ))}

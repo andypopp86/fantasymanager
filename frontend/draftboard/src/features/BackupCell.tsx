@@ -30,14 +30,13 @@ type BackupCellProps = {
     settled: boolean,
     nominated: any,
     draggedPlayer: any,
-    expanded: boolean,
     // player_id (stringified) -> the manager who drafted them, whole field.
     takenBy: Record<string, string>,
 };
 
 export default function BackupCell({
     draftId, drafterId, slot, rank, cell, allowed, occupantPick, settled,
-    nominated, draggedPlayer, expanded, takenBy,
+    nominated, draggedPlayer, takenBy,
 }: BackupCellProps) {
     const [isDragOver, setIsDragOver] = useState(false);
 
@@ -125,10 +124,12 @@ export default function BackupCell({
         >
             {cell ? (
                 <span className="flex items-center gap-1">
-                    <span className={`truncate ${expanded ? "w-28" : "w-14"} ${taken ? "line-through" : ""}`}>
+                    {/* Fixed width + truncate: a long name ellipsises rather
+                        than widening the column out from under the board. */}
+                    <span className={`truncate w-28 ${taken ? "line-through" : ""}`}>
                         {cell.player_name}
                     </span>
-                    {expanded && <span className="whitespace-nowrap">${price}</span>}
+                    <span className="whitespace-nowrap">${price}</span>
                     <button
                         className="ml-auto px-0.5 hover:text-red-600"
                         onClick={(e) => { e.stopPropagation(); mutations.unbackupPick(draftId, cell.player_id); }}
@@ -138,7 +139,7 @@ export default function BackupCell({
                     </button>
                 </span>
             ) : (
-                <span className={`block text-center text-gray-300 ${expanded ? "w-28" : "w-14"}`}>
+                <span className="block text-center text-gray-300 w-28">
                     {isTapTarget ? "＋" : "·"}
                 </span>
             )}

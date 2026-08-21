@@ -811,14 +811,17 @@ the budget row.
   nothing here can undo a pick, so promoting over one would leave the pick with
   no budget row. Same reasoning as `StagedOccupant.locked`, and keyed on the
   PLAYER for the same reason.
-- **The Backups ⤢ toggle** (in the table's header, state in `Draft.tsx`) widens
-  the cells from a truncated name to name + price, and on desktop adds
-  `.backups-wide` to `.draftboard-grid`, which raises the sidebar track's cap
-  from `fit-content(45vw)` to `fit-content(65vw)`. Only the CAP moves — the
-  track stays content-sized, so nothing stretches — and since the board is the
-  only `1fr` track, the room the sidebar takes comes off the board. That is
-  deliberate: backups are secondary work that gets space on request. The table
-  itself sits in an `overflow-x-auto` wrapper, because six columns don't fit a
+- **The Backups ▸ / Hide ✕ toggle** (in the table's header, state in
+  `Draft.tsx`) is SHOW/HIDE, not narrow/widen: hidden means the three columns
+  aren't rendered at all, and the count rides on the show label since that's
+  when you can't see the shelves. There is only ONE shown rendering — a
+  truncating fixed-width name plus the price. Showing them adds
+  `.backups-shown` to `.draftboard-grid` on desktop, which raises the sidebar
+  track's cap from `fit-content(45vw)` to `fit-content(65vw)`. Only the CAP
+  moves — the track stays content-sized, so nothing stretches — and since the
+  board is the only `1fr` track, the room the sidebar takes comes off the board.
+  That is deliberate: backups are secondary work that gets space on request. The
+  table sits in an `overflow-x-auto` wrapper, because six columns don't fit a
   phone (horizontal only — the page keeps its own vertical scroll).
 
 ## Do not

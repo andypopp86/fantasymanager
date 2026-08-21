@@ -43,13 +43,13 @@
     align-items: center;
 }
 
-/* Backups expanded (Draft.tsx toggles `.backups-wide`): the budget table's
-   backup cells widen, and the sidebar needs headroom to show them. Only the CAP
-   moves — the track is still content-sized, so nothing stretches. The board is
-   the only `1fr` track, so the width the sidebar takes comes off the board,
-   which is the point: backups are secondary work that gets room on request. */
+/* Backups shown (Draft.tsx toggles `.backups-shown`): the budget table grows
+   three columns, and the sidebar needs headroom for them. Only the CAP moves —
+   the track is still content-sized, so nothing stretches. The board is the only
+   `1fr` track, so the width the sidebar takes comes off the board, which is the
+   point: backups are secondary work that gets room on request. */
 @media (min-width: 1024px) {
-    .draftboard-grid.backups-wide {
+    .draftboard-grid.backups-shown {
         grid-template-columns: fit-content(65vw) minmax(0, 1fr);
     }
 }
