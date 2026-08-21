@@ -1,6 +1,7 @@
 import logging
 
 from django.utils import timezone
+from django.core.validators import MaxValueValidator
 from django.db import models
 
 logger = logging.getLogger(__name__)
@@ -175,6 +176,19 @@ class Player(models.Model):
     # is why the apps' filters treat it as a plain number rather than inferring
     # rookie status from it.
     years_experience = models.PositiveIntegerField(default=0)
+    # RISK. Hand-scored 1-10, higher = riskier; 0 = NOT REVIEWED YET (the
+    # default), so a zero says nothing about the player. Filtered in /admin and
+    # in the board's player list; the summary rides along to the nomination area
+    # so the reasoning is on screen while the bidding is live.
+    risk_score = models.PositiveIntegerField(
+        default=0,
+        validators=[MaxValueValidator(10)],
+        help_text='1-10, higher = riskier. 0 = not reviewed yet.',
+    )
+    # The justification for risk_score, written as one BULLET PER LINE (a
+    # leading "-", "*" or "•" is optional — the UI strips it). Free text on
+    # purpose: the score is what gets filtered, the summary is what gets read.
+    risk_summary = models.TextField(null=True, blank=True)
     # Hand-set draft-day warning flags, surfaced as icons in the nomination area
     # (see PLAYER_FLAGS in features/PlayerFlagIcons.tsx) so the drafter doesn't
     # overextend to win a bid. Adding another: field here + admin + the player
