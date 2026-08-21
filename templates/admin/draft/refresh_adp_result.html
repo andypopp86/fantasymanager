@@ -8,11 +8,11 @@ next to each other so the created players can be eyeballed against the pick
 rows they should have produced.
 {% endcomment %}
 {% block content %}
-<h1>Refresh ADP and sync players — {{ report.draft_name }}</h1>
+<h1>Refresh ADP and prices{% if report.synced_a_draft %} — {{ report.draft_name }}{% endif %}</h1>
 
 <ul class="messagelist"><li class="success">
-    Refreshed {{ report.summary.year }}: {{ report.summary.created|length }} player(s)
-    created, {{ report.picks_added|length }} pick row(s) added to {{ report.draft_name }}.
+    Refreshed {{ report.summary.year }}: {{ report.summary.created|length }} player(s) created{% if report.synced_a_draft %},
+    {{ report.picks_added|length }} pick row(s) added to {{ report.draft_name }}{% endif %}.
 </li></ul>
 
 {% if report.year_mismatch %}
@@ -62,8 +62,12 @@ rows they should have produced.
 <p>None — the feed had no players this DB was missing.</p>
 {% endif %}
 
-<h2>Step 4 — pick rows added to {{ report.draft_name }}</h2>
-{% if report.picks_added %}
+<h2>Step 4 — draft pool sync</h2>
+{% if not report.synced_a_draft %}
+<p>Skipped — no draft was selected, so no pick rows were added. Any player created
+    above still can't be nominated in an existing draft until its pool is synced
+    (this page, or the draft list's "Add missing players" action).</p>
+{% elif report.picks_added %}
 <table>
     <thead><tr><th>Player</th><th>Position</th><th>Projected price</th></tr></thead>
     <tbody>
@@ -78,8 +82,8 @@ rows they should have produced.
 <p>More rows here than in step 3 is normal: this also backfills players from
     earlier refreshes that {{ report.draft_name }} never picked up.</p>
 {% else %}
-<p>None — this draft's pool already held every {{ report.draft_year }} player.</p>
+<p>None — {{ report.draft_name }}'s pool already held every {{ report.draft_year }} player.</p>
 {% endif %}
 
-<p><a href="." class="button">Back to drafts</a></p>
+<p><a href="../" class="button">Back to players</a></p>
 {% endblock %}

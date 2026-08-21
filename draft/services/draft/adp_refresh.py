@@ -6,7 +6,13 @@ One staff click does four things and reports each in the browser:
   2. recompute projected prices from that ADP  (same import — step 2 is not
                                                 separable from step 1)
   3. list the players the refresh CREATED
-  4. backfill one draft's available-player pool, and list what it added
+  4. optionally backfill ONE draft's available-player pool, and list what it
+     added
+
+Steps 1-3 are Player-wide: they rewrite every ADP and projected price for the
+year, which is why the entry point is a button on the PLAYER changelist. Step 4
+is the only per-draft part, so the draft is an input to the flow (a field on the
+confirm page) rather than a row you select to reach it — and it's optional.
 
 Why 3 and 4 both get listed: a draft's pool is its own DraftPick rows, fixed
 when the draft was created, so a player new to the feed exists in the DB but
@@ -32,8 +38,10 @@ logger = logging.getLogger(__name__)
 class RefreshReport:
     """Everything the admin results page renders."""
 
-    draft_name: str
-    draft_year: int
+    # None when the run refreshed players without syncing a draft (step 4
+    # skipped), which is a legitimate way to use this.
+    draft_name: str | None
+    draft_year: int | None
     summary: ImportSummary
     picks_added: list = dataclasses.field(default_factory=list)
     # logging records captured during the run (WARNING+), so a quiet failure in
@@ -42,11 +50,15 @@ class RefreshReport:
     warnings: list = dataclasses.field(default_factory=list)
 
     @property
+    def synced_a_draft(self):
+        return self.draft_name is not None
+
+    @property
     def year_mismatch(self):
         """The refresh only touches the CURRENT year. Syncing a draft from
         another season is legal but can't gain anything from this run, and
         saying so beats showing an empty step 4 as if it were normal."""
-        return self.draft_year != self.summary.year
+        return self.synced_a_draft and self.draft_year != self.summary.year
 
 
 class _WarningCollector(logging.Handler):
@@ -65,8 +77,9 @@ class _WarningCollector(logging.Handler):
         self.records.append(self.format(record))
 
 
-def refresh_and_sync(draft):
-    """Run the pipeline for one draft and return a RefreshReport.
+def refresh_and_sync(draft=None):
+    """Run the pipeline and return a RefreshReport. `draft` is optional: without
+    one, steps 1-3 run and step 4 is skipped.
 
     Writes on every step (players upserted, prices rewritten, pick rows
     created), so callers must confirm with the user first — see the admin
@@ -79,13 +92,13 @@ def refresh_and_sync(draft):
     draft_logger.addHandler(collector)
     try:
         summary = refresh_players_from_ffc()       # steps 1 + 2
-        picks_added = draft.add_missing_players()   # step 4
+        picks_added = draft.add_missing_players() if draft else []   # step 4
     finally:
         draft_logger.removeHandler(collector)
 
     return RefreshReport(
-        draft_name=draft.draft_name,
-        draft_year=draft.year,
+        draft_name=draft.draft_name if draft else None,
+        draft_year=draft.year if draft else None,
         summary=summary,
         picks_added=picks_added,
         warnings=collector.records,
