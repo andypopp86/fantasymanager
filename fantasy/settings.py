@@ -57,12 +57,15 @@ INTERNAL_IPS = ['localhost', '127.0.0.1']  # debug toolbar
 # Request limits
 # ---------------------------------------------------------------------------
 
-# /admin's player list is edited INLINE, a page at a time: 11 list_editable
-# fields x 100 rows (list_per_page), and every row also posts its pk and an
-# action checkbox — about 1,300 fields, over Django's 1,000 default, so saving
-# the list view failed outright with TooManyFieldsSent. Raised rather than
-# worked around by paginating smaller or dropping editable columns, because
-# bulk inline editing IS the prep workflow (tiers, risk, favorites).
+# /admin's player list is edited INLINE, and page size sets how many form
+# fields a Save posts: 11 list_editable fields per row, plus each row's pk and
+# action checkbox. At the 100-row default that was ~1,300 fields, over Django's
+# 1,000 default cap, and Save failed outright with TooManyFieldsSent.
+# PlayerAdmin now paginates at 20 (~260 fields), which fits the default on its
+# own — but the changelist also offers "Show all" whenever the result count is
+# under list_max_show_all (200), and saving THAT page posts ~2,600. So the cap
+# stays raised: bulk inline editing is the prep workflow (tiers, risk,
+# favorites) and it should not matter which of those two pages you save from.
 #
 # The cap exists to bound the cost of parsing a hostile form post. Every
 # request that can reach this many fields is behind @login_required and the

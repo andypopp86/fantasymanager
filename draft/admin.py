@@ -140,6 +140,11 @@ class PlayerAdmin(admin.ModelAdmin):
     # Edit tiers and the warning flags straight from the list — setting these a
     # board's worth of players one change-form at a time is unworkable.
     list_editable = ('target_tier', 'years_experience', 'risk_score', 'risk_summary', 'is_projection', 'has_injury', 'defensive_impact', 'favorite', 'override_price', 'my_price', 'my_price_rationale')
+    # 20 rows per page, not the 100 default. The list is an inline EDITING
+    # surface, so page size sets how many form fields a Save posts (11 editable
+    # fields + pk + action checkbox per row) — and a screenful you can actually
+    # scan beats one you scroll past while tiering.
+    list_per_page = 20
     search_fields = ('name', 'position', )
     # The change form is long (prices, flags, tiers, risk); putting the submit
     # row at the top too saves scrolling to the bottom to commit one edit.
