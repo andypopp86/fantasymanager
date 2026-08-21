@@ -54,6 +54,27 @@ CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[])
 INTERNAL_IPS = ['localhost', '127.0.0.1']  # debug toolbar
 
 # ---------------------------------------------------------------------------
+# Request limits
+# ---------------------------------------------------------------------------
+
+# /admin's player list is edited INLINE, and page size sets how many form
+# fields a Save posts: 11 list_editable fields per row, plus each row's pk and
+# action checkbox. At the 100-row default that was ~1,300 fields, over Django's
+# 1,000 default cap, and Save failed outright with TooManyFieldsSent.
+# PlayerAdmin now paginates at 20 (~260 fields), which fits the default on its
+# own — but the changelist also offers "Show all" whenever the result count is
+# under list_max_show_all (200), and saving THAT page posts ~2,600. So the cap
+# stays raised: bulk inline editing is the prep workflow (tiers, risk,
+# favorites) and it should not matter which of those two pages you save from.
+#
+# The cap exists to bound the cost of parsing a hostile form post. Every
+# request that can reach this many fields is behind @login_required and the
+# staff-only admin, and the new ceiling still bounds a runaway request, so the
+# guard is loosened, not removed. Headroom is deliberate: adding an editable
+# column or bumping list_per_page must not resurrect a confusing 400.
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 5000
+
+# ---------------------------------------------------------------------------
 # Apps & middleware
 # ---------------------------------------------------------------------------
 
