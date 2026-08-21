@@ -484,6 +484,53 @@ change the import there, once.
   warns and preserves existing prices rather than flattening them (the dev Mac
   DB is in this state; `add_default_prices --update` applies the hardcoded
   curve by ADP order instead).
+**Refreshing from /admin** — `DraftAdmin` action **"Refresh ADP + prices, then
+sync the selected draft"**, which runs four steps and reports each in the
+browser (`draft/services/draft/adp_refresh.py`, templates under
+`templates/admin/draft/`):
+
+1. re-pull the FFC feed, upserting players; 2. recompute `projected_price` from
+that ADP (the same import — step 2 is not separable from step 1); 3. list the
+players CREATED; 4. `Draft.add_missing_players()` on the selected draft, listing
+what it added.
+
+Steps 3 and 4 are both listed because a draft's pool is its own `DraftPick`
+rows, fixed at creation, so a player new to the feed exists in the DB but cannot
+be nominated until step 4 runs. A refresh creates a handful of players, so the
+two lists side by side are enough to eyeball that they agree — there is
+deliberately **no programmatic cross-check**; one was built and removed as more
+machinery than the check is worth. Expect step 4 to list MORE than step 3: it
+also backfills players from earlier refreshes the draft never picked up.
+
+Three things about the shape of this, all deliberate:
+
+- **It's an ACTION, not a changelist button.** The ADP refresh belongs to no
+  row, but syncing a pool does, so the draft is the row. Exactly one draft, or
+  it refuses.
+- **It runs INLINE in the request** — no Celery, no queue, no worker process.
+  Django 6.0's `django.tasks` ships the interface but no worker, so any real
+  queue means a second always-on Railway service; for one staff user a few
+  times a season, against an import where every step is idempotent, a retry is
+  cheaper than that infrastructure. The cost is `--timeout 300` on gunicorn in
+  the `Dockerfile` (the 30s default would kill it mid-write; sync workers count
+  a long request as silence, so streaming wouldn't have dodged it either) and
+  one of the two workers being busy for the duration — **so don't run it during
+  a live draft**, on top of step 2 rewriting every price under the budget plan.
+- **A confirm page comes first** (the admin's own delete-confirmation idiom),
+  because step 2 rewrites every projected price for the year.
+
+Only WARNING+ from the `draft` logger is captured onto the page: the import logs
+a line per player, and ~1,200 of those would bury the handful worth reading —
+but a silent "no HistoricalDraftPicks, prices untouched" has to reach the
+browser, since it looks identical to success otherwise.
+
+The import itself is NOT reimplemented for the admin:
+`add_players.refresh_players_from_ffc()` is the single entry point the two
+management commands and the action all call, and `load_ffc_json` returns an
+`ImportSummary` (created players, updated count, kickers, whether prices had a
+basis). Add behaviour there, once. Tests:
+`draft/tests.py::FfcImportSummaryTests`.
+
 - Refreshing the Railway instance: see "Refresh ADP / prices in-season" in
   `RAILWAY_RUNBOOK.md` — run the DEPLOYED command via
   `railway ssh --service app -- python manage.py refresh_player_adp`.

@@ -4,12 +4,7 @@ logger = logging.getLogger(__name__)
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from draft import models as d
-from draft.management.commands.add_players import (
-    compute_average_adp_prices,
-    get_data,
-    load_ffc_json,
-)
+from draft.management.commands.add_players import refresh_players_from_ffc
 
 
 class Command(BaseCommand):
@@ -18,10 +13,12 @@ class Command(BaseCommand):
             'Same import as add_players (kept as the in-season alias).')
 
     def handle(self, *args, **options):
-        this_year = timezone.now().year
-        d.Player.objects.filter(position='PK').delete()
-        average_adp_prices = compute_average_adp_prices()
-        data = get_data(this_year)
-        load_ffc_json(average_adp_prices, this_year, data)
+        summary = refresh_players_from_ffc()
+        if not summary.priced:
+            self.stdout.write(self.style.WARNING(
+                'no HistoricalDraftPicks - projected prices left untouched'))
+        for name in summary.created_names:
+            self.stdout.write(f'  created {name}')
         self.stdout.write(self.style.SUCCESS(
-            f'refreshed {len(data["players"])} FFC rows for {this_year}'))
+            f'refreshed {summary.feed_rows} FFC rows for {summary.year}: '
+            f'{len(summary.created)} created, {summary.updated} updated'))

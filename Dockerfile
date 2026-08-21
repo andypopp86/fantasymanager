@@ -30,4 +30,9 @@ RUN SECRET_KEY=build-only-dummy DATABASE_URL=postgres://build:build@build/build 
 EXPOSE 8000
 # Railway injects PORT. Migrations run at boot: single-instance app, so no
 # concurrent-migration concerns, and the DB is only reachable at runtime.
-CMD ["sh", "-c", "python manage.py migrate --noinput && gunicorn fantasy.wsgi --bind 0.0.0.0:${PORT:-8000} --workers 2"]
+# --timeout 300: the /admin "refresh ADP and sync" action runs the whole FFC
+# import inline in the request (DraftAdmin.refresh_adp_and_sync_players) —
+# ~1,200 upserts plus a third-party HTTP call, which the 30s default would kill
+# mid-write. Sync workers count a long request as silence, so streaming the
+# response would not have dodged this either.
+CMD ["sh", "-c", "python manage.py migrate --noinput && gunicorn fantasy.wsgi --bind 0.0.0.0:${PORT:-8000} --workers 2 --timeout 300"]

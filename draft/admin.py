@@ -1,7 +1,10 @@
 from django.contrib import admin, messages
 from django.db.models import Case, F, Q, When
 from django.forms import Textarea
+from django.template.response import TemplateResponse
+from django.utils import timezone
 from draft import models as d
+from draft.services.draft.adp_refresh import refresh_and_sync
 
 class SuccessFilter(admin.SimpleListFilter):
     title = 'Success'
@@ -178,13 +181,54 @@ class DraftAdmin(admin.ModelAdmin):
     # date_created is auto_now_add (non-editable); without this the edit form
     # 500s with FieldError.
     readonly_fields = ('date_created',)
-    actions = ('add_missing_players',)
+    actions = ('refresh_adp_and_sync_players', 'add_missing_players')
 
     # A draft's available-player pool is its own DraftPick rows, fixed at
     # creation — so players added to the DB later (an ADP refresh picking up new
     # FFC entries) are invisible to a draft already in flight and can't be
     # nominated. This is the way to pull them in: select the draft, run the
     # action. Safe to re-run; it only ever adds.
+    # Refreshing ADP belongs to no single row — but syncing a draft's pool
+    # afterwards does, and that is the step worth checking, so the draft IS the
+    # row and this is an action rather than a changelist button. Runs INLINE in
+    # the request (no worker process, no queue): one staff user, a handful of
+    # times a season, against an import whose every step is idempotent, so a
+    # timeout costs a retry and nothing else. See the Dockerfile's --timeout.
+    @admin.action(description='Refresh ADP + prices, then sync the selected draft')
+    def refresh_adp_and_sync_players(self, request, queryset):
+        if queryset.count() != 1:
+            self.message_user(
+                request,
+                "Pick exactly one draft — step 4 syncs one draft's player pool.",
+                messages.ERROR,
+            )
+            return None
+
+        draft = queryset.get()
+        if not request.POST.get('confirmed'):
+            # Nothing has run yet. The refresh rewrites every projected price
+            # for the year, so it gets the admin's own confirm-page treatment.
+            return TemplateResponse(request, 'admin/draft/refresh_adp_confirm.html', {
+                **self.admin_site.each_context(request),
+                'title': 'Refresh ADP and sync players',
+                'draft': draft,
+                'current_year': timezone.now().year,
+            })
+
+        report = refresh_and_sync(draft)
+        # The page carries the lists; this message survives navigating away.
+        self.message_user(
+            request,
+            f'{draft.draft_name}: {len(report.summary.created)} player(s) created, '
+            f'{len(report.picks_added)} pick row(s) added.',
+            messages.SUCCESS,
+        )
+        return TemplateResponse(request, 'admin/draft/refresh_adp_result.html', {
+            **self.admin_site.each_context(request),
+            'title': 'Refresh ADP and sync players',
+            'report': report,
+        })
+
     @admin.action(description='Add missing players to the selected drafts')
     def add_missing_players(self, request, queryset):
         # One message per draft, naming the players it pulled in — after an ADP

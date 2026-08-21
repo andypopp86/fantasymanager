@@ -1,0 +1,44 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+Confirmation step for the DraftAdmin "refresh ADP and sync" action. Modelled on
+the admin's own delete-confirmation: the action POSTs here first, and nothing
+runs until this form is submitted. It exists because the refresh REWRITES every
+projected price for the year — an accidental click during a live draft would
+move the budget maths under the drafter.
+{% endcomment %}
+{% block content %}
+<h1>Refresh ADP and sync players</h1>
+
+<p>This will run, in order, against <strong>{{ draft }}</strong> ({{ draft.year }}):</p>
+<ol>
+    <li>Re-pull ADP from the Fantasy Football Calculator feed, upserting players for {{ current_year }}.</li>
+    <li>Recompute <code>projected_price</code> from that ADP (same import — not separable).</li>
+    <li>List the players the refresh created.</li>
+    <li>Add missing players to <strong>{{ draft }}</strong>'s available pool, and list what it added.</li>
+</ol>
+
+<ul class="messagelist">
+    <li class="warning">
+        Step 2 rewrites <strong>every</strong> projected price for {{ current_year }}, which shifts
+        the budget plan's numbers. Don't run this mid-draft.
+    </li>
+    {% if draft.year != current_year %}
+    <li class="warning">
+        {{ draft }} is a {{ draft.year }} draft but the refresh only touches {{ current_year }},
+        so step 4 has nothing to gain from it.
+    </li>
+    {% endif %}
+    <li class="info">
+        Every step only ever adds or updates — nothing is deleted, and each is
+        idempotent, so re-running after a timeout is safe.
+    </li>
+</ul>
+
+<form method="post">{% csrf_token %}
+    <input type="hidden" name="action" value="refresh_adp_and_sync_players">
+    <input type="hidden" name="confirmed" value="1">
+    <input type="hidden" name="_selected_action" value="{{ draft.pk }}">
+    <input type="submit" class="default" value="Yes, run it">
+    <a href="." class="button cancel-link">No, take me back</a>
+</form>
+{% endblock %}
