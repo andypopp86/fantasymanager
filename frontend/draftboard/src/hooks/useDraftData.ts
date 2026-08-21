@@ -1,7 +1,8 @@
 import { useMemo } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../lib/db";
-import type { BudgetPickRow, DraftPickRow, PickSlot, SlotName } from "../lib/draft.schemas";
+import { BACKUP_DEPTH } from "../lib/draft.schemas";
+import type { BackupPickRow, BudgetPickRow, DraftPickRow, PickSlot, SlotName } from "../lib/draft.schemas";
 
 // Live projection of the Dexie tables into the shapes the draft components
 // consume (the old machine-context "draftContext" fields). Rows are the
@@ -16,12 +17,15 @@ export const useDraftData = (draftId: number) => {
     const pickRows = useLiveQuery(() => db.draft_picks.where("draftId").equals(draftId).toArray(), [draftId]);
     const budgetRows = useLiveQuery(() => db.budget_picks.where("draftId").equals(draftId).toArray(), [draftId]);
     const watchRows = useLiveQuery(() => db.watch_picks.where("draftId").equals(draftId).toArray(), [draftId]);
+    // Local-only shelf of alternates (lib/db.ts v5) — never hydrated from, or
+    // pushed to, the server.
+    const backupRows = useLiveQuery(() => db.backup_picks.where("draftId").equals(draftId).toArray(), [draftId]);
     // Writes waiting for the server to come back (lib/writeQueue.ts).
     const pendingWrites = useLiveQuery(() => db.pending_writes.where("draftId").equals(draftId).count(), [draftId]) ?? 0;
 
     return useMemo(() => {
-        if (!meta || !pickRows || !budgetRows || !watchRows) {
-            return { hydrated: false, drafterId: 0, managers: [], undraftedPlayers: [], budgetedPlayers: {}, watchedPlayers: [], budgetSpent: 0, pendingWrites };
+        if (!meta || !pickRows || !budgetRows || !watchRows || !backupRows) {
+            return { hydrated: false, drafterId: 0, managers: [], undraftedPlayers: [], budgetedPlayers: {}, watchedPlayers: [], backupsBySlot: {}, budgetSpent: 0, pendingWrites };
         }
 
         const undraftedPlayers = pickRows
@@ -75,6 +79,22 @@ export const useDraftData = (draftId: number) => {
         const budgetSpent = budgetRows.reduce(
             (acc, row) => acc + (parseInt(String(row.actual_price)) || parseInt(String(row.projected_price)) || 0), 0);
 
+        // One fixed-length shelf per BUDGET slot, indexed by rank-1 with holes
+        // kept as null — the panel draws every cell, empty ones as drop targets.
+        // Deliberately absent from budgetSpent: a backup is a candidate, not a
+        // commitment.
+        const backupsBySlot: Record<SlotName, (BackupPickRow | null)[]> = {};
+        meta.slots.forEach(({ slot }) => {
+            backupsBySlot[slot] = Array.from({ length: BACKUP_DEPTH }, () => null);
+        });
+        backupRows.forEach((row) => {
+            // A row for a slot this draft doesn't have (or a rank past the
+            // current depth) is ignored rather than crashing the projection.
+            const shelf = backupsBySlot[row.slot];
+            const index = Number(row.rank) - 1;
+            if (shelf && index >= 0 && index < BACKUP_DEPTH) shelf[index] = row;
+        });
+
         const watchedPlayers = [...watchRows].sort(
             (a, b) => Number(b.projected_price) - Number(a.projected_price));
 
@@ -85,8 +105,9 @@ export const useDraftData = (draftId: number) => {
             undraftedPlayers,
             budgetedPlayers,
             watchedPlayers,
+            backupsBySlot,
             budgetSpent,
             pendingWrites,
         };
-    }, [meta, pickRows, budgetRows, watchRows, pendingWrites]);
+    }, [meta, pickRows, budgetRows, watchRows, backupRows, pendingWrites]);
 };

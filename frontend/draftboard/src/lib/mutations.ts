@@ -187,6 +187,90 @@ export const applyBudgetChanges = async (
     }
 };
 
+// ---- Backups (LOCAL ONLY) -------------------------------------------------
+// Every BUDGET slot has its own shelf of alternates, addressed by
+// (slot, rank): the WR1 shelf holds who takes WR1 if the WR1 target is gone.
+// There is no endpoint, no BudgetPlayer row, and nothing enters the offline
+// write queue — these are the only mutations here that never talk to the
+// server (promoteBackup being the exception, since it also writes the budget).
+//
+// One row per player, like budget_picks: parking someone already parked
+// elsewhere MOVES them, and the target cell's occupant is replaced (the UI
+// shows cell contents, so filling a full cell is a deliberate swap).
+export const backupPick = async (
+    draftId: number,
+    player: { player_id: number | string, name?: string, player_name?: string, position: string },
+    slot: SlotName,
+    rank: number,
+    projectedPrice: number | string,
+) => {
+    await db.transaction("rw", db.backup_picks, async () => {
+        await db.backup_picks.where("[draftId+slot+rank]").equals([draftId, slot, rank]).delete();
+        await db.backup_picks.delete([draftId, player.player_id]);
+        await db.backup_picks.put({
+            draftId,
+            player_id: player.player_id,
+            slot,
+            rank,
+            player_name: player.name || player.player_name || "",
+            position: player.position,
+            projected_price: projectedPrice,
+        });
+    });
+};
+
+export const unbackupPick = async (draftId: number, playerId: number | string) => {
+    await db.backup_picks.delete([draftId, playerId]);
+};
+
+// Promote a backup into the budget slot it was parked behind — the whole point
+// of the shelf, and one click because the slot is not a choice: a WR1 backup
+// goes to WR1.
+//
+// It is a SWAP, not a replacement: whoever held the budget slot lands in the
+// cell the promoted player just vacated, so the plan never loses a player it
+// had picked out (and clicking the same cell again swaps them straight back).
+// `occupant` may be null, in which case this is a plain placement.
+//
+// The budget half goes through applyBudgetChanges to inherit its ordering
+// contract (removals before placements, sequential so the write queue replays
+// them in that order). The occupant is genuinely LEAVING the budget, so
+// unbudgeting them is correct here — see the "removals only, never movers"
+// note above.
+export const promoteBackup = async (
+    draftId: number,
+    drafterId: number,
+    slot: SlotName,
+    rank: number,
+    backup: { player_id: number | string, player_name: string, position: string, projected_price: number | string },
+    occupant: { player_id: number | string, player_name: string, position: string, projected_price: number | string } | null,
+) => {
+    await applyBudgetChanges(draftId, drafterId, {
+        unbudget: occupant ? [occupant.player_id] : [],
+        place: [{
+            slot,
+            player: { player_id: backup.player_id, name: backup.player_name, position: backup.position },
+            projectedPrice: backup.projected_price,
+        }],
+    });
+    // Local shelf second: if the budget writes throw, the shelf still reads the
+    // way the user left it rather than half-applied.
+    await db.transaction("rw", db.backup_picks, async () => {
+        await db.backup_picks.delete([draftId, backup.player_id]);
+        if (occupant) {
+            await db.backup_picks.put({
+                draftId,
+                player_id: occupant.player_id,
+                slot,
+                rank,
+                player_name: occupant.player_name,
+                position: occupant.position,
+                projected_price: occupant.projected_price,
+            });
+        }
+    });
+};
+
 export const watchPick = async (
     draftId: number,
     managerId: number,

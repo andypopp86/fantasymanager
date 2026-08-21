@@ -717,6 +717,52 @@ removable.
 > (The *backend* half — the `PlanChange` model + `update_plan_changes` — DOES run on
 > every drafter pick.) Consolidate rather than extend the dead frontend pieces.
 
+**Backups** (`features/BackupPicks.tsx`, `backup_picks` in Dexie v6) — a shelf of
+pre-picked alternates **behind each BUDGET SLOT**: the WR1 shelf says who takes
+WR1 if the WR1 target gets bought by someone else, so the swap is one click
+instead of a plan rebuilt under time pressure. `BACKUP_DEPTH` (3) cells per
+slot, addressed by `(slot, rank)`. Deliberately narrow in scope:
+
+- **LOCAL ONLY.** No endpoint, no `BudgetPlayer` row, nothing in the offline
+  write queue — `backupPick` / `unbackupPick` are the only mutations in
+  `mutations.ts` that never talk to the server, and `hydrateDraft` leaves
+  `backup_picks` alone (a refetch has no opinion on them, and wiping them would
+  lose the feature on every load). They live and die on one browser; a
+  draft-day machine swap loses the shelf, which is accepted.
+- **Not the budget.** Backups are absent from `budgetSpent` — a candidate is not
+  a commitment. But they ARE slot-specific, so a backup must satisfy its slot's
+  `allowed_positions` like any other candidate for it (guarded on drop and tap,
+  with the board's blue-outline affordance on eligible empty cells).
+- One row per player, like `budget_picks`, so parking someone already parked
+  MOVES them; filling an occupied cell replaces its occupant.
+- **In:** drop an available player on a cell, or tap a cell while someone is
+  nominated (priced from the projection, matching the budget panel). **Out:** ✕
+  clears a cell; clicking a filled cell calls `mutations.promoteBackup`.
+- **Promotion is a SWAP, not a replacement** — the displaced budget occupant
+  lands in the cell the promoted player just vacated, so the plan never loses a
+  player it had picked out and a second click puts things back. The budget half
+  goes through `applyBudgetChanges` to inherit its ordering contract; the
+  occupant is genuinely leaving the budget, so unbudgeting them is correct here.
+  No staging modal: the slot isn't a choice, which is the whole point of keying
+  shelves to slots.
+- Two guards, both `alert()` like the budget panel's ineligible tap: a backup
+  the field has already drafted can't be promoted (struck through and labelled
+  with who took them, read from the LOCAL manager projections so a pick made
+  this session counts at once), and a slot whose budget row mirrors one of the
+  DRAFTER's own picks is settled — nothing in this panel can undo a pick, so
+  promoting over one would leave the pick with no budget row. Same reasoning as
+  `StagedOccupant.locked`, and keyed on the PLAYER for the same reason.
+- **Expand** is the only layout switch: collapsed it is a compact
+  slot × B1/B2/B3 table at the bottom of the sidebar column (slot order matches
+  the budget table, so the two read side by side); expanded (desktop)
+  `Draft.tsx` adds `.with-backups` to `.draftboard-grid` and the panel moves
+  into its own middle track (`minmax(22rem, 34vw)`, clamped because a
+  `fit-content` track jitters as cells fill), which also shows each slot's
+  current budget occupant and prices. Since the board is the only `1fr` track,
+  every rem the backups take comes off the board — intentional: this is
+  secondary functionality that only gets room when asked. On mobile there is one
+  column, so the panel stays in the Budget tab and only the cells widen.
+
 ## Do not
 
 - Do not treat `static/js/`, `static/css/draftboard.css`, or the jQuery-era

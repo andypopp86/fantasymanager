@@ -1,5 +1,5 @@
 import Dexie, { type Table } from "dexie";
-import type { BudgetPickRow, DraftMetaRow, DraftPickRow, PendingWriteRow, WatchPickRow } from "./draft.schemas";
+import type { BackupPickRow, BudgetPickRow, DraftMetaRow, DraftPickRow, PendingWriteRow, WatchPickRow } from "./draft.schemas";
 
 // Dexie is the client-side database. Server fetches hydrate these tables
 // (hydrateDraft below), components read them live via useDraftData, and all
@@ -16,12 +16,20 @@ import type { BudgetPickRow, DraftMetaRow, DraftPickRow, PendingWriteRow, WatchP
 //   v3: server-modeled tables (draft_picks/budget_picks/watch_picks/draft_meta);
 //       draftSnapshots dropped — Dexie is now the data layer, not a crash dump
 //   v4: pending_writes op log (offline write-queue, flushed by lib/writeQueue.ts)
+//   v5: backup_picks — pre-picked alternates. LOCAL ONLY: no endpoint, no
+//       write-queue entry, and hydrateDraft deliberately never touches them
+//       (see the note there), so they live and die on this browser.
+//   v6: backup_picks keyed per BUDGET slot — a shelf behind each budget slot
+//       ([draftId+slot+rank]) instead of three slot-agnostic parking spots.
+//       The upgrade CLEARS the table: v5 rows carried slot="BACKUP1..3", which
+//       names no budget slot, so there is nothing to migrate them to.
 class DraftboardDB extends Dexie {
     draft_picks!: Table<DraftPickRow, [number, number | string]>;
     budget_picks!: Table<BudgetPickRow, [number, number | string]>;
     watch_picks!: Table<WatchPickRow, [number, number | string]>;
     draft_meta!: Table<DraftMetaRow, number>;
     pending_writes!: Table<PendingWriteRow, number>;
+    backup_picks!: Table<BackupPickRow, [number, number | string]>;
 
     constructor() {
         super("draftboard");
@@ -41,6 +49,12 @@ class DraftboardDB extends Dexie {
         this.version(4).stores({
             pending_writes: "++id, draftId",
         });
+        this.version(5).stores({
+            backup_picks: "[draftId+player_id], draftId, [draftId+slot]",
+        });
+        this.version(6).stores({
+            backup_picks: "[draftId+player_id], draftId, [draftId+slot], [draftId+slot+rank]",
+        }).upgrade((tx) => tx.table("backup_picks").clear());
     }
 }
 
@@ -61,6 +75,10 @@ export const hydrateDraft = async (
     },
 ) => {
     const { draftDetails, availablePlayers, managerPicks, budgetedPicks, watchedPlayers } = payloads;
+
+    // backup_picks is NOT in anything below, on purpose: the backup slots are a
+    // local-only shelf the server knows nothing about, so a refetch has no
+    // opinion on them and wiping them would lose the whole feature every load.
 
     // Unsynced local writes exist: the server data is BEHIND our local rows,
     // so replacing them would silently undo queued changes. Skip — the next

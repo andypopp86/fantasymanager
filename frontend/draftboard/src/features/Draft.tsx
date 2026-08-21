@@ -15,6 +15,7 @@ import { BudgetPerSlot } from "./BudgetPerSlot";
 import RebudgetModal from "./RebudgetModal";
 import TargetTiers from "./TargetTiers";
 import BudgetStagingModal from "./BudgetStagingModal";
+import BackupPicks from "./BackupPicks";
 import { applyBudgetChanges } from "../lib/mutations";
 import PlayerFlagIcons from "./PlayerFlagIcons";
 import { POSITION_BG_COLORS, POSITION_FG_COLORS } from "../utils/colors";
@@ -39,6 +40,10 @@ export default function Draft({draftDetails}: DraftProps) {
     const [showTiers, setShowTiers] = useState(true);
     // The tier player whose budget edit is open, if any.
     const [tierBudgetPlayer, setTierBudgetPlayer] = useState<any>(null);
+    // Backups are secondary, so they sit compact in the sidebar until asked to
+    // expand — at which point (desktop) they take their own grid column, and
+    // the width comes off the board.
+    const [backupsExpanded, setBackupsExpanded] = useState(false);
     // Phones can't show the sidebar beside the board, so the panels become
     // tabs. Nomination survives tab switches (it lives in the flow machine),
     // which is what makes "tap a player, switch to Board, tap a slot" work.
@@ -121,11 +126,21 @@ export default function Draft({draftDetails}: DraftProps) {
     const watchPanel = showWatchList
         ? <WatchedPlayers draftContext={draftContext} draftSend={draftSend} onHide={() => setShowWatchList(false)} />
         : null;
+    const backupsPanel = (
+        <BackupPicks
+            draftContext={draftContext}
+            expanded={backupsExpanded}
+            onToggleExpanded={() => setBackupsExpanded((prev) => !prev)}
+        />
+    );
     const budgetPanel = (
         <div className="flex flex-col gap-2">
             <NominationArea draftContext={draftContext} draftSend={draftSend} />
             <BudgetPerSlot draftContext={draftContext} />
             <BudgetedPicks draftContext={draftContext} draftSend={draftSend} />
+            {/* Expanded backups move out to their own column on desktop; on a
+                phone there's only one column, so they stay put and just grow. */}
+            {(isMobile || !backupsExpanded) && backupsPanel}
         </div>
     );
     const boardPanel = <DraftBoard draftContext={draftContext} draftSend={draftSend} />;
@@ -329,12 +344,19 @@ export default function Draft({draftDetails}: DraftProps) {
         </>
     ) : (
         <>
-            <div className="draftboard-grid">
+            <div className={"draftboard-grid" + (backupsExpanded ? " with-backups" : "")}>
                 <div className="draft-sidebar flex gap-2">
                     {playersPanel}
                     {watchPanel}
                     {budgetPanel}
                 </div>
+                {/* Expanded only: its own track between the sidebar and the
+                    board, which is where the extra width comes from. */}
+                {backupsExpanded && (
+                    <div className="draft-backups">
+                        {backupsPanel}
+                    </div>
+                )}
                 <div className="draft-main">
                     {boardPanel}
                 </div>
