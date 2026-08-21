@@ -1,7 +1,11 @@
 from django.contrib import admin, messages
 from django.db.models import Case, F, Q, When
 from django.forms import Textarea
+from django.template.response import TemplateResponse
+from django.urls import path
+from django.utils import timezone
 from draft import models as d
+from draft.services.draft.adp_refresh import refresh_and_sync
 
 class SuccessFilter(admin.SimpleListFilter):
     title = 'Success'
@@ -151,6 +155,59 @@ class PlayerAdmin(admin.ModelAdmin):
     # NOTE: this is the CHANGE FORM only — Django has no equivalent for the
     # changelist's inline-edit Save, which stays at the bottom of the list.
     save_on_top = True
+    # Adds the "Refresh ADP + prices" button to the changelist's object-tools.
+    change_list_template = 'admin/draft/player/change_list.html'
+
+    def get_urls(self):
+        # BEFORE super(), or the admin's catch-all <path:object_id>/ route
+        # swallows 'refresh-adp' and tries to open a player with that pk.
+        return [
+            path(
+                'refresh-adp/',
+                # admin_view() is what gates this on a logged-in staff user and
+                # adds the never-cache headers; a bare view here would be open.
+                self.admin_site.admin_view(self.refresh_adp_view),
+                name='draft_player_refresh_adp',
+            ),
+        ] + super().get_urls()
+
+    # Lives on the PLAYER changelist because that is whose data it rewrites: a
+    # whole year of ADP and projected prices, not one row. Syncing a draft's
+    # pick pool afterwards is the only per-draft part, so the draft is a FIELD
+    # on the confirm page (and optional) rather than a row you select to reach a
+    # global refresh.
+    #
+    # Runs INLINE in the request — no worker, no queue. One staff user a few
+    # times a season, against an import whose every step is idempotent, so a
+    # timeout costs a retry. See the Dockerfile's gunicorn --timeout.
+    def refresh_adp_view(self, request):
+        current_year = timezone.now().year
+        context = {
+            **self.admin_site.each_context(request),
+            'title': 'Refresh ADP and prices',
+            'current_year': current_year,
+            'opts': self.model._meta,
+        }
+        if request.method != 'POST':
+            # GET is the confirmation page: step 2 rewrites every projected
+            # price for the year, so nothing runs until it's submitted.
+            context['drafts'] = d.Draft.objects.filter(year=current_year).order_by('draft_name')
+            return TemplateResponse(request, 'admin/draft/refresh_adp_confirm.html', context)
+
+        draft = None
+        if request.POST.get('draft'):
+            draft = d.Draft.objects.filter(pk=request.POST['draft']).first()
+        report = refresh_and_sync(draft)
+        # The page carries the lists; this message survives navigating away.
+        self.message_user(
+            request,
+            f'{len(report.summary.created)} player(s) created'
+            + (f', {len(report.picks_added)} pick row(s) added to {report.draft_name}.'
+               if report.synced_a_draft else ' (no draft synced).'),
+            messages.SUCCESS,
+        )
+        context['report'] = report
+        return TemplateResponse(request, 'admin/draft/refresh_adp_result.html', context)
     # Team last on purpose — it renders every code as a link, so leading with it
     # pushes the short, frequently-used filters below the fold.
     list_filter = ('position', 'year', 'target_tier', 'years_experience', 'risk_score', RiskBandFilter, 'is_projection', 'has_injury', 'defensive_impact', 'favorite', MyPriceVarianceFilter, PlayerTeamFilter)

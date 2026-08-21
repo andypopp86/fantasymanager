@@ -526,6 +526,55 @@ class AddMissingPlayersTests(TestCase):
         self.assertEqual({player.pk for player in created}, {first.pk, second.pk})
 
 
+class FfcImportSummaryTests(TestCase):
+    """`load_ffc_json` has to report WHICH players it created, because that list
+    is what the admin refresh page prints for eyeballing. No network: the feed
+    payload is fabricated."""
+
+    def _feed(self, *players):
+        return {'players': list(players)}
+
+    def _row(self, player_id, name, position, adp=1.0, team='ATL'):
+        return {
+            'player_id': player_id, 'name': name, 'position': position,
+            'adp_formatted': adp, 'team': team,
+        }
+
+    def test_reports_created_updated_and_skipped_kickers(self):
+        from draft.management.commands.add_players import load_ffc_json
+
+        existing = make_player("Known WR", "WR", player_id=4001)
+        data = self._feed(
+            self._row(4001, "Known WR", "WR"),
+            self._row(4002, "Brand New RB", "RB"),
+            self._row(4003, "Kick Er", "PK"),
+        )
+
+        summary = load_ffc_json([], 2026, data)
+
+        self.assertEqual(summary.year, 2026)
+        self.assertEqual(summary.feed_rows, 3)
+        self.assertEqual(summary.updated, 1)
+        self.assertEqual([player.player_id for player in summary.created], [4002])
+        self.assertEqual(summary.skipped_kickers, 1)
+        self.assertNotIn(existing.pk, [player.pk for player in summary.created])
+
+    def test_no_price_basis_is_reported_and_prices_are_preserved(self):
+        """Without HistoricalDraftPicks the import must leave prices alone
+        rather than flatten them, and the report has to say so — the admin page
+        shows it, since a silent no-op here looks identical to success."""
+        from draft.management.commands.add_players import load_ffc_json
+
+        player = make_player("Priced WR", "WR", player_id=4101)
+        Player.objects.filter(pk=player.pk).update(projected_price=44)
+
+        summary = load_ffc_json([], 2026, self._feed(self._row(4101, "Priced WR", "WR")))
+
+        self.assertFalse(summary.priced)
+        player.refresh_from_db()
+        self.assertEqual(int(player.projected_price), 44)
+
+
 class RiskFieldsTests(TestCase):
     """Hand-scored risk. The score is filtered on and the summary is READ during
     the bidding, so both have to survive the hand-written player serializer —

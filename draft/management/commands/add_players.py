@@ -1,3 +1,4 @@
+import dataclasses
 import logging
 import csv
 logger = logging.getLogger(__name__)
@@ -69,6 +70,29 @@ def compute_average_adp_prices():
     return average_adp_prices
 
 
+@dataclasses.dataclass
+class ImportSummary:
+    """What one FFC import actually did.
+
+    `created` carries the Player objects, not a count, because the callers that
+    care (the admin refresh flow) need to say WHO arrived — a player new to the
+    feed is exactly the player a draft already in flight is missing.
+    """
+    year: int
+    feed_rows: int = 0
+    created: list = dataclasses.field(default_factory=list)
+    updated: int = 0
+    skipped_kickers: int = 0
+    deleted_kickers: int = 0
+    # False when the DB has no HistoricalDraftPicks: prices are left untouched
+    # rather than flattened to the fallback (see below).
+    priced: bool = True
+
+    @property
+    def created_names(self):
+        return sorted(f'{player.name} ({player.position})' for player in self.created)
+
+
 def load_ffc_json(average_adp_prices, this_year, data):
     # Prices come from historical auction results; without them a refresh
     # would flatten every projected_price to the fallback. Keep existing
@@ -79,9 +103,18 @@ def load_ffc_json(average_adp_prices, this_year, data):
         logger.warning(
             'no HistoricalDraftPicks in this DB - leaving projected_price '
             'untouched (run add_default_prices for a fallback curve)')
+    summary = ImportSummary(
+        year=this_year,
+        feed_rows=len(data['players']),
+        priced=have_price_basis,
+    )
     player_ct = 0
     for player_json in data['players']:
-        if player_json['position'] != 'PK':
+        if player_json['position'] == 'PK':
+            # The feed says PK, the model says K; either way this league doesn't
+            # draft kickers.
+            summary.skipped_kickers += 1
+        else:
             try:
                 projected_price = round(average_adp_prices[player_ct],2)
             except:
@@ -108,7 +141,30 @@ def load_ffc_json(average_adp_prices, this_year, data):
                 # consumer (add_default_prices, UI sorts).
                 player.adp_formatted = player_json['adp_formatted']
             player.save()
+            if created:
+                summary.created.append(player)
+            else:
+                summary.updated += 1
             player_ct += 1
+    return summary
+
+
+def refresh_players_from_ffc(year=None):
+    """The whole FFC refresh, as one call: drop kickers, recompute the price
+    basis, pull the feed, upsert. Returns an ImportSummary.
+
+    Extracted so the management commands (`add_players`, `refresh_player_adp`)
+    and the /admin refresh action all run the SAME import — there is one place
+    this behaviour lives, and the admin is not allowed to grow its own copy.
+    """
+    year = year or timezone.now().year
+    kickers = d.Player.objects.filter(position='PK')
+    deleted_kickers = kickers.count()
+    kickers.delete()
+    average_adp_prices = compute_average_adp_prices()
+    summary = load_ffc_json(average_adp_prices, year, get_data(year))
+    summary.deleted_kickers = deleted_kickers
+    return summary
 
 
 def load_fantasypros_txt(this_year):
@@ -207,11 +263,12 @@ class Command(BaseCommand):
         parser.add_argument('--delete_all_first', action='store_true', dest='delete_all_first')
 
     def handle(self, *args, **options):
-        this_year = timezone.now().year
-
-        kickers = d.Player.objects.filter(position='PK')
-        kickers.delete()
-        average_adp_prices = compute_average_adp_prices()
-        data = get_data(this_year)
-        load_ffc_json(average_adp_prices, this_year, data)
+        summary = refresh_players_from_ffc()
+        self.stdout.write(
+            f'{summary.feed_rows} FFC rows for {summary.year}: '
+            f'{len(summary.created)} created, {summary.updated} updated, '
+            f'{summary.skipped_kickers} kickers skipped'
+        )
+        for name in summary.created_names:
+            self.stdout.write(f'  created {name}')
         # load_fantasypros_txt(this_year)

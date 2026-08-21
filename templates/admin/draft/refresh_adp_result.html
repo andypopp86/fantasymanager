@@ -1,0 +1,89 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+Results page for the DraftAdmin refresh action — the "logging in the browser"
+half. Renders the structured report (draft/services/draft/adp_refresh.py) rather
+than a raw log dump: the import logs a line per player, and ~1,200 of those
+would bury the handful of players actually worth reading. The two lists sit
+next to each other so the created players can be eyeballed against the pick
+rows they should have produced.
+{% endcomment %}
+{% block content %}
+<h1>Refresh ADP and prices{% if report.synced_a_draft %} — {{ report.draft_name }}{% endif %}</h1>
+
+<ul class="messagelist"><li class="success">
+    Refreshed {{ report.summary.year }}: {{ report.summary.created|length }} player(s) created{% if report.synced_a_draft %},
+    {{ report.picks_added|length }} pick row(s) added to {{ report.draft_name }}{% endif %}.
+</li></ul>
+
+{% if report.year_mismatch %}
+<ul class="messagelist"><li class="warning">
+    {{ report.draft_name }} is a {{ report.draft_year }} draft; the refresh touched
+    {{ report.summary.year }}. Step 4 can only add {{ report.draft_year }} players, so
+    nothing from this refresh will appear below.
+</li></ul>
+{% endif %}
+
+{% if report.warnings %}
+<h2>Warnings</h2>
+<pre>{% for line in report.warnings %}{{ line }}
+{% endfor %}</pre>
+{% endif %}
+
+<h2>Steps 1 &amp; 2 — ADP and prices ({{ report.summary.year }})</h2>
+<ul>
+    <li>{{ report.summary.feed_rows }} row(s) in the FFC feed</li>
+    <li>{{ report.summary.created|length }} player(s) created, {{ report.summary.updated }} updated</li>
+    <li>{{ report.summary.skipped_kickers }} kicker(s) skipped, {{ report.summary.deleted_kickers }} existing kicker row(s) deleted</li>
+    <li>
+        {% if report.summary.priced %}
+            Projected prices recomputed from historical auction prices.
+        {% else %}
+            <strong>Prices NOT recomputed</strong> — this DB has no HistoricalDraftPicks,
+            so existing prices were preserved rather than flattened.
+        {% endif %}
+    </li>
+</ul>
+
+<h2>Step 3 — players the refresh created</h2>
+{% if report.summary.created %}
+<table>
+    <thead><tr><th>Player</th><th>Position</th><th>Team</th><th>ADP</th><th>Projected price</th></tr></thead>
+    <tbody>
+    {% for player in report.summary.created %}
+        <tr>
+            <td>{{ player.name }}</td><td>{{ player.position }}</td>
+            <td>{{ player.team.code|default:"—" }}</td>
+            <td>{{ player.adp_formatted }}</td><td>{{ player.projected_price }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>None — the feed had no players this DB was missing.</p>
+{% endif %}
+
+<h2>Step 4 — draft pool sync</h2>
+{% if not report.synced_a_draft %}
+<p>Skipped — no draft was selected, so no pick rows were added. Any player created
+    above still can't be nominated in an existing draft until its pool is synced
+    (this page, or the draft list's "Add missing players" action).</p>
+{% elif report.picks_added %}
+<table>
+    <thead><tr><th>Player</th><th>Position</th><th>Projected price</th></tr></thead>
+    <tbody>
+    {% for player in report.picks_added %}
+        <tr>
+            <td>{{ player.name }}</td><td>{{ player.position }}</td>
+            <td>{{ player.projected_price }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+<p>More rows here than in step 3 is normal: this also backfills players from
+    earlier refreshes that {{ report.draft_name }} never picked up.</p>
+{% else %}
+<p>None — {{ report.draft_name }}'s pool already held every {{ report.draft_year }} player.</p>
+{% endif %}
+
+<p><a href="../" class="button">Back to players</a></p>
+{% endblock %}
