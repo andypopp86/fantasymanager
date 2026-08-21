@@ -328,10 +328,26 @@ since 0 is meaningful) and for the same reason **`≤ N` spans 1…N and EXCLUDE
 board. `= 0` is how you go find the unreviewed ones; `≥` needs no special case.
 
 Unlike `my_price_rationale` (prep-time only), the summary **does** ship to the
-client: `NominationArea` renders the score as a badge (`getRiskColors` in
-`utils/colors.tsx` — green ≤3, amber 4-6, red 7-8, dark red 9+) with the bullets
-under it, read off the **live** Dexie row like `favorite` and the flag icons, so
-a player reviewed in /admin mid-draft shows up on the next refetch. Both fields
+client. Two surfaces, one colour function (`getRiskColors` in
+`utils/colors.tsx`) so they can't drift:
+
+- `AvailablePlayers` has a **Risk column next to Pos$** — the cell paints
+  itself (the row's position colour would swallow the ramp), and an unscored
+  player's cell is blank white, never a 0.
+- `NominationArea` renders the score as a badge with the bullets under it, read
+  off the **live** Dexie row like `favorite` and the flag icons, so a player
+  reviewed in /admin mid-draft shows up on the next refetch.
+
+`getRiskColors` mixes three anchors — **bright green-500 at 1, near-black
+zinc-900 at 5, bright red-600 at 10** — and picks black or white text per fill
+by relative luminance (0.179 is the WCAG crossover), since the ramp spans both
+ends of the lightness range. Two things there are deliberate and were arrived at
+by looking at it: lightness DIPS in the middle, which is what tells 4/5/6 apart
+(hue alone is too subtle in a small cell) — an earlier ramp between dark
+green-700 and red-700 made the whole low end near-black and a low score merged
+into its own green WR row. And the neutral stays DARK rather than pale: unscored
+cells are white, so a pale 5 would read as "not scored", the opposite of what it
+means. Both fields
 ride through `DraftPicksOutputSerializer`'s hand-written player serializer;
 a field missing there means the panel silently shows nothing, hence
 `draft/tests.py::RiskFieldsTests`. NOT added to

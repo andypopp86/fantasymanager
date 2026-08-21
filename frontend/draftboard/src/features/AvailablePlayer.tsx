@@ -1,6 +1,6 @@
 import React from "react";
 import { setFavorite } from "../lib/mutations";
-import { POSITION_BG_COLORS, POSITION_FG_COLORS } from "../utils/colors";
+import { POSITION_BG_COLORS, POSITION_FG_COLORS, getRiskColors } from "../utils/colors";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faHeart as solidHeart, faHeartCrack } from '@fortawesome/free-solid-svg-icons';
 import { faHeart as regularHeart } from '@fortawesome/free-regular-svg-icons';
@@ -38,6 +38,12 @@ export default function AvailablePlayer({pick, nominatePlayer, handleDragStart, 
         setFavorite(draftContext.draftId, player.player_id);
     }
 
+    // Hand-scored risk, next to the price because that's the trade the column
+    // exists to show: what you're paying against how likely it is to hold up.
+    // 0 = not reviewed, which draws NOTHING — an unscored player must not read
+    // as a safe one (same rule as the nomination panel's badge).
+    const riskScore = parseInt(String(pick.player.risk_score ?? 0)) || 0;
+
     const strengthOfSchedule = getStrengthOfSchedule(pick);
     const scheduleBG = strengthOfSchedule > 25 ? "bg-red-900" : strengthOfSchedule <= 5 ? "bg-green-900" : "bg-yellow-200";
     const scheduleFG = strengthOfSchedule > 25 ? "text-white" : strengthOfSchedule <= 5 ? "text-white" : "text-black";
@@ -53,6 +59,17 @@ export default function AvailablePlayer({pick, nominatePlayer, handleDragStart, 
                 <td onClick={() => nominatePlayer(pick.player)}>{pick.player.name}</td>
                 <td onClick={() => nominatePlayer(pick.player)}>{pick.player.position}</td>
                 <td onClick={() => nominatePlayer(pick.player)}>{parseInt(pick.projected_price)}</td>
+                <td
+                    className="text-center"
+                    onClick={() => nominatePlayer(pick.player)}
+                    // The row's own position colour would swallow the ramp, so
+                    // the cell paints itself — the same full-cell-fill idiom the
+                    // Schd column used.
+                    style={riskScore > 0 ? getRiskColors(riskScore) : { background: "white", color: "black" }}
+                    title={riskScore > 0
+                        ? `Risk ${riskScore}/10 (higher = riskier)`
+                        : "Risk not scored yet"}
+                >{riskScore > 0 ? riskScore : ""}</td>
                 {/* Unused for the 2026 draft; matching headers are commented out in AvailablePlayers.tsx
                 <td onClick={() => nominatePlayer(pick.player)}>{parseInt(pick.player.adp_price)}</td>
                 <td onClick={() => nominatePlayer(pick.player)}>{parseInt(pick.player.adp_price)-parseInt(pick.projected_price)}</td>

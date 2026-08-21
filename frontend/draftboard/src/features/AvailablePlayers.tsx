@@ -342,6 +342,7 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
                         <th>Player Name</th>
                         <th>Position</th>
                         <th>Pos$</th>
+                        <th title="Hand-scored risk, 1-10 — higher = riskier. Blank = not reviewed.">Risk</th>
                         {/* Unused for the 2026 draft; matching cells are commented out in AvailablePlayer.tsx
                         <th>Adp$</th>
                         <th>Diff$</th>
