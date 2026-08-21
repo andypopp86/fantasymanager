@@ -465,6 +465,65 @@ class YearsExperienceTests(TestCase):
         self.assertEqual(rows["Mock Vet TE"]["years_experience"], 4)
 
 
+class RiskFieldsTests(TestCase):
+    """Hand-scored risk. The score is filtered on and the summary is READ during
+    the bidding, so both have to survive the hand-written player serializer —
+    and the admin's band filter has to keep "not reviewed" out of the low band.
+    """
+
+    def test_defaults_to_unreviewed(self):
+        player = make_player("Unscored RB", "RB")
+        self.assertEqual(player.risk_score, 0)
+        self.assertIsNone(player.risk_summary)
+
+    def test_available_players_carries_score_and_summary(self):
+        from draft.api.views.draft import DraftPicksOutputSerializer
+        from draft.services.draft.draft import DraftReadService
+
+        draft = Draft.objects.create(year=2026, draft_name="risk")
+        risky = make_player("Risky WR", "WR")
+        Player.objects.filter(pk=risky.pk).update(
+            risk_score=8, risk_summary="- coming off achilles\n- new OC",
+        )
+        unscored = make_player("Unscored WR", "WR")
+        for player in (risky, unscored):
+            DraftPick.objects.create(draft=draft, player=player, drafted=False)
+
+        picks = DraftReadService(user=None).get_available_players(draft_id=draft.id)
+        rows = {
+            row["player"]["name"]: row["player"]
+            for row in (DraftPicksOutputSerializer.serialize(pick) for pick in picks)
+        }
+        self.assertEqual(rows["Risky WR"]["risk_score"], 8)
+        self.assertEqual(rows["Risky WR"]["risk_summary"], "- coming off achilles\n- new OC")
+        self.assertEqual(rows["Unscored WR"]["risk_score"], 0)
+        self.assertIsNone(rows["Unscored WR"]["risk_summary"])
+
+    def test_band_filter_separates_unreviewed_from_low(self):
+        from django.contrib.admin.sites import AdminSite
+        from django.test import RequestFactory
+
+        from draft.admin import PlayerAdmin, RiskBandFilter
+
+        unscored = make_player("Zero Risk RB", "RB")
+        low = make_player("Low Risk RB", "RB")
+        Player.objects.filter(pk=low.pk).update(risk_score=2)
+        high = make_player("High Risk RB", "RB")
+        Player.objects.filter(pk=high.pk).update(risk_score=9)
+
+        model_admin = PlayerAdmin(Player, AdminSite())
+        request = RequestFactory().get("/")
+
+        def names(band):
+            flt = RiskBandFilter(request, {"risk_band": [band]}, Player, model_admin)
+            return set(flt.queryset(request, Player.objects.all()).values_list("name", flat=True))
+
+        self.assertEqual(names("unreviewed"), {"Zero Risk RB"})
+        self.assertEqual(names("low"), {"Low Risk RB"})
+        self.assertEqual(names("reviewed"), {"Low Risk RB", "High Risk RB"})
+        self.assertEqual(names("extreme"), {"High Risk RB"})
+
+
 class MyPriceVarianceFilterTests(TestCase):
     """Buckets my_price against the EFFECTIVE projected price
     (`override_price or projected_price`) — the same basis the board colours

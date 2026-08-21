@@ -38,6 +38,16 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
     // "eq" with 0 is how you go looking for the zeros deliberately.
     const [expModeFilterValue, setExpModeFilterValue] = useState("eq");
     const [expFilterValue, setExpFilterValue] = useState("");
+    // risk_score: the same mode + value pair as Exp, for the same reason — 0 is
+    // MEANINGFUL (it means "not reviewed yet"), so an empty VALUE is what turns
+    // the filter off. Modes: "=", "≤", "≥".
+    //
+    // "lte" spans 1..N and EXCLUDES 0, like Exp: an unscored player is silence,
+    // not a low risk, and a ceiling that swallowed them would return the whole
+    // board. "= 0" is how you go find the unreviewed ones deliberately, and
+    // "gte" needs no special case (nothing is ≥ 1 without a score).
+    const [riskModeFilterValue, setRiskModeFilterValue] = useState("lte");
+    const [riskFilterValue, setRiskFilterValue] = useState("");
     const [filteredPlayers, setFilteredPlayers] = useState(draftContext.undraftedPlayers);
 
     const checkName = (player) => {
@@ -71,6 +81,13 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
     const checkFavorite = (player) => {
         return !!player.player.favorite;
     }
+    const checkRisk = (player) => {
+        const score = parseInt(String(player.player.risk_score ?? 0)) || 0;
+        const target = parseInt(riskFilterValue);
+        if (riskModeFilterValue === "lte") return score >= 1 && score <= target;
+        if (riskModeFilterValue === "gte") return score >= target;
+        return score === target;
+    }
     const checkExperience = (player) => {
         const years = parseInt(String(player.player.years_experience ?? 0)) || 0;
         const target = parseInt(expFilterValue);
@@ -98,6 +115,7 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
         if (favoriteFilterValue === "on") { predicates.push(checkFavorite); }
         if (priceVarFilterValue !== "") { predicates.push(checkPriceVariance); }
         if (expFilterValue !== "" && !isNaN(parseInt(expFilterValue))) { predicates.push(checkExperience); }
+        if (riskFilterValue !== "" && !isNaN(parseInt(riskFilterValue))) { predicates.push(checkRisk); }
         if (predicates.length === 0) {
             setFilteredPlayers(draftContext.undraftedPlayers);
             return;
@@ -140,6 +158,8 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
         setPriceVarFilterValue("");
         setExpModeFilterValue("eq");
         setExpFilterValue("");
+        setRiskModeFilterValue("lte");
+        setRiskFilterValue("");
         setFilteredPlayers(draftContext.undraftedPlayers);
     }
 
@@ -277,6 +297,24 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
                         </td>
                     </tr>
                     <tr>
+                        <td scope="row">Risk:</td>
+                        <td>
+                            <select style={{width: "44px"}} value={riskModeFilterValue}
+                                onChange={(e) => setRiskModeFilterValue(e.target.value)}
+                                title="Hand-scored 1-10, higher = riskier. ≤ is 1 through this score (unscored excluded — use = 0 for those); ≥ finds the risky ones.">
+                                <option value="eq">=</option>
+                                <option value="lte">&le;</option>
+                                <option value="gte">&ge;</option>
+                            </select>
+                            <input type="number" min="0" max="10" style={{width: "52px"}}
+                                className="ml-1 py-1 px-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:border-blue-500"
+                                placeholder="any"
+                                value={riskFilterValue}
+                                onChange={(e) => setRiskFilterValue(e.target.value)}
+                                onKeyDown={handleFilterKeyDown} />
+                        </td>
+                    </tr>
+                    <tr>
                     <td><button className={"px-2 py-1 bg-blue-500 text-white rounded-md shadow-md hover:bg-blue-600"} onClick={handleFilterChange}>Filter</button></td>
                     <td><button className={"px-2 py-1 bg-gray-300 text-gray-800 rounded-md shadow-md hover:bg-gray-400"} onClick={clearFilter}>Clear</button></td>
                     </tr>
@@ -304,6 +342,7 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
                         <th>Player Name</th>
                         <th>Position</th>
                         <th>Pos$</th>
+                        <th title="Hand-scored risk, 1-10 — higher = riskier. Blank = not reviewed.">Risk</th>
                         {/* Unused for the 2026 draft; matching cells are commented out in AvailablePlayer.tsx
                         <th>Adp$</th>
                         <th>Diff$</th>

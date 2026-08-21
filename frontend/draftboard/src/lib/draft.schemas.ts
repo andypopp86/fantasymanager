@@ -188,6 +188,11 @@ export type PlayerDetail = {
     // Completed NFL seasons, hand-set in /admin (0 = rookie OR not yet filled
     // in). Filter-only — nothing renders it.
     years_experience?: number,
+    // Hand-scored risk: 1-10, HIGHER = RISKIER, 0 = not reviewed yet (so a zero
+    // is silence, not a clean bill of health). `risk_summary` is the written
+    // justification, one BULLET PER LINE — rendered in the nomination area.
+    risk_score?: number,
+    risk_summary?: string | null,
     // Hand-set warning flags, rendered as icons when the player is nominated.
     // The icon/colour/label table is PLAYER_FLAGS in features/PlayerFlagIcons.tsx.
     // Price only justified by a projection (role, opportunity, health) rather
