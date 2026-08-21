@@ -1,4 +1,4 @@
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.db.models import Case, F, Q, When
 from django.forms import Textarea
 from draft import models as d
@@ -178,6 +178,38 @@ class DraftAdmin(admin.ModelAdmin):
     # date_created is auto_now_add (non-editable); without this the edit form
     # 500s with FieldError.
     readonly_fields = ('date_created',)
+    actions = ('add_missing_players',)
+
+    # A draft's available-player pool is its own DraftPick rows, fixed at
+    # creation — so players added to the DB later (an ADP refresh picking up new
+    # FFC entries) are invisible to a draft already in flight and can't be
+    # nominated. This is the way to pull them in: select the draft, run the
+    # action. Safe to re-run; it only ever adds.
+    @admin.action(description='Add missing players to the selected drafts')
+    def add_missing_players(self, request, queryset):
+        # One message per draft, naming the players it pulled in — after an ADP
+        # refresh that's a handful and worth reading. Capped because a first run
+        # on an old draft can add four figures, and admin messages ride in a
+        # cookie before falling back to the session.
+        NAME_CAP = 50
+        for draft in queryset:
+            created = draft.add_missing_players()
+            if not created:
+                self.message_user(
+                    request,
+                    f'{draft.draft_name}: no missing players — every {draft.year} player already has a pick row.',
+                    messages.INFO,
+                )
+                continue
+            names = sorted(f'{player.name} ({player.position})' for player in created)
+            overflow = len(names) - NAME_CAP
+            self.message_user(
+                request,
+                f'{draft.draft_name}: added {len(created)} player(s) — '
+                + ', '.join(names[:NAME_CAP])
+                + (f', and {overflow} more' if overflow > 0 else ''),
+                messages.SUCCESS,
+            )
 
 class PositionADPAdmin(admin.ModelAdmin):
     list_display = ('position', 'adp', 'average_price')

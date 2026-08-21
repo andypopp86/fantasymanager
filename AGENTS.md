@@ -444,6 +444,28 @@ guard a `None` pick — otherwise re-drafting a slot 500s, which surfaces on the
 "the pick submitted but the board didn't update" (the optimistic budget change lands, but
 the `draftPickSubmit` promise rejects so `draft_player` never fires).
 
+**Adding players to a draft already in flight** — a draft's available pool is
+its OWN `DraftPick` rows (available = `drafted=False`), written when the draft
+is created, so a player who enters the DB later (an ADP refresh picking up new
+FFC entries) is invisible to that draft and cannot be nominated.
+`Draft.add_missing_players()` backfills the rows and returns the `Player`s it
+created; **the way to run it is the "Add missing players to the selected
+drafts" action on the /admin draft list**, which names the players it added in
+the success message (capped at 50 — admin messages ride in a cookie, and a
+first run on an old draft can add four figures).
+
+It is keyed on **`(player_id, year)`** — Player's `unique_together`, and the
+only identity stable across the local / Windows / hosted copies. It used to
+match on NAME, which broke two ways on any DB holding more than one season:
+two different players sharing a name collapsed into one (the second never got a
+row), and the re-lookup dropped the year filter and took
+`order_by('id').first()`, attaching the OLDEST row of that name — a previous
+season's player, with that season's team and price. Same unkeyed-lookup trap as
+`get_or_create_team` (see below). Kickers are excluded, it only ever ADDS, and
+it's idempotent (`bulk_create(ignore_conflicts=True)` against
+`DraftPick.unique_together`), so re-running after every refresh is the intended
+use. Regression tests: `draft/tests.py::AddMissingPlayersTests`.
+
 ## Player data import (FFC ADP)
 
 `add_players` / `refresh_player_adp` (same import; the latter is the in-season
