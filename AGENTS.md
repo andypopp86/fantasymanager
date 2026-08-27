@@ -491,9 +491,15 @@ the browser (`draft/services/draft/adp_refresh.py`, pages under
 `templates/admin/draft/`):
 
 1. re-pull the FFC feed, upserting players; 2. recompute `projected_price` from
-that ADP (the same import — step 2 is not separable from step 1); 3. list the
-players CREATED; 4. optionally `Draft.add_missing_players()` on one draft,
-listing what it added.
+that ADP (the same import — inside THIS button the two are not separable); 3.
+list the players CREATED; 4. optionally `Draft.add_missing_players()` on one
+draft, listing what it added.
+
+> **Amended by multi-source ADP.** "Pulling ADP and pricing from it are one
+> step" was true when FFC was the only source. `sync_adp` / `apply_adp_source`
+> now split them deliberately — see "Multi-source ADP" below. This button is
+> unchanged and remains the FFC roster path; the split lives beside it, not
+> inside it.
 
 Steps 3 and 4 are both listed because a draft's pool is its own `DraftPick`
 rows, fixed at creation, so a player new to the feed exists in the DB but cannot
@@ -552,6 +558,82 @@ basis). Add behaviour there, once. Tests:
   since the refresh only relinks players present in the FFC feed). Run it
   once after the first refresh on a DB with pre-fix data — cleaned 14 such
   links on the Railway DB (2026-08-02).
+
+## Multi-source ADP
+
+FFC's feed is fresh but its drafter pool is free public mocks, so its consensus
+lags the market. Rather than swapping importers, **every provider's ADP lives in
+its own column** and choosing which one drives the board is a separate, offline
+step. Code lives in `draft/services/adp/`.
+
+**Two commands, and the split between them is the whole design:**
+
+| | writes | network | risk |
+|---|---|---|---|
+| `sync_adp --source ffc\|mfl\|fpros\|all` | only `adp_<source>` + the cached provider id | yes | none — the board cannot change |
+| `apply_adp_source --source X` | `adp_formatted`, `adp_source`, `projected_price` | **no** | rewrites a year of ADP and prices |
+
+Because the ADP is already in the database, toggling costs no API call and is
+freely reversible. Both are also buttons on the Player changelist ("Sync ADP
+sources", "Apply ADP source"), beside the older "Refresh ADP + prices".
+
+**Every source is normalised onto OVERALL AVERAGE PICK.** `adp_formatted` keeps
+its round.pick meaning and becomes DERIVED — `apply_source` recomputes it via
+`to_round_pick()` at `TEAMS = 10`. That is what keeps the blast radius near zero:
+`Player.Meta.ordering`, the serializers, `update_position_adp` and the React
+board all keep reading the one field they already read. Verified against the
+live FFC feed: 198 of 207 rows round-trip identically; all 9 misses are exact
+`.5` ties where FFC itself is inconsistent (its published `adp` is already
+rounded to one decimal, so the tie is arbitrary either way).
+
+**Sources** (`sources.py` is the registry — add one there, plus a column and a
+provider module, and nothing else branches):
+
+- `ffc` — Fantasy Football Calculator. Also the ROSTER source; `add_players`
+  still owns creating players and now fills `adp_ffc` in passing.
+- `mfl` — MyFantasyLeague. Real leagues, ~692 drafts. Two calls (the ADP feed
+  carries ids only, so the ~2,600-row player table resolves names). **Traps:**
+  `IS_MOCK` does not filter this endpoint (0 and 1 both return 692 drafts) and
+  `IS_KEEPER` rejects every value, so dynasty/devy rookie drafts are mixed in —
+  ~49 of its top 150 are college players. They match nothing here and are
+  dropped, which is why the feed is usable, but do not read MFL's raw ranks as
+  redraft ADP.
+- `fpros` — FantasyPros. **This is ECR, not ADP** — their real ADP endpoint
+  returns `count: 0` without a paid key. Scoring is `HALF` to match the
+  hardcoded `half-ppr` FFC pull.
+
+**Player matching (`matching.py`) is the part that can be WRONG rather than
+merely broken** — the Player table keys on FFC's `player_id` and no other feed
+knows it. Confidence ladder: cached provider id → exact normalised name +
+position → name alone when unambiguous → `difflib` similarity within the same
+position (cutoff 0.85) → miss. A resolved id is written back, so the fuzzy pass
+shrinks every run instead of re-rolling. Fuzzy hits log at **WARNING**, which is
+how they reach the admin result page (`capture_draft_warnings`).
+
+- **Defenses match on TEAM CODE, never name** — the feeds say "Seattle Defense",
+  "Seahawks, Seattle" and "Seattle Seahawks". The codes need folding too:
+  `TEAM_CODE_ALIASES` maps MFL's `GBP/KCC/NEP/NOS/SFO/TBB/LVR` and
+  FantasyPros' `JAC` onto this DB's `GB/KC/NE/NO/SF/TB/LV/JAX`. Without it every
+  defense silently got no ADP.
+- A defense with **no team FK** (this DB has one) falls back to the city token.
+- **Unmatched rows are reported, never created.** FFC stays the roster source,
+  and `adp_formatted` is NOT NULL — a stub row would need an ADP invented for it
+  that then feeds the price curve. A deep feed against a shallow DB leaves a big
+  unmatched list by construction (FantasyPros: ~690 of 901); what matters is
+  whether anyone *draftable* is in it.
+
+**Coverage gaps are marked, not rewritten.** A player the chosen source doesn't
+rank keeps their existing `adp_formatted` and `projected_price` and gets
+`adp_source = ''`. Filter on `adp_source` in /admin to find them.
+
+**Pricing** reuses `compute_average_adp_prices()`. `--price-basis historical`
+(default) leaves prices untouched and warns when the DB has no
+`HistoricalDraftPicks` — preserving the existing guard, since silently
+flattening every price looks identical to success. `default` applies the
+hardcoded `add_default_prices` curve; `none` moves ADP only.
+
+Tests: `draft/tests.py::AdpMatchingTests`, `AdpProviderParseTests`,
+`AdpSyncTests`, `ApplyAdpSourceTests` — all fixture-driven, no network.
 
 ## Client data layer (Dexie/IndexedDB)
 

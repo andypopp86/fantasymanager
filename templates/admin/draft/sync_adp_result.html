@@ -1,0 +1,65 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<h1>Sync ADP sources &mdash; {{ current_year }}</h1>
+
+{% if warnings %}
+<h2>Warnings</h2>
+<p>
+    Fuzzy name matches appear here on purpose &mdash; each one is a guess that a
+    feed name and a player in this database are the same person.
+    <strong>Read them.</strong>
+</p>
+<pre>{% for line in warnings %}{{ line }}
+{% endfor %}</pre>
+{% endif %}
+
+{% for summary in summaries %}
+<h2>{{ summary.label }}</h2>
+
+{% if not summary.ok %}
+<ul class="messagelist">
+    <li class="error">Fetch failed: {{ summary.error }}</li>
+</ul>
+{% else %}
+<ul>
+    <li>
+        <strong>{{ summary.feed_rows }}</strong> rows in the feed{% if summary.sample_size %},
+        from {{ summary.sample_size }} {{ summary.sample_unit }}{% endif %}.
+    </li>
+    <li><strong>{{ summary.matched }}</strong> matched to a player in this database.</li>
+    {% if summary.fuzzy_matched %}
+    <li>
+        <strong>{{ summary.fuzzy_matched }}</strong> matched by name SIMILARITY rather than
+        an exact hit &mdash; listed under Warnings above.
+    </li>
+    {% endif %}
+    {% if summary.ids_learned %}
+    <li>
+        {{ summary.ids_learned }} provider id(s) cached &mdash; the next sync of this source
+        skips name matching entirely.
+    </li>
+    {% endif %}
+    <li><strong>{{ summary.unmatched }}</strong> unmatched (reported below, not created).</li>
+</ul>
+
+{% if summary.unmatched_names %}
+<details>
+    <summary>{{ summary.unmatched }} unmatched feed row(s)</summary>
+    <p class="help">
+        A deep feed against a shallower database produces these by construction &mdash;
+        mostly rookies and bench players this board does not carry. What matters is
+        whether a player you would actually draft is in this list.
+    </p>
+    <pre>{% for name in summary.unmatched_names %}{{ name }}
+{% endfor %}</pre>
+</details>
+{% endif %}
+{% endif %}
+{% endfor %}
+
+<div class="submit-row">
+    <a href="../apply-adp/" class="button default">Choose the effective source &rarr;</a>
+    <a href="../" class="button">Back to players</a>
+</div>
+{% endblock %}

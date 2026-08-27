@@ -155,6 +155,35 @@ class Player(models.Model):
     my_price_rationale = models.TextField(null=True, blank=True)
     position_price = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     adp_price = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    # --- Multi-source ADP -------------------------------------------------
+    # One column per provider, each holding that provider's OVERALL AVERAGE
+    # PICK (not round.pick — see adp_formatted above, which is the derived
+    # 10-team round.pick rendering). Normalising every feed onto one unit is
+    # what makes the sources comparable and lets `apply_adp_source` swap
+    # between them with pure arithmetic and no API call.
+    #
+    # `sync_adp` writes ONLY these columns; it never touches adp_formatted or
+    # any price. `apply_adp_source` reads one of them and derives the rest.
+    # Null = that provider does not rank this player (coverage differs a lot:
+    # FFC 225 rows, MFL ~298 after dropping IDP, FantasyPros ~941).
+    adp_ffc = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    adp_mfl = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    # FantasyPros ships an expert CONSENSUS RANK, not an average pick — their
+    # real ADP endpoint is behind a paid key. Stored here anyway because the
+    # price curve only cares about the ordering, but don't read it as market data.
+    adp_fpros = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    # Provider ids, learned once. The feeds key on their own ids while this
+    # table keys on FFC's (player_id), so the first sync has to resolve by name
+    # — fuzzy, and occasionally wrong. Persisting the id it landed on turns
+    # every later sync into an exact lookup, so the fuzzy pass only ever sees
+    # genuinely new names. See draft/services/adp/matching.py.
+    mfl_id = models.CharField(max_length=16, null=True, blank=True, db_index=True)
+    fpros_id = models.CharField(max_length=16, null=True, blank=True, db_index=True)
+    # Which source produced this row's CURRENT adp_formatted. Empty string
+    # means the active source didn't rank them, so their ADP and price are
+    # left over from a previous source — the admin filter on this is how you
+    # find the gaps a toggle left behind.
+    adp_source = models.CharField(max_length=16, null=True, blank=True)
     nickname = models.CharField(max_length=200, null=True, blank=True)
     team = models.ForeignKey(NFLTeam, null=True, blank=True, on_delete=models.SET_NULL)
     year = models.IntegerField(default=2023)
@@ -628,3 +657,42 @@ class PlanChange(models.Model):
 
     def __str__(self):
         return '%s - %s - %s - %s' % (self.draft.draft_name, self.position, self.budget_pick, self.draft_pick)
+
+
+class AdpSourceSync(models.Model):
+    """One row per (ADP source, year): when it was last pulled, how well it
+    matched, and whether it is the source currently driving the board.
+
+    Exists because a column of numbers on Player says nothing about how much to
+    trust it. Before toggling the effective source you want to know when it was
+    synced, how big the provider's sample was, and — most of all — how many
+    players it FAILED to match, since an unmatched star silently keeps its old
+    price. `unmatched_names` carries the list so the admin can print it.
+
+    `is_active` lives here rather than in a settings singleton so the toggle
+    sits next to the freshness metadata that justifies it. Exactly one row per
+    year should be active; `apply_source` enforces that.
+    """
+
+    source = models.CharField(max_length=16)
+    year = models.IntegerField()
+    synced_at = models.DateTimeField(auto_now=True)
+    feed_rows = models.IntegerField(default=0)
+    matched = models.IntegerField(default=0)
+    # Matched by name similarity rather than an exact hit — the number worth
+    # eyeballing, because this is where a wrong player gets someone's ADP.
+    fuzzy_matched = models.IntegerField(default=0)
+    unmatched = models.IntegerField(default=0)
+    unmatched_names = models.TextField(blank=True, default='')
+    # The provider's own sample size: MFL reports drafts, FantasyPros reports
+    # experts. Units differ by source, which is why it's a plain number with no
+    # unit baked in — the admin labels it per source.
+    sample_size = models.IntegerField(null=True, blank=True)
+    is_active = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ('source', 'year')
+        ordering = ('-year', 'source')
+
+    def __str__(self):
+        return '%s %s%s' % (self.source, self.year, ' (active)' if self.is_active else '')

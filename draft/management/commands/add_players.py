@@ -134,6 +134,14 @@ def load_ffc_json(average_adp_prices, this_year, data):
             )
             if have_price_basis:
                 player.projected_price = projected_price
+            # FFC's RAW overall average pick, kept alongside the round.pick
+            # adp_formatted above so FFC can be toggled against the other
+            # sources on equal terms (see draft/services/adp/). Populated here
+            # rather than only by `sync_adp --source ffc` so the existing
+            # refresh keeps the column current for free. `.get` because the
+            # older cached players.json payloads have no 'adp' key.
+            if player_json.get('adp') is not None:
+                player.adp_ffc = player_json['adp']
             if not created:
                 player.team = nfl_team
                 # The point of a refresh: ADP moves in the weeks before the

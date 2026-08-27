@@ -1,16 +1,25 @@
 {% extends "admin/change_list.html" %}
-{% comment %}
-Adds the "Refresh ADP + prices" button beside "Add player". The refresh belongs
-on THIS changelist because it rewrites a year of Player data — every ADP and
-every projected price — rather than any single row; hanging it off a row
-selection (an admin action) would hide a global write behind a per-row control.
-The button only links to the confirmation page; nothing runs on GET.
-{% endcomment %}
+
 {% block object-tools-items %}
     <li>
         <a href="refresh-adp/" class="addlink"
            title="Re-pull ADP from the FFC feed and recompute projected prices for the year">
             Refresh ADP + prices
+        </a>
+    </li>
+    {# The two halves of multi-source ADP, kept separate because their risk #}
+    {# differs: syncing only fills per-source columns and changes nothing the #}
+    {# board reads; applying rewrites every ADP and price for the year. #}
+    <li>
+        <a href="sync-adp/" class="addlink"
+           title="Pull each provider's ADP into its own column. Changes nothing the board shows.">
+            Sync ADP sources
+        </a>
+    </li>
+    <li>
+        <a href="apply-adp/" class="addlink"
+           title="Choose which synced source drives adp_formatted and prices. No API call.">
+            Apply ADP source
         </a>
     </li>
     {{ block.super }}

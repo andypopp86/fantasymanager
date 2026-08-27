@@ -85,6 +85,30 @@ missing `NFLTeam` rows, updates every listed player's team link,
 `refresh_player_adp` and `add_players` run the same import
 (`refresh_player_adp` is the in-season alias).
 
+### Pricing against a different market (multi-source ADP)
+
+`refresh_player_adp` above is the FFC path and the only thing that creates
+players. To price against MyFantasyLeague or FantasyPros instead, two commands —
+same `railway ssh` rule, deploy first:
+
+```bash
+# Safe any time: fills one column per provider, changes nothing the board shows.
+railway ssh --service app -- python manage.py sync_adp --source all
+
+# See what is synced and which source is currently effective.
+railway ssh --service app -- python manage.py apply_adp_source
+
+# Rewrites every ADP and price for the year. NO API call - the data is already
+# in the DB, so this is reversible: run it again with a different source.
+railway ssh --service app -- python manage.py apply_adp_source --source mfl
+```
+
+Add `--dry-run` to either to see the outcome without writing. **Don't run
+`apply_adp_source` during a live draft** — it rewrites every projected price the
+budget plan sits on. Full design notes in `AGENTS.md` under "Multi-source ADP";
+the caveats worth knowing before you trust a source (MFL mixes in dynasty rookie
+drafts, FantasyPros is expert rank rather than ADP) are documented there.
+
 Two safety properties, learned the hard way:
 
 - **Prices need `HistoricalDraftPicks`.** projected_price = average historical

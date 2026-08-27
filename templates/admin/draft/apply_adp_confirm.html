@@ -1,0 +1,73 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<h1>Apply ADP source &mdash; {{ current_year }}</h1>
+
+<p>
+    Makes one already-synced source the <strong>effective</strong> ADP:
+    re-derives <code>adp_formatted</code> from its column and re-prices every
+    player off the new order. <strong>No API call</strong> &mdash; the data is
+    already in the database, which is what makes this reversible: pick a
+    different source and run it again.
+</p>
+
+<ul class="messagelist">
+    <li class="warning">
+        This rewrites every ADP and projected price for {{ current_year }}, which the
+        budget plan is built on. <strong>Don't run it during a live draft.</strong>
+    </li>
+    <li class="info">
+        Players the chosen source does not rank keep their existing ADP and price
+        untouched, and are marked with an empty <code>adp_source</code> so you can
+        filter for them on the player list.
+    </li>
+</ul>
+
+<form method="post">{% csrf_token %}
+    <fieldset class="module aligned">
+        <h2>Source</h2>
+        {% for source, record in statuses %}
+        <div class="form-row">
+            <label for="id_apply_{{ source.key }}" style="width: auto;">
+                <input type="radio" name="source" value="{{ source.key }}"
+                       id="id_apply_{{ source.key }}"
+                       {% if record.is_active %}checked{% endif %}
+                       {% if not record %}disabled{% endif %}>
+                {{ source.label }}{% if record.is_active %} &mdash; currently effective{% endif %}
+            </label>
+            <p class="help">
+                {% if record %}
+                    Synced {{ record.synced_at|date:"Y-m-d H:i" }} &mdash;
+                    {{ record.matched }} players ranked, {{ record.unmatched }} feed rows
+                    unmatched{% if record.sample_size %}, {{ record.sample_size }}
+                    {{ source.sample_unit }}{% endif %}.
+                {% else %}
+                    <strong>Never synced</strong> &mdash; sync it first, or applying it would
+                    leave every player unranked.
+                {% endif %}
+                {% if source.caveat %}<br><em>{{ source.caveat }}</em>{% endif %}
+            </p>
+        </div>
+        {% endfor %}
+
+        <h2>Prices</h2>
+        <div class="form-row">
+            <label for="id_price_basis">Recalculate projected prices from:</label>
+            <select name="price_basis" id="id_price_basis">
+                <option value="historical">Historical auction averages (default)</option>
+                <option value="default">The hardcoded default curve</option>
+                <option value="none">Don't touch prices &mdash; move ADP only</option>
+            </select>
+            <p class="help">
+                Historical uses the average <code>HistoricalDraftPicks</code> price at each
+                draft rank. On a database with no draft history it writes nothing and says
+                so, rather than flattening every price &mdash; pick the default curve there.
+            </p>
+        </div>
+    </fieldset>
+    <div class="submit-row">
+        <input type="submit" class="default" value="Yes, make this the effective source">
+        <a href="../" class="button cancel-link">No, take me back</a>
+    </div>
+</form>
+{% endblock %}
