@@ -139,7 +139,18 @@ class Player(models.Model):
     player_id = models.IntegerField()
     name = models.CharField(max_length=100)
     position = models.CharField(max_length=100)
-    adp_formatted = models.DecimalField(max_digits=8, decimal_places=2)
+    # OVERALL RANK, 1 = the first player off the board. Not round.pick, not an
+    # average pick — a dense index over the players the active source ranks,
+    # assigned by `apply_adp_source`. It is the one EFFECTIVE ADP: Meta.ordering
+    # below, DraftPick.Meta.ordering, add_default_prices and update_position_adp
+    # all sort on it.
+    #
+    # It used to hold FFC's round.pick rendering ("3.05"). That was dropped
+    # because the three sources report ADP in three different units — FFC and
+    # MFL give an average pick over different draft pools, FantasyPros gives a
+    # consensus rank — so the raw numbers on one row could not be compared by
+    # eye. Ranking every column makes "FFC 5 / MFL 12 / FPROS 8" mean something.
+    adp_formatted = models.PositiveIntegerField()
     projected_price = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     override_price = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     # The drafter's WALK-AWAY price: stop bidding above this. Hand-set in /admin,
@@ -156,22 +167,27 @@ class Player(models.Model):
     position_price = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     adp_price = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     # --- Multi-source ADP -------------------------------------------------
-    # One column per provider, each holding that provider's OVERALL AVERAGE
-    # PICK (not round.pick — see adp_formatted above, which is the derived
-    # 10-team round.pick rendering). Normalising every feed onto one unit is
-    # what makes the sources comparable and lets `apply_adp_source` swap
-    # between them with pure arithmetic and no API call.
+    # One column per provider, each holding that provider's RANK for this
+    # player: a dense 1..N index over the players in THIS database that the
+    # provider ranks, ordered by whatever the feed actually reports.
+    #
+    # Rank rather than the feed's own number because the feeds do not share a
+    # unit — FFC and MFL publish an average pick over different draft pools
+    # (MFL's look like 7.74), FantasyPros publishes a consensus rank. Storing
+    # the sort index makes the columns directly comparable across a row, which
+    # is the whole point of having them side by side. The raw feed values are
+    # not kept; re-run `sync_adp` to recompute from source.
     #
     # `sync_adp` writes ONLY these columns; it never touches adp_formatted or
     # any price. `apply_adp_source` reads one of them and derives the rest.
     # Null = that provider does not rank this player (coverage differs a lot:
-    # FFC 225 rows, MFL ~298 after dropping IDP, FantasyPros ~941).
-    adp_ffc = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
-    adp_mfl = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    # FFC ~199, MFL ~205 after dropping IDP, FantasyPros ~210 of a 941-row feed).
+    adp_ffc = models.PositiveIntegerField(null=True, blank=True)
+    adp_mfl = models.PositiveIntegerField(null=True, blank=True)
     # FantasyPros ships an expert CONSENSUS RANK, not an average pick — their
-    # real ADP endpoint is behind a paid key. Stored here anyway because the
-    # price curve only cares about the ordering, but don't read it as market data.
-    adp_fpros = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    # real ADP endpoint is behind a paid key. Ranked like the others, but don't
+    # read it as market data.
+    adp_fpros = models.PositiveIntegerField(null=True, blank=True)
     # Provider ids, learned once. The feeds key on their own ids while this
     # table keys on FFC's (player_id), so the first sync has to resolve by name
     # — fuzzy, and occasionally wrong. Persisting the id it landed on turns

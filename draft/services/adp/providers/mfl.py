@@ -10,10 +10,23 @@ this source exists alongside FFC. Two quirks shape this module:
     at the provider, so nothing downstream can accidentally give an IDP
     linebacker a slot in the auction price curve.
 
-One correction worth recording: MFL documents an `IS_MOCK` parameter, but it
-does NOT filter this endpoint — `IS_MOCK=0` and `IS_MOCK=1` both return the same
-692 drafts. So this feed is real leagues AND mocks mixed, just a more serious
-population than FFC's. Don't add the parameter back thinking it does something.
+Three things about this feed's POPULATION, all measured, none filterable:
+
+  * **Superflex contamination, and it is severe.** MFL ranks 7 QBs inside its
+    top 50; FFC ranks 1. A 1QB league takes one or two. QBs come out a median
+    28 ranks earlier than FFC and TEs 16 earlier, with WRs pushed 16 later —
+    the exact signature of superflex/2QB leagues, which MFL is the platform of
+    choice for. Applying this source to a 1QB auction inflates every QB price.
+  * Dynasty/devy rookie drafts are mixed in: ~49 of its top 150 are college
+    players. They match nothing in this DB and drop out, but they are why the
+    raw ranks are not redraft ADP.
+  * `IS_MOCK` does NOT filter this endpoint — `IS_MOCK=0` and `IS_MOCK=1` both
+    return the same 692 drafts — and `IS_KEEPER` rejects every value it
+    documents. Don't add either back thinking it does something.
+
+None of that makes the source useless — it is a real-money population and a
+genuine second opinion at RB/WR — but read a QB or TE rank from it with the
+superflex skew in mind.
 """
 
 import logging

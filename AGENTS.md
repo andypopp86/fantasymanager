@@ -577,14 +577,35 @@ Because the ADP is already in the database, toggling costs no API call and is
 freely reversible. Both are also buttons on the Player changelist ("Sync ADP
 sources", "Apply ADP source"), beside the older "Refresh ADP + prices".
 
-**Every source is normalised onto OVERALL AVERAGE PICK.** `adp_formatted` keeps
-its round.pick meaning and becomes DERIVED — `apply_source` recomputes it via
-`to_round_pick()` at `TEAMS = 10`. That is what keeps the blast radius near zero:
-`Player.Meta.ordering`, the serializers, `update_position_adp` and the React
-board all keep reading the one field they already read. Verified against the
-live FFC feed: 198 of 207 rows round-trip identically; all 9 misses are exact
-`.5` ties where FFC itself is inconsistent (its published `adp` is already
-rounded to one decimal, so the tie is arbitrary either way).
+**Every ADP column holds an integer RANK** — a dense 1..N index, 1 = first
+player off the board. `adp_formatted`, `adp_ffc`, `adp_mfl`, `adp_fpros` are all
+`PositiveIntegerField`.
+
+This replaced a mess of incompatible units (migrations 0089 + 0090): FFC and MFL
+publish an average overall pick over *different* draft pools, FantasyPros
+publishes a consensus rank, and `adp_formatted` carried FFC's round.pick
+rendering (`"3.05"`). Three units on one row cannot be compared by eye, which is
+the only reason to display them together. Ranks are the only thing they share —
+and the price curve and every sort consume ordering anyway, so nothing is lost.
+
+`adp_formatted` stays the one EFFECTIVE ADP and is DERIVED: `apply_source`
+assigns `index + 1` over the players its source ranks. `Player.Meta.ordering`,
+the serializers, `update_position_adp` and the board keep reading the same field.
+The three serializers exposing it are now `IntegerField` (`draft.py:56`,
+`draft.py:291`, `mock_draft.py:73`).
+
+**`rerank_year()` (`ranking.py`) rebuilds the dense index and must run after
+anything that adds or repoints players.** `refresh_players_from_ffc` calls it
+unconditionally at the end — a refresh that inserts a player mid-board would
+otherwise leave a duplicate or a hole. It is idempotent, orders by the current
+value with `name` as a deterministic tiebreaker, leaves NULLs NULL, and writes
+via queryset `update()` so it can't trip `Player.save()`'s price flooring.
+
+> Migration note: 0089 ranks the values while the columns are still numeric,
+> 0090 casts to integer. They are separate migrations because Postgres refuses
+> to `ALTER` a column type in the transaction that just wrote to the table, and
+> ranking has to come first — a plain cast would collapse round.pick 1.01
+> through 1.10 into ten players all sitting at 1.
 
 **Sources** (`sources.py` is the registry — add one there, plus a column and a
 provider module, and nothing else branches):
@@ -592,12 +613,17 @@ provider module, and nothing else branches):
 - `ffc` — Fantasy Football Calculator. Also the ROSTER source; `add_players`
   still owns creating players and now fills `adp_ffc` in passing.
 - `mfl` — MyFantasyLeague. Real leagues, ~692 drafts. Two calls (the ADP feed
-  carries ids only, so the ~2,600-row player table resolves names). **Traps:**
-  `IS_MOCK` does not filter this endpoint (0 and 1 both return 692 drafts) and
-  `IS_KEEPER` rejects every value, so dynasty/devy rookie drafts are mixed in —
-  ~49 of its top 150 are college players. They match nothing here and are
-  dropped, which is why the feed is usable, but do not read MFL's raw ranks as
-  redraft ADP.
+  carries ids only, so the ~2,600-row player table resolves names).
+  **⚠ SUPERFLEX CONTAMINATION — the trap that matters.** MFL ranks **7 QBs in
+  its top 50; FFC ranks 1**, and a 1QB league takes one or two. Median shift vs
+  FFC: QB **−28**, TE **−16**, WR **+16**. That is the signature of
+  superflex/2QB leagues, which MFL is the platform of choice for. **Applying
+  this source to a 1QB auction inflates every QB price.** It remains a good
+  second opinion at RB/WR; treat its QB and TE ranks as belonging to a different
+  format. Also: dynasty/devy rookie drafts are mixed in (~49 of its top 150 are
+  college players — they match nothing here and drop out), and neither
+  `IS_MOCK` (0 and 1 both return 692 drafts) nor `IS_KEEPER` (rejects every
+  documented value) filters any of it.
 - `fpros` — FantasyPros. **This is ECR, not ADP** — their real ADP endpoint
   returns `count: 0` without a paid key. Scoring is `HALF` to match the
   hardcoded `half-ppr` FFC pull.

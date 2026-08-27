@@ -14,6 +14,7 @@ from django.utils import timezone
 from django.db import models
 
 from draft import models as d
+from draft.services.adp.ranking import rerank_year
 
 def get_data(year, strategy="api"):
     if strategy == "api":
@@ -87,6 +88,9 @@ class ImportSummary:
     # False when the DB has no HistoricalDraftPicks: prices are left untouched
     # rather than flattened to the fallback (see below).
     priced: bool = True
+    # The RerankReport from the pass that runs after every refresh, or None when
+    # load_ffc_json was called directly (tests, and the older price commands).
+    rerank: object = None
 
     @property
     def created_names(self):
@@ -121,33 +125,36 @@ def load_ffc_json(average_adp_prices, this_year, data):
                 projected_price = 0.00
             logger.info('updating player %s (%s) with price %s' % (player_json['name'], player_json['player_id'], projected_price))
             nfl_team = get_or_create_team(player_json['team'], this_year)
+            # ADP columns hold a RANK, not the feed's own number, so the feed's
+            # round.pick string ("1.01") is not written anywhere. `player_ct` is
+            # this row's position in an ADP-ordered feed, which IS the rank —
+            # and refresh_players_from_ffc reranks at the end anyway to absorb
+            # players the feed doesn't list.
+            feed_rank = player_ct + 1
             player, created = d.Player.objects.get_or_create(
                 player_id=player_json['player_id'],
                 year=this_year,
                 defaults={
                     'name': player_json['name'],
                     'position': player_json['position'],
-                    'adp_formatted': player_json['adp_formatted'],
+                    'adp_formatted': feed_rank,
                     'projected_price': projected_price,
                     'team': nfl_team
                 }
             )
             if have_price_basis:
                 player.projected_price = projected_price
-            # FFC's RAW overall average pick, kept alongside the round.pick
-            # adp_formatted above so FFC can be toggled against the other
-            # sources on equal terms (see draft/services/adp/). Populated here
-            # rather than only by `sync_adp --source ffc` so the existing
-            # refresh keeps the column current for free. `.get` because the
-            # older cached players.json payloads have no 'adp' key.
-            if player_json.get('adp') is not None:
-                player.adp_ffc = player_json['adp']
+            # FFC's rank, kept alongside adp_formatted so FFC can be toggled
+            # against the other sources on equal terms (see draft/services/adp/).
+            # Populated here rather than only by `sync_adp --source ffc` so the
+            # existing refresh keeps the column current for free.
+            player.adp_ffc = feed_rank
             if not created:
                 player.team = nfl_team
                 # The point of a refresh: ADP moves in the weeks before the
                 # draft, and stale ranks would corrupt every ADP-ordered
                 # consumer (add_default_prices, UI sorts).
-                player.adp_formatted = player_json['adp_formatted']
+                player.adp_formatted = feed_rank
             player.save()
             if created:
                 summary.created.append(player)
@@ -172,6 +179,12 @@ def refresh_players_from_ffc(year=None):
     average_adp_prices = compute_average_adp_prices()
     summary = load_ffc_json(average_adp_prices, year, get_data(year))
     summary.deleted_kickers = deleted_kickers
+    # MUST run after the import, every time. The feed only covers players FFC
+    # lists, so a refresh that creates a player mid-board, or leaves an off-feed
+    # player carrying an old rank, breaks the dense 1..N the columns promise.
+    # Reranking is idempotent, so doing it unconditionally costs one query per
+    # column and removes a way to forget.
+    summary.rerank = rerank_year(year)
     return summary
 
 

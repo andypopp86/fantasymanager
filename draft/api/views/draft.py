@@ -53,7 +53,8 @@ class PlayerOutputSerializer(BaseSerializer):
     player_id = serializers.CharField()
     name = serializers.CharField()
     position = serializers.CharField()
-    adp_formatted = serializers.DecimalField(max_digits=8, decimal_places=2)
+    # Integer RANK (1 = first off the board), not a decimal round.pick.
+    adp_formatted = serializers.IntegerField()
     projected_price = serializers.DecimalField(max_digits=8, decimal_places=2)
     override_price = serializers.DecimalField(max_digits=8, decimal_places=2)
     nickname = serializers.CharField()
@@ -288,7 +289,7 @@ class TargetTierPlayerOutputSerializer(BaseSerializer):
     name = serializers.CharField(source="player.name")
     position = serializers.CharField(source="player.position")
     target_tier = serializers.IntegerField(source="player.target_tier")
-    adp_formatted = serializers.DecimalField(max_digits=8, decimal_places=2, source="player.adp_formatted")
+    adp_formatted = serializers.IntegerField(source="player.adp_formatted")
     favorite = serializers.BooleanField(allow_null=True, source="player.favorite")
     notes = serializers.CharField(allow_null=True, source="player.notes")
     team = serializers.CharField(allow_null=True, source="player.team.code", default=None)

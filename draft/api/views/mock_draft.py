@@ -70,7 +70,8 @@ class MockDraftPlayerOutputSerializer(BaseSerializer):
     name = serializers.CharField()
     position = serializers.CharField()
     team = serializers.CharField(source='team.code', allow_null=True, default=None)
-    adp_formatted = serializers.DecimalField(max_digits=8, decimal_places=2)
+    # Integer RANK (1 = first off the board), not a decimal round.pick.
+    adp_formatted = serializers.IntegerField()
     favorite = serializers.BooleanField(allow_null=True)
     target_tier = serializers.IntegerField()
     years_experience = serializers.IntegerField()

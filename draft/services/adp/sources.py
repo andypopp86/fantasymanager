@@ -55,7 +55,9 @@ SOURCES = {
         persist_id=True,
         sample_unit='drafts',
         fetch=mfl.fetch,
-        caveat='Real MFL leagues, but mocks are mixed in - IS_MOCK does not filter this feed.',
+        caveat='SUPERFLEX CONTAMINATION: 7 QBs in its top 50 vs FFC\'s 1, so QB prices '
+               'will be badly inflated for a 1QB league. Mocks and dynasty rookie drafts '
+               'are also mixed in - IS_MOCK and IS_KEEPER do not filter this feed.',
     ),
     'fpros': Source(
         key='fpros',

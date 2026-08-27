@@ -2,7 +2,8 @@
 
 The whole discipline of this module is what it does NOT do. A sync writes:
 
-  * `Player.adp_<source>` for the rows it matched
+  * `Player.adp_<source>` for the rows it matched — as a dense 1..N RANK, not
+    the feed's own number, so the columns are comparable across a row
   * `Player.<source>_id` for the ids it learned
   * one `AdpSourceSync` row of metadata
 
@@ -108,6 +109,7 @@ def sync_source(source_key, year=None, dry_run=False):
     # Ranked by the feed's own ordering so an unmatched row can report how early
     # this source drafts the player it couldn't find.
     ranked_rows = sorted(feed.rows, key=lambda r: r.overall_pick)
+    matches = []
     for feed_rank, row in enumerate(ranked_rows, start=1):
         result = matcher.match(row)
         if not result.matched:
@@ -120,9 +122,19 @@ def sync_source(source_key, year=None, dry_run=False):
         summary.matched += 1
         if result.is_fuzzy:
             summary.fuzzy_matched += 1
+        matches.append((result.player, row))
 
-        player = result.player
-        setattr(player, source.adp_field, round(row.overall_pick, 2))
+    # The column stores a dense RANK, not the feed's number. The feeds don't
+    # share a unit — FFC and MFL publish an average pick over different pools,
+    # FantasyPros a consensus rank — so only the ordering is comparable across
+    # sources, and the ordering is what the price curve consumes anyway.
+    #
+    # Ranked over MATCHED players only, so the column reads 1..N with no holes
+    # where the feed listed somebody this DB doesn't carry. Sorting is already
+    # done above; the name breaks ties so equal picks get a stable order.
+    matches.sort(key=lambda pair: (pair[1].overall_pick, pair[0].name))
+    for rank, (player, row) in enumerate(matches, start=1):
+        setattr(player, source.adp_field, rank)
         fields = [source.adp_field]
         if matcher.remember(player, row.provider_id):
             summary.ids_learned += 1
@@ -130,9 +142,8 @@ def sync_source(source_key, year=None, dry_run=False):
 
         if not dry_run:
             # NOT player.save(): Player.save() floors projected_price at 1, and
-            # a sync has no business touching a price at all. update_fields on
-            # the queryset bypasses that override and writes exactly these
-            # columns.
+            # a sync has no business touching a price at all. update() on the
+            # queryset bypasses that override and writes exactly these columns.
             d.Player.objects.filter(pk=player.pk).update(
                 **{field: getattr(player, field) for field in fields})
 

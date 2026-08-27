@@ -28,7 +28,7 @@ def make_player(name, position, year=2026, player_id=None):
         player_id=player_id or Player.objects.count() + 1,
         name=name,
         position=position,
-        adp_formatted=1.0,
+        adp_formatted=1,
         projected_price=10,
         year=year,
     )
@@ -1267,9 +1267,9 @@ class AdpProviderParseTests(TestCase):
         self.assertEqual(result.sample_size, 109)
 
     def test_ffc_stores_raw_adp_not_the_round_pick_string(self):
-        """adp_formatted is round.pick; every source column is an OVERALL pick.
-        Reading the wrong field here would put "1.01" in a column the apply step
-        treats as pick number 1."""
+        """The parser must read the feed's RAW `adp`, not its round.pick
+        `adp_formatted` string — the sync ranks on this value, so reading "1.01"
+        instead of 1.5 would scramble the ordering."""
         from draft.services.adp.providers import ffc
 
         payload = {'meta': {'total_drafts': 3144}, 'players': [
@@ -1293,7 +1293,7 @@ class AdpSyncTests(TestCase):
     def setUp(self):
         self.player = make_player('Jahmyr Gibbs', 'RB')
         Player.objects.filter(pk=self.player.pk).update(
-            adp_formatted='3.05', projected_price=44)
+            adp_formatted=305, projected_price=44)
 
     def _feed(self, *rows):
         from draft.services.adp.rows import AdpRow, FeedResult
@@ -1311,10 +1311,11 @@ class AdpSyncTests(TestCase):
 
         self.player.refresh_from_db()
         self.assertEqual(summary.matched, 1)
-        self.assertEqual(float(self.player.adp_mfl), 18.69)
+        # The column stores a RANK, not the feed's 18.69.
+        self.assertEqual(self.player.adp_mfl, 1)
         self.assertEqual(self.player.mfl_id, '16162')
         # The whole point: the board is untouched until apply_adp_source runs.
-        self.assertEqual(str(self.player.adp_formatted), '3.05')
+        self.assertEqual(self.player.adp_formatted, 305)
         self.assertEqual(int(self.player.projected_price), 44)
         self.assertIsNone(self.player.adp_ffc)
 
@@ -1360,7 +1361,7 @@ class AdpSyncTests(TestCase):
         target.refresh_from_db()
         self.assertEqual(summary.matched, 1)
         self.assertEqual(summary.unmatched, 0)
-        self.assertEqual(float(target.adp_mfl), 30.0)
+        self.assertEqual(target.adp_mfl, 1)
 
     def test_dry_run_writes_nothing(self):
         summary = self._sync(
@@ -1400,31 +1401,23 @@ class ApplyAdpSourceTests(TestCase):
         # Covered by no source — the coverage-gap case.
         self.unranked = make_player('Uncovered TE', 'TE')
         Player.objects.filter(pk=self.ranked.pk).update(
-            adp_mfl=1.75, adp_formatted='9.09', projected_price=5)
+            adp_mfl=1, adp_formatted=99, projected_price=5)
         Player.objects.filter(pk=self.other.pk).update(
-            adp_mfl=25.0, adp_formatted='1.01', projected_price=70)
+            adp_mfl=2, adp_formatted=1, projected_price=70)
         Player.objects.filter(pk=self.unranked.pk).update(
-            adp_formatted='4.04', projected_price=33)
+            adp_formatted=44, projected_price=33)
         AdpSourceSync.objects.create(source='mfl', year=2026, matched=2)
 
-    def test_round_pick_derivation_reproduces_ffc_formatting(self):
-        from draft.services.adp.apply import to_round_pick
+    def test_adp_formatted_is_a_dense_rank(self):
+        """1 is the first player off the board, with no gaps — not round.pick,
+        not the feed's own number."""
+        from draft.services.adp.apply import apply_source
 
-        # The exact values FFC publishes for these picks, at 10 teams. Verified
-        # against the live feed: 198 of 207 rows round-trip identically.
-        self.assertEqual(str(to_round_pick(1.4)), '1.01')
-        self.assertEqual(str(to_round_pick(80.8)), '9.01')
-        self.assertEqual(str(to_round_pick(92.1)), '10.02')
-        # Guards the (overall - 1) arithmetic against an off-by-one at the
-        # round boundary.
-        self.assertEqual(str(to_round_pick(10)), '1.10')
-        self.assertEqual(str(to_round_pick(11)), '2.01')
-        # A pick below 1 can't exist but must not produce round 0.
-        self.assertEqual(str(to_round_pick(0.4)), '1.01')
-        # Exact .5 ties are arbitrary — FFC itself rounds them both ways, since
-        # the adp it publishes is already rounded to one decimal. Pinned only so
-        # the behaviour is deliberate rather than accidental.
-        self.assertEqual(str(to_round_pick(1.5)), '1.02')
+        apply_source('mfl', year=2026, price_basis='none')
+
+        ranks = sorted(Player.objects.filter(year=2026, adp_source='mfl')
+                       .values_list('adp_formatted', flat=True))
+        self.assertEqual(ranks, [1, 2])
 
     def test_ranked_players_are_re_derived_and_re_priced(self):
         from draft.services.adp.apply import apply_source
@@ -1434,9 +1427,9 @@ class ApplyAdpSourceTests(TestCase):
         self.ranked.refresh_from_db()
         self.other.refresh_from_db()
         self.assertEqual(report.ranked, 2)
-        # 1.75 -> pick 2 -> round 1, pick 2.
-        self.assertEqual(str(self.ranked.adp_formatted), '1.02')
-        self.assertEqual(str(self.other.adp_formatted), '3.05')
+        # The source's own ordering becomes ranks 1 and 2 — no arithmetic.
+        self.assertEqual(self.ranked.adp_formatted, 1)
+        self.assertEqual(self.other.adp_formatted, 2)
         self.assertEqual(self.ranked.adp_source, 'mfl')
         # Priced by ADP ORDER, so the first-ranked player takes the top of the
         # curve regardless of what he was worth under the previous source.
@@ -1451,7 +1444,7 @@ class ApplyAdpSourceTests(TestCase):
 
         self.unranked.refresh_from_db()
         self.assertEqual(report.unranked, 1)
-        self.assertEqual(str(self.unranked.adp_formatted), '4.04')
+        self.assertEqual(self.unranked.adp_formatted, 44)
         self.assertEqual(int(self.unranked.projected_price), 33)
         # Marked, so the gap is findable in /admin.
         self.assertEqual(self.unranked.adp_source, '')
@@ -1467,7 +1460,7 @@ class ApplyAdpSourceTests(TestCase):
         self.assertEqual(report.priced, 0)
         self.assertEqual(int(self.ranked.projected_price), 5)
         # ADP still moves — only pricing is withheld.
-        self.assertEqual(str(self.ranked.adp_formatted), '1.02')
+        self.assertEqual(self.ranked.adp_formatted, 1)
 
     def test_price_basis_none_moves_adp_only(self):
         from draft.services.adp.apply import apply_source
@@ -1476,7 +1469,7 @@ class ApplyAdpSourceTests(TestCase):
 
         self.ranked.refresh_from_db()
         self.assertEqual(int(self.ranked.projected_price), 5)
-        self.assertEqual(str(self.ranked.adp_formatted), '1.02')
+        self.assertEqual(self.ranked.adp_formatted, 1)
 
     def test_dry_run_writes_nothing(self):
         from draft.services.adp.apply import active_source, apply_source
@@ -1485,7 +1478,7 @@ class ApplyAdpSourceTests(TestCase):
 
         self.ranked.refresh_from_db()
         self.assertEqual(report.ranked, 2)
-        self.assertEqual(str(self.ranked.adp_formatted), '9.09')
+        self.assertEqual(self.ranked.adp_formatted, 99)
         self.assertEqual(active_source(2026), '')
 
     def test_applying_marks_exactly_one_source_active(self):
@@ -1505,3 +1498,168 @@ class ApplyAdpSourceTests(TestCase):
 
         with self.assertRaises(ValueError):
             apply_source('espn', year=2026)
+
+
+class AdpRerankTests(TestCase):
+    """`rerank_year` is what keeps every ADP column a dense 1..N. It has to be
+    safe to run at any time, because it runs after every FFC refresh — a refresh
+    that creates a player mid-board would otherwise leave the ranks with a hole
+    or a duplicate."""
+
+    def _rank(self, name, formatted, ffc=None, mfl=None):
+        player = make_player(name, 'RB')
+        Player.objects.filter(pk=player.pk).update(
+            adp_formatted=formatted, adp_ffc=ffc, adp_mfl=mfl)
+        return player
+
+    def test_collapses_arbitrary_values_to_a_dense_index(self):
+        from draft.services.adp.ranking import rerank_year
+
+        self._rank('Third', 900, ffc=77)
+        self._rank('First', 5, ffc=1)
+        self._rank('Second', 40, ffc=12)
+
+        rerank_year(2026)
+
+        ordered = list(Player.objects.filter(year=2026)
+                       .order_by('adp_formatted').values_list('name', 'adp_formatted', 'adp_ffc'))
+        self.assertEqual(ordered, [('First', 1, 1), ('Second', 2, 2), ('Third', 3, 3)])
+
+    def test_is_idempotent(self):
+        """It runs on every refresh, so a second pass must be a no-op rather
+        than shuffling anything."""
+        from draft.services.adp.ranking import rerank_year
+
+        self._rank('A', 10)
+        self._rank('B', 20)
+        self._rank('C', 30)
+
+        rerank_year(2026)
+        second = rerank_year(2026)
+
+        self.assertEqual(second.total_changed, 0)
+        self.assertEqual(
+            list(Player.objects.filter(year=2026).order_by('adp_formatted')
+                 .values_list('name', 'adp_formatted')),
+            [('A', 1), ('B', 2), ('C', 3)])
+
+    def test_a_player_inserted_mid_board_closes_the_gap(self):
+        """The case that makes this mandatory after a refresh: FFC adds a player
+        between two existing ones."""
+        from draft.services.adp.ranking import rerank_year
+
+        self._rank('Early', 1)
+        self._rank('Late', 2)
+        rerank_year(2026)
+
+        newcomer = make_player('Newcomer', 'WR')
+        Player.objects.filter(pk=newcomer.pk).update(adp_formatted=1)
+
+        rerank_year(2026)
+
+        self.assertEqual(
+            sorted(Player.objects.filter(year=2026).values_list('adp_formatted', flat=True)),
+            [1, 2, 3])
+
+    def test_nulls_stay_null(self):
+        """A source that does not rank a player must not be handed an opinion."""
+        from draft.services.adp.ranking import rerank_year
+
+        self._rank('Ranked', 1, mfl=50)
+        self._rank('Unranked By Mfl', 2, mfl=None)
+
+        rerank_year(2026)
+
+        self.assertEqual(Player.objects.get(name='Ranked').adp_mfl, 1)
+        self.assertIsNone(Player.objects.get(name='Unranked By Mfl').adp_mfl)
+
+    def test_ties_break_on_name_so_the_result_is_deterministic(self):
+        from draft.services.adp.ranking import rerank_year
+
+        self._rank('Zebra', 7)
+        self._rank('Aardvark', 7)
+
+        rerank_year(2026)
+
+        self.assertEqual(Player.objects.get(name='Aardvark').adp_formatted, 1)
+        self.assertEqual(Player.objects.get(name='Zebra').adp_formatted, 2)
+
+    def test_does_not_touch_prices(self):
+        """Player.save() floors projected_price at 1; reranking must not go
+        through it."""
+        from draft.services.adp.ranking import rerank_year
+
+        player = self._rank('Priced', 500)
+        Player.objects.filter(pk=player.pk).update(projected_price=44)
+
+        rerank_year(2026)
+
+        player.refresh_from_db()
+        self.assertEqual(int(player.projected_price), 44)
+        self.assertEqual(player.adp_formatted, 1)
+
+    def test_dry_run_reports_without_writing(self):
+        from draft.services.adp.ranking import rerank_year
+
+        self._rank('A', 90)
+        self._rank('B', 10)
+
+        report = rerank_year(2026, dry_run=True)
+
+        self.assertEqual(report.total_changed, 2)
+        self.assertEqual(Player.objects.get(name='A').adp_formatted, 90)
+
+    def test_year_is_isolated(self):
+        from draft.services.adp.ranking import rerank_year
+
+        other = make_player('Other Season', 'RB', year=2025)
+        Player.objects.filter(pk=other.pk).update(adp_formatted=888)
+        self._rank('This Season', 400)
+
+        rerank_year(2026)
+
+        self.assertEqual(Player.objects.get(name='This Season').adp_formatted, 1)
+        self.assertEqual(Player.objects.get(name='Other Season').adp_formatted, 888)
+
+    def test_rejects_a_column_that_is_not_an_adp_rank(self):
+        from draft.services.adp.ranking import rerank_year
+
+        with self.assertRaises(ValueError):
+            rerank_year(2026, columns=['projected_price'])
+
+
+class FfcRefreshReranksTests(TestCase):
+    """The FFC refresh is the reason reranking is automatic: it creates players
+    and writes feed-order values, so the ranks have to be rebuilt afterwards or
+    the board carries duplicates."""
+
+    def test_refresh_leaves_every_column_densely_ranked(self):
+        from draft.management.commands import add_players
+
+        # A player NOT in the feed, holding a stale rank that would otherwise
+        # collide with the freshly imported ones.
+        stale = make_player('Off Feed WR', 'WR', player_id=9001)
+        Player.objects.filter(pk=stale.pk).update(adp_formatted=1, adp_ffc=None)
+
+        feed = {'meta': {'total_drafts': 10}, 'players': [
+            {'player_id': 5001, 'name': 'Feed One', 'position': 'RB',
+             'team': 'ATL', 'adp': 1.5, 'adp_formatted': '1.01'},
+            {'player_id': 5002, 'name': 'Feed Two', 'position': 'WR',
+             'team': 'ATL', 'adp': 12.5, 'adp_formatted': '2.03'},
+            {'player_id': 5003, 'name': 'Kick Er', 'position': 'PK',
+             'team': 'ATL', 'adp': 99.0, 'adp_formatted': '10.09'},
+        ]}
+
+        with mock.patch.object(add_players, 'get_data', return_value=feed):
+            summary = add_players.refresh_players_from_ffc(year=2026)
+
+        self.assertIsNotNone(summary.rerank)
+        ranks = sorted(Player.objects.filter(year=2026)
+                       .values_list('adp_formatted', flat=True))
+        # Three players (the kicker is dropped), densely ranked with no clash
+        # between the newcomers and the off-feed holdover.
+        self.assertEqual(ranks, [1, 2, 3])
+        # The feed's round.pick string is never stored.
+        self.assertEqual(Player.objects.get(name='Feed One').adp_ffc, 1)
+        self.assertEqual(Player.objects.get(name='Feed Two').adp_ffc, 2)
+        self.assertIsNone(Player.objects.get(name='Off Feed WR').adp_ffc)

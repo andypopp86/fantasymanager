@@ -16,11 +16,15 @@ Two rules govern what gets touched:
   * Prices follow ADP order, not the feed's row order. The old FFC import
     indexed the price curve by position in the feed; ranking explicitly here
     means a source that returns rows in any order still prices correctly.
+
+`adp_formatted` ends up holding the RANK — 1 is the first player off the board.
+It used to hold FFC's round.pick rendering ("3.05"), which was dropped because
+the sources report ADP in three different units and the numbers on one row could
+not be compared by eye. Ranks are the only thing they share.
 """
 
 import dataclasses
 import logging
-from decimal import Decimal
 
 from django.utils import timezone
 
@@ -31,32 +35,7 @@ from draft.services.adp.sources import SOURCE_KEYS, get_source
 
 logger = logging.getLogger(__name__)
 
-# The league this board is built for, and the basis of `adp_formatted`'s
-# round.pick rendering. Matches the `teams=10` hardcoded in the FFC pull.
-TEAMS = 10
-
 PRICE_BASIS_CHOICES = ('historical', 'default', 'none')
-
-
-def to_round_pick(overall_pick):
-    """Overall average pick -> the round.pick Decimal stored in adp_formatted.
-
-    Reproduces FFC's own formatting so switching sources doesn't change what the
-    number MEANS: pick 80.8 becomes 9.01, pick 92.1 becomes 10.02. Rounding the
-    overall pick before splitting is what matches FFC; truncating does not.
-
-    Checked against the live FFC feed: 198 of its 207 non-kicker rows come out
-    identical. All 9 disagreements sit on an exact .5 tie, where FFC is not even
-    self-consistent (12.5 -> 2.03 rounds up, 1.5 -> 1.01 rounds down) because the
-    `adp` it publishes is already rounded to one decimal, so the true value
-    behind a displayed .5 could be either side. Ties are therefore arbitrary by
-    construction and not worth chasing — one pick of drift on a player whose ADP
-    is a fractional average anyway.
-    """
-    overall = max(1, int(round(float(overall_pick))))
-    rnd = (overall - 1) // TEAMS + 1
-    pick = (overall - 1) % TEAMS + 1
-    return Decimal(f'{rnd}.{pick:02d}')
 
 
 def resolve_price_curve(basis):
@@ -86,9 +65,11 @@ class Move:
 
     name: str
     position: str
-    previous: Decimal
-    current: Decimal
-    # Positive = the new source ranks them EARLIER (more valuable).
+    previous: int
+    current: int
+    # Positive = the new source ranks them EARLIER (more valuable). Both sides
+    # are ranks now, so this is plain subtraction rather than the round.pick
+    # arithmetic it used to need.
     delta_ranks: int
 
 
@@ -140,7 +121,11 @@ def apply_source(source_key, year=None, price_basis='historical', dry_run=False)
 
     for index, player in enumerate(ranked):
         previous_adp = player.adp_formatted
-        player.adp_formatted = to_round_pick(getattr(player, source.adp_field))
+        # The rank IS the ADP: 1 is the first player off the board. `ranked` is
+        # already sorted by this source's column, so the enumeration index is
+        # the answer — no rounding, no round.pick, nothing to reconcile against
+        # a feed's own numbering.
+        player.adp_formatted = index + 1
         player.adp_source = source.key
         fields = ['adp_formatted', 'adp_source']
 
@@ -156,7 +141,7 @@ def apply_source(source_key, year=None, price_basis='historical', dry_run=False)
             report.movers.append(Move(
                 name=player.name, position=player.position,
                 previous=previous_adp, current=player.adp_formatted,
-                delta_ranks=_rank_delta(previous_adp, player.adp_formatted),
+                delta_ranks=(previous_adp or 0) - player.adp_formatted,
             ))
 
         if not dry_run:
@@ -182,21 +167,6 @@ def apply_source(source_key, year=None, price_basis='historical', dry_run=False)
                     source.key, year, report.ranked, report.unranked)
 
     return report
-
-
-def _rank_delta(previous, current):
-    """Round.pick difference expressed in whole picks, for sorting movers."""
-    if previous is None or current is None:
-        return 0
-    return int(round((_to_overall(previous) - _to_overall(current))))
-
-
-def _to_overall(round_pick):
-    """Inverse of to_round_pick, for comparing two round.pick values."""
-    value = float(round_pick)
-    rnd = int(value)
-    pick = int(round((value - rnd) * 100))
-    return (rnd - 1) * TEAMS + max(pick, 1)
 
 
 def active_source(year=None):
