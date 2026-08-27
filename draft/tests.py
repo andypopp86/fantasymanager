@@ -1134,6 +1134,64 @@ class AdpMatchingTests(TestCase):
         self.assertEqual(result.player, player)
         self.assertEqual(result.method, 'id')
 
+    def test_alias_resolves_a_name_the_matcher_cannot(self):
+        """The hand-match escape hatch: the player IS here, spelled differently
+        enough that neither normalisation nor similarity connects them."""
+        from draft.models import AdpPlayerAlias
+
+        player = make_player('Marquise Brown', 'WR')
+        AdpPlayerAlias.objects.create(
+            feed_name='Hollywood Brown', position='WR', player=player)
+
+        result = self._matcher(source_key='mfl').match(
+            self._row('Hollywood Brown', 'WR'))
+        self.assertEqual(result.player, player)
+        self.assertEqual(result.method, 'alias')
+
+    def test_alias_overrides_a_wrong_fuzzy_match(self):
+        """The more dangerous failure is not a miss, it's a confident WRONG
+        match. An alias has to be able to correct one, which is why it sits
+        above every automatic rule."""
+        from draft.models import AdpPlayerAlias
+
+        make_player('DJ Moore', 'WR')
+        intended = make_player('DJ Chark', 'WR')
+        # Without the alias this fuzzy-matches to DJ Moore.
+        self.assertEqual(
+            self._matcher().match(self._row('D.J. Moore', 'WR')).player.name,
+            'DJ Moore')
+
+        AdpPlayerAlias.objects.create(
+            feed_name='D.J. Moore', position='WR', player=intended)
+
+        result = self._matcher(source_key='mfl').match(self._row('D.J. Moore', 'WR'))
+        self.assertEqual(result.player, intended)
+        self.assertEqual(result.method, 'alias')
+
+    def test_alias_scoped_to_one_source_does_not_leak_to_another(self):
+        from draft.models import AdpPlayerAlias
+
+        player = make_player('Real Player', 'RB')
+        AdpPlayerAlias.objects.create(
+            source='mfl', feed_name='Odd Spelling', position='RB', player=player)
+
+        self.assertEqual(
+            self._matcher(source_key='mfl').match(self._row('Odd Spelling', 'RB')).player,
+            player)
+        self.assertFalse(
+            self._matcher(source_key='fpros').match(self._row('Odd Spelling', 'RB')).matched)
+
+    def test_alias_matching_ignores_punctuation_and_case(self):
+        from draft.models import AdpPlayerAlias
+
+        player = make_player('Marquise Brown', 'WR')
+        AdpPlayerAlias.objects.create(
+            feed_name="Hollywood Brown", position='WR', player=player)
+
+        result = self._matcher(source_key='mfl').match(
+            self._row("HOLLYWOOD  BROWN", 'WR'))
+        self.assertEqual(result.player, player)
+
     def test_remember_is_a_noop_when_ids_are_not_persisted(self):
         """FFC's provider id IS Player.player_id, so it must be read but never
         written back."""
@@ -1266,6 +1324,43 @@ class AdpSyncTests(TestCase):
         self.assertEqual(summary.matched, 0)
         self.assertEqual(summary.unmatched_names, ['Nobody At All (WR)'])
         self.assertEqual(Player.objects.filter(year=2026).count(), 1)
+
+    def test_unmatched_rows_carry_the_feed_rank(self):
+        """Rank is what makes the list actionable: a miss at 40 matters, one at
+        700 is a bench player this board would never draft."""
+        summary = self._sync(self._feed(
+            ('98', 'Deep Guy', 'WR', 'ATL', 190.0),
+            ('99', 'Early Guy', 'RB', 'ATL', 12.0),
+        ))
+
+        self.assertEqual([(r.name, r.feed_rank) for r in summary.unmatched_rows],
+                         [('Early Guy', 1), ('Deep Guy', 2)])
+
+    def test_top_unmatched_cuts_off_past_the_feeds_top_200(self):
+        rows = [(str(i), f'Player {i}', 'WR', 'ATL', float(i)) for i in range(1, 206)]
+        summary = self._sync(self._feed(*rows))
+
+        self.assertEqual(summary.unmatched, 205)
+        self.assertEqual(len(summary.top_unmatched), 200)
+        self.assertEqual(summary.top_unmatched[-1].feed_rank, 200)
+
+    def test_an_alias_turns_an_unmatched_row_into_a_match(self):
+        """End to end: the escape hatch the admin's "Map to a player" link
+        writes actually feeds back into the next sync."""
+        from draft.models import AdpPlayerAlias
+
+        feed = self._feed(('77', 'Hollywood Brown', 'WR', 'ATL', 30.0))
+        self.assertEqual(self._sync(feed).matched, 0)
+
+        target = make_player('Marquise Brown', 'WR')
+        AdpPlayerAlias.objects.create(
+            feed_name='Hollywood Brown', position='WR', player=target)
+
+        summary = self._sync(feed)
+        target.refresh_from_db()
+        self.assertEqual(summary.matched, 1)
+        self.assertEqual(summary.unmatched, 0)
+        self.assertEqual(float(target.adp_mfl), 30.0)
 
     def test_dry_run_writes_nothing(self):
         summary = self._sync(

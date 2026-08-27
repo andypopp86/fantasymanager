@@ -30,6 +30,17 @@ logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass
+class UnmatchedRow:
+    """A feed row that resolved to nobody, with where the feed ranks it."""
+
+    name: str
+    position: str
+    team_code: str
+    overall_pick: float
+    feed_rank: int
+
+
+@dataclasses.dataclass
 class SyncSummary:
     """What one source's sync did. Rendered by both the command and the admin."""
 
@@ -39,7 +50,11 @@ class SyncSummary:
     feed_rows: int = 0
     matched: int = 0
     fuzzy_matched: int = 0
-    unmatched_names: list = dataclasses.field(default_factory=list)
+    # UnmatchedRow objects rather than strings, so the admin can offer a
+    # prefilled "create an alias for this" link per row and rank them by how
+    # early the feed drafts them — a miss at feed rank 40 matters, one at 700
+    # almost never does.
+    unmatched_rows: list = dataclasses.field(default_factory=list)
     ids_learned: int = 0
     sample_size: int = None
     sample_unit: str = ''
@@ -50,7 +65,17 @@ class SyncSummary:
 
     @property
     def unmatched(self):
-        return len(self.unmatched_names)
+        return len(self.unmatched_rows)
+
+    @property
+    def unmatched_names(self):
+        return [f'{row.name} ({row.position})' for row in self.unmatched_rows]
+
+    @property
+    def top_unmatched(self):
+        """Misses inside the feed's top 200 — the only ones worth a human's
+        time, since anything deeper is a player this board would never draft."""
+        return [row for row in self.unmatched_rows if row.feed_rank <= 200]
 
     @property
     def ok(self):
@@ -78,11 +103,18 @@ def sync_source(source_key, year=None, dry_run=False):
     summary.feed_rows = len(feed.rows)
     summary.sample_size = feed.sample_size
 
-    matcher = PlayerMatcher(year, id_field=source.id_field, persist_id=source.persist_id)
-    for row in feed.rows:
+    matcher = PlayerMatcher(year, id_field=source.id_field,
+                            persist_id=source.persist_id, source_key=source.key)
+    # Ranked by the feed's own ordering so an unmatched row can report how early
+    # this source drafts the player it couldn't find.
+    ranked_rows = sorted(feed.rows, key=lambda r: r.overall_pick)
+    for feed_rank, row in enumerate(ranked_rows, start=1):
         result = matcher.match(row)
         if not result.matched:
-            summary.unmatched_names.append(f'{row.name} ({row.position})')
+            summary.unmatched_rows.append(UnmatchedRow(
+                name=row.name, position=row.position, team_code=row.team_code,
+                overall_pick=row.overall_pick, feed_rank=feed_rank,
+            ))
             continue
 
         summary.matched += 1
@@ -112,10 +144,14 @@ def sync_source(source_key, year=None, dry_run=False):
                 'matched': summary.matched,
                 'fuzzy_matched': summary.fuzzy_matched,
                 'unmatched': summary.unmatched,
-                # Capped: FantasyPros' 941-row feed against a 212-player DB
-                # leaves ~700 unmatched, and the point is to spot a missing
-                # STAR, which will be near the top of a rank-ordered feed.
-                'unmatched_names': '\n'.join(summary.unmatched_names[:100]),
+                # Capped at the feed's top 200: FantasyPros' 941-row feed
+                # against a 212-player DB leaves ~690 unmatched, and the point
+                # is to spot a missing STAR, which is near the top by
+                # construction. Deeper misses are bench players this board
+                # would never draft.
+                'unmatched_names': '\n'.join(
+                    f'{r.feed_rank:>4}  {r.name} ({r.position})'
+                    for r in summary.top_unmatched),
                 'sample_size': summary.sample_size,
             },
         )

@@ -26,7 +26,7 @@ class Command(BaseCommand):
             help='Fetch and match, report, write nothing.')
         parser.add_argument(
             '--show-unmatched', action='store_true', default=False,
-            help='Print every unmatched feed row, not just the first 20.')
+            help="Print every unmatched feed row, not just the feed's top 200.")
 
     def handle(self, *args, **options):
         keys = SOURCE_KEYS if options['source'] == 'all' else (options['source'],)
@@ -60,11 +60,19 @@ class Command(BaseCommand):
                 f'  ids learned:   {summary.ids_learned} (next sync skips name matching)')
         self.stdout.write(f'  unmatched:     {summary.unmatched}')
 
-        if summary.unmatched_names:
-            shown = summary.unmatched_names if show_unmatched else summary.unmatched_names[:20]
-            for name in shown:
-                self.stdout.write(f'    - {name}')
+        if summary.unmatched_rows:
+            # Only the feed's top 200 by default: a deep feed against a shallow
+            # DB leaves hundreds of misses, and all the ones worth a human's
+            # attention are near the top by construction.
+            shown = summary.unmatched_rows if show_unmatched else summary.top_unmatched
+            if shown:
+                self.stdout.write('  unmatched inside the feed\'s top 200:'
+                                  if not show_unmatched else '  all unmatched rows:')
+            for row in shown:
+                self.stdout.write(
+                    f'    {row.feed_rank:>4}  {row.name:30} {row.position:4} '
+                    f'{row.team_code:4} pick {row.overall_pick:.1f}')
             if len(shown) < summary.unmatched:
                 self.stdout.write(
-                    f'    ... and {summary.unmatched - len(shown)} more '
+                    f'    ... and {summary.unmatched - len(shown)} deeper '
                     f'(--show-unmatched for all)')

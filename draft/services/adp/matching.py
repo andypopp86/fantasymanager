@@ -5,8 +5,9 @@ keyed on FFC's `player_id` and no other feed knows that id. Everything else in
 the feature is arithmetic; this is the part that can quietly attach Marvin
 Harrison Jr.'s ADP to Marvin Harrison.
 
-The ordering below is a confidence ladder — exact identifiers first, then exact
-names, then similarity, and a miss is a MISS. A provider row that reaches the
+The ordering below is a confidence ladder — exact identifiers first, then a
+human's hand-made alias (AdpPlayerAlias), then exact names, then similarity, and
+a miss is a MISS. A provider row that reaches the
 bottom is reported and dropped, never inserted: FFC is the roster source, and
 `Player.adp_formatted` is NOT NULL, so a stub row would have to have an ADP
 invented for it that would then feed the price curve and every server-side sort.
@@ -22,6 +23,8 @@ import difflib
 import logging
 import re
 import unicodedata
+
+from django.db.models import Q
 
 from draft import models as d
 
@@ -122,7 +125,7 @@ class MatchResult:
     def __init__(self, row, player, method):
         self.row = row
         self.player = player
-        # 'id' | 'exact' | 'team' | 'fuzzy' | None
+        # 'id' | 'alias' | 'exact' | 'team' | 'fuzzy' | None
         self.method = method
 
     @property
@@ -142,13 +145,27 @@ class PlayerMatcher:
     in memory (212 players for 2026).
     """
 
-    def __init__(self, year, id_field=None, persist_id=True):
+    def __init__(self, year, id_field=None, persist_id=True, source_key=None):
         self.year = year
         # e.g. 'mfl_id'. FFC passes 'player_id' — its ids ARE this table's
         # identity column, so they're read but never written back.
         self.id_field = id_field
         self.persist_id = persist_id
         self.players = list(d.Player.objects.filter(year=year))
+        self.source_key = source_key
+
+        # Hand-made overrides, keyed on (normalized feed name, position). A
+        # source-specific alias wins over an all-sources one, so a general rule
+        # can be narrowed for the one provider that needs it.
+        self._aliases = {}
+        alias_qs = d.AdpPlayerAlias.objects.filter(
+            player__year=year).select_related('player')
+        if source_key:
+            alias_qs = alias_qs.filter(Q(source='') | Q(source=source_key))
+        else:
+            alias_qs = alias_qs.filter(source='')
+        for alias in alias_qs.order_by('source'):   # '' sorts first, so specific wins
+            self._aliases[(normalize_name(alias.feed_name), alias.position)] = alias.player
 
         self._by_provider_id = {}
         if id_field:
@@ -203,7 +220,14 @@ class PlayerMatcher:
             if player:
                 return MatchResult(row, player, 'id')
 
-        # 2. Team defenses, by code. Ahead of name matching, not after it,
+        # 2. A human's explicit decision, which beats every automatic rule
+        #    below — including a fuzzy match that landed on the wrong player,
+        #    which is exactly what an alias needs to be able to override.
+        alias_player = self._aliases.get((normalize_name(row.name), row.position))
+        if alias_player:
+            return MatchResult(row, alias_player, 'alias')
+
+        # 3. Team defenses, by code. Ahead of name matching, not after it,
         #    because the names would produce confident nonsense.
         if row.position == 'DEF':
             player = self._def_by_team.get(canonical_team_code(row.team_code))
@@ -228,12 +252,12 @@ class PlayerMatcher:
 
         key = normalize_name(row.name)
 
-        # 3. Exact normalized name within the position.
+        # 4. Exact normalized name within the position.
         player = self._by_name_pos.get((key, row.position))
         if player:
             return MatchResult(row, player, 'exact')
 
-        # 4. Exact name, position disagrees. Accepted only when the name is
+        # 5. Exact name, position disagrees. Accepted only when the name is
         #    unique in the DB — otherwise we'd be guessing which of two players
         #    the feed meant, which is the one thing this ladder exists to avoid.
         candidates = self._by_name.get(key, [])
@@ -243,7 +267,7 @@ class PlayerMatcher:
                 row.name, row.position, candidates[0].position)
             return MatchResult(row, candidates[0], 'exact')
 
-        # 5. Similarity, within the position only.
+        # 6. Similarity, within the position only.
         pool = self._names_by_pos.get(row.position, [])
         close = difflib.get_close_matches(key, pool, n=1, cutoff=FUZZY_CUTOFF)
         if close:

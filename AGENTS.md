@@ -621,6 +621,25 @@ how they reach the admin result page (`capture_draft_warnings`).
   that then feeds the price curve. A deep feed against a shallow DB leaves a big
   unmatched list by construction (FantasyPros: ~690 of 901); what matters is
   whether anyone *draftable* is in it.
+- **Unmatched reporting is capped at the feed's top 200**, ranked by the feed's
+  own ordering. A miss at rank 46 matters; one at 700 is a bench player this
+  board would never draft. `AdpSourceSync.unmatched_names` stores that slice,
+  the sync result page tables it, and `sync_adp --show-unmatched` prints all.
+
+**`AdpPlayerAlias` is the hand-match escape hatch** — feed name + position →
+Player, editable in /admin, with a prefilled "Map to a player" link beside every
+unmatched row on the sync result page. It sits directly after the cached
+provider id and **above every automatic rule**, so a human decision can override
+a fuzzy match that landed on the wrong player — the more dangerous failure than
+a miss. Blank `source` means every source; set it to narrow a rule to one feed.
+
+> **Read this before working an unmatched list.** Most misses are NOT spelling
+> problems — they are players this DB does not carry, and an alias cannot
+> conjure a Player row. Measured on the 2026 dev DB: of 65 unique top-200
+> misses, 50 had no counterpart at all and the remaining 15 "close" candidates
+> were coincidences (Cam Ward→Sam Darnold, Robert Henry→Derrick Henry). The fix
+> for those is `refresh_player_adp`, which creates players. Aliases are for the
+> genuine case: the player is here under a name the matcher can't reach.
 
 **Coverage gaps are marked, not rewritten.** A player the chosen source doesn't
 rank keeps their existing `adp_formatted` and `projected_price` and gets

@@ -43,16 +43,47 @@
     <li><strong>{{ summary.unmatched }}</strong> unmatched (reported below, not created).</li>
 </ul>
 
-{% if summary.unmatched_names %}
+{% if summary.top_unmatched %}
 <details>
-    <summary>{{ summary.unmatched }} unmatched feed row(s)</summary>
+    <summary>
+        {{ summary.top_unmatched|length }} unmatched inside this feed's top 200
+        ({{ summary.unmatched }} unmatched overall)
+    </summary>
     <p class="help">
-        A deep feed against a shallower database produces these by construction &mdash;
-        mostly rookies and bench players this board does not carry. What matters is
-        whether a player you would actually draft is in this list.
+        <strong>Most of these are not spelling problems.</strong> A feed ranks players
+        this board does not carry &mdash; rookies, and anyone added since the last FFC
+        refresh &mdash; and no alias can conjure a player row for them. If the name has
+        no counterpart here, run <em>Refresh ADP + prices</em>, which is the only thing
+        that creates players.
+        <br>
+        Use &ldquo;Map to a player&rdquo; only when the player IS in this database under
+        a different spelling. Only the feed's top 200 is listed; anything deeper is a
+        bench player this board would never draft.
     </p>
-    <pre>{% for name in summary.unmatched_names %}{{ name }}
-{% endfor %}</pre>
+    <table>
+        <thead>
+            <tr>
+                <th>Feed rank</th><th>Name</th><th>Pos</th><th>Team</th>
+                <th>Avg pick</th><th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in summary.top_unmatched %}
+            <tr>
+                <td>{{ row.feed_rank }}</td>
+                <td>{{ row.name }}</td>
+                <td>{{ row.position }}</td>
+                <td>{{ row.team_code }}</td>
+                <td>{{ row.overall_pick|floatformat:1 }}</td>
+                <td>
+                    <a href="{% url 'admin:draft_adpplayeralias_add' %}?feed_name={{ row.name|urlencode }}&amp;position={{ row.position|urlencode }}&amp;source={{ summary.source|urlencode }}">
+                        Map to a player
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </details>
 {% endif %}
 {% endif %}

@@ -696,3 +696,41 @@ class AdpSourceSync(models.Model):
 
     def __str__(self):
         return '%s %s%s' % (self.source, self.year, ' (active)' if self.is_active else '')
+
+
+class AdpPlayerAlias(models.Model):
+    """A HAND-MADE link from a provider's spelling of a name to a Player.
+
+    The matcher resolves most rows on its own, and what it can't resolve is
+    usually a player this DB simply doesn't carry — no alias can fix that, only
+    an FFC refresh that creates the row. This table is for the remaining case:
+    the player IS here, and a feed spells them differently enough that neither
+    normalisation nor similarity connects the two.
+
+    Consulted immediately after a cached provider id and BEFORE any automatic
+    matching, so a human decision always beats the algorithm — including
+    overriding a fuzzy match that landed on the wrong player, which is the more
+    dangerous failure and the one an alias most needs to be able to correct.
+
+    `source` blank means "every source", which is usually right: feeds tend to
+    disagree with this DB the same way. Set it only to fix one provider.
+    """
+
+    # Blank = applies to every source.
+    source = models.CharField(max_length=16, blank=True, default='')
+    # The name exactly as the feed sends it, kept verbatim for readability.
+    # Lookups normalise both sides, so punctuation and case don't matter.
+    feed_name = models.CharField(max_length=100)
+    position = models.CharField(max_length=10)
+    player = models.ForeignKey('Player', on_delete=models.CASCADE,
+                               related_name='adp_aliases')
+    note = models.CharField(max_length=200, blank=True, default='')
+
+    class Meta:
+        unique_together = ('source', 'feed_name', 'position')
+        ordering = ('feed_name',)
+        verbose_name_plural = 'ADP player aliases'
+
+    def __str__(self):
+        scope = self.source or 'all sources'
+        return '%s (%s) -> %s [%s]' % (self.feed_name, self.position, self.player.name, scope)

@@ -544,3 +544,35 @@ class AdpSourceSyncAdmin(admin.ModelAdmin):
 
 
 admin.site.register(d.AdpSourceSync, AdpSourceSyncAdmin)
+
+
+class AdpPlayerAliasAdmin(admin.ModelAdmin):
+    """Hand-made feed-name -> Player links.
+
+    Reached from the "unmatched" list on the Sync ADP result page, which links
+    here with the name, position and source prefilled — the only ergonomic way
+    to work through a list of misses.
+
+    Worth knowing before using it: most unmatched rows are NOT spelling
+    problems, they are players this DB does not carry (rookies, and anyone added
+    to a feed since the last FFC refresh). An alias cannot conjure a Player row.
+    If the name has no counterpart here, run "Refresh ADP + prices" instead —
+    that is the only thing that creates players.
+    """
+
+    list_display = ('feed_name', 'position', 'player', 'source', 'note')
+    list_filter = ('source', 'position')
+    search_fields = ('feed_name', 'player__name')
+    autocomplete_fields = ('player',)
+    fields = ('feed_name', 'position', 'player', 'source', 'note')
+
+    def get_changeform_initial_data(self, request):
+        # Prefilled by the links on the sync result page.
+        return {
+            'feed_name': request.GET.get('feed_name', ''),
+            'position': request.GET.get('position', ''),
+            'source': request.GET.get('source', ''),
+        }
+
+
+admin.site.register(d.AdpPlayerAlias, AdpPlayerAliasAdmin)
