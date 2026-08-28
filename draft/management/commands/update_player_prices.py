@@ -63,7 +63,7 @@ class Command(BaseCommand):
                         defaults={
                             'name': player_json['name'],
                             'position': player_json['position'],
-                            'adp_formatted': player_json['adp_formatted'],
+                            'adp_formatted': player_ct + 1,  # integer RANK, not round.pick
                             'projected_price': projected_price
                         }
                     )

@@ -3,8 +3,8 @@
 One staff click does four things and reports each in the browser:
 
   1. re-pull ADP from the FFC feed, upserting players
-  2. recompute projected prices from that ADP  (same import — step 2 is not
-                                                separable from step 1)
+  2. recompute projected prices from that ADP  (same import — inside THIS
+                                                pipeline the two are one step)
   3. list the players the refresh CREATED
   4. optionally backfill ONE draft's available-player pool, and list what it
      added
@@ -24,8 +24,15 @@ Lives here, not in admin.py, so the pipeline is testable without a request and
 the action stays thin. The FFC import itself is NOT reimplemented — it comes
 from add_players.refresh_players_from_ffc, the same call the management commands
 make.
+
+NOT the only ADP path any more. draft/services/adp/ splits pulling a source from
+pricing off it, so several providers can be stored side by side and toggled
+without an API call. This pipeline is unchanged and remains the FFC ROSTER path —
+the only thing that creates players. Use it to pick up players new to the feed;
+use sync_adp / apply_adp_source to choose which market prices them.
 """
 
+import contextlib
 import dataclasses
 import logging
 
@@ -77,6 +84,26 @@ class _WarningCollector(logging.Handler):
         self.records.append(self.format(record))
 
 
+@contextlib.contextmanager
+def capture_draft_warnings():
+    """Collect WARNING+ from anywhere under the `draft` logger for the duration
+    of a block, so an admin page can print what a long inline run complained
+    about.
+
+    Shared with the multi-source ADP admin views (draft/services/adp/), where
+    fuzzy player matches are logged at WARNING precisely so they surface here
+    for a human to eyeball.
+    """
+    collector = _WarningCollector()
+    collector.setFormatter(logging.Formatter('%(levelname)s %(name)s: %(message)s'))
+    draft_logger = logging.getLogger('draft')
+    draft_logger.addHandler(collector)
+    try:
+        yield collector
+    finally:
+        draft_logger.removeHandler(collector)
+
+
 def refresh_and_sync(draft=None):
     """Run the pipeline and return a RefreshReport. `draft` is optional: without
     one, steps 1-3 run and step 4 is skipped.
@@ -86,15 +113,9 @@ def refresh_and_sync(draft=None):
     action. Every step is individually idempotent, which is what makes a retry
     after a timeout safe.
     """
-    collector = _WarningCollector()
-    collector.setFormatter(logging.Formatter('%(levelname)s %(name)s: %(message)s'))
-    draft_logger = logging.getLogger('draft')
-    draft_logger.addHandler(collector)
-    try:
+    with capture_draft_warnings() as collector:
         summary = refresh_players_from_ffc()       # steps 1 + 2
         picks_added = draft.add_missing_players() if draft else []   # step 4
-    finally:
-        draft_logger.removeHandler(collector)
 
     return RefreshReport(
         draft_name=draft.draft_name if draft else None,

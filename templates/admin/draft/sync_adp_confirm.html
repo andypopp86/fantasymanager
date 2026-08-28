@@ -1,0 +1,53 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<h1>Sync ADP sources &mdash; {{ current_year }}</h1>
+
+<p>
+    Pulls each selected provider's ADP into its own column on Player. This is the
+    <strong>safe half</strong> of the flow: it writes only <code>adp_&lt;source&gt;</code>
+    (plus the cached provider id), and never touches <code>adp_formatted</code>, any
+    price, or the player list itself. Nothing the draft board shows will change.
+</p>
+
+<ul class="messagelist">
+    <li class="info">
+        Rows that match no player in this database are <strong>reported, not created</strong>.
+        Fantasy Football Calculator stays the roster source &mdash; use
+        &ldquo;Refresh ADP + prices&rdquo; to pick up players new to the feed.
+    </li>
+    <li class="warning">
+        Runs inline and hits each provider's API, so it takes a few seconds per source.
+        Safe to re-run; it is idempotent.
+    </li>
+</ul>
+
+<form method="post">{% csrf_token %}
+    <fieldset class="module aligned">
+        {% for source, record in statuses %}
+        <div class="form-row">
+            <label for="id_source_{{ source.key }}" style="width: auto;">
+                <input type="checkbox" name="sources" value="{{ source.key }}"
+                       id="id_source_{{ source.key }}" checked>
+                {{ source.label }}
+            </label>
+            <p class="help">
+                {% if record %}
+                    Last synced {{ record.synced_at|date:"Y-m-d H:i" }} &mdash;
+                    {{ record.matched }} matched, {{ record.unmatched }} unmatched{% if record.sample_size %},
+                    {{ record.sample_size }} {{ source.sample_unit }}{% endif %}.
+                    {% if record.is_active %}<strong>Currently the effective source.</strong>{% endif %}
+                {% else %}
+                    Never synced.
+                {% endif %}
+                {% if source.caveat %}<br><em>{{ source.caveat }}</em>{% endif %}
+            </p>
+        </div>
+        {% endfor %}
+    </fieldset>
+    <div class="submit-row">
+        <input type="submit" class="default" value="Sync selected sources">
+        <a href="../" class="button cancel-link">No, take me back</a>
+    </div>
+</form>
+{% endblock %}

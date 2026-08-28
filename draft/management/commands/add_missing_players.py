@@ -33,7 +33,9 @@ def load_player(player, year):
         position=player['position'],
         team=team,
         year=year,
-        adp_formatted="15.1",
+        # ADP is an integer RANK now; 999 parks a hand-added player at the
+        # back of the board until the next rerank places them properly.
+        adp_formatted=999,
         projected_price=1,
     )
     print(f"Loaded player {player_obj.name} ({player_obj.position}) for {year} with ID {player_obj.player_id}. Created: {was_created}")

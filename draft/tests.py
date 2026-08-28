@@ -28,7 +28,7 @@ def make_player(name, position, year=2026, player_id=None):
         player_id=player_id or Player.objects.count() + 1,
         name=name,
         position=position,
-        adp_formatted=1.0,
+        adp_formatted=1,
         projected_price=10,
         year=year,
     )
@@ -1009,3 +1009,678 @@ class MockDraftAPITests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual([draft["draft_name"] for draft in response.data], [visible.draft_name])
+
+
+# ---------------------------------------------------------------------------
+# Multi-source ADP
+# ---------------------------------------------------------------------------
+
+class AdpMatchingTests(TestCase):
+    """The matcher is the part of multi-source ADP that can be WRONG rather than
+    merely broken: a bad match silently gives one player another's ADP, and the
+    price curve then prices him on it. These lock down the ladder in
+    draft/services/adp/matching.py."""
+
+    def _row(self, name, position, team='ATL', pick=10.0, provider_id='x1'):
+        from draft.services.adp.rows import AdpRow
+        return AdpRow(provider_id=provider_id, name=name, position=position,
+                      team_code=team, sort_value=pick)
+
+    def _matcher(self, **kwargs):
+        from draft.services.adp.matching import PlayerMatcher
+        return PlayerMatcher(2026, **kwargs)
+
+    def test_normalize_folds_punctuation_accents_and_suffixes(self):
+        from draft.services.adp.matching import normalize_name
+
+        self.assertEqual(normalize_name("Ja'Marr Chase"), 'ja marr chase')
+        self.assertEqual(normalize_name('Marvin Harrison Jr.'), 'marvin harrison')
+        self.assertEqual(normalize_name('Kenneth Walker III'), 'kenneth walker')
+        # Accents are folded, so a feed that spells a name either way still hits.
+        self.assertEqual(normalize_name('Austin Ekelér'), 'austin ekeler')
+
+    def test_flip_comma_name_handles_mfl_format_and_suffixes(self):
+        from draft.services.adp.matching import flip_comma_name, normalize_name
+
+        self.assertEqual(flip_comma_name('Gibbs, Jahmyr'), 'Jahmyr Gibbs')
+        # MFL keeps the suffix on the SURNAME side; normalising drops it anyway.
+        self.assertEqual(flip_comma_name('Walker III, Kenneth'), 'Kenneth Walker III')
+        self.assertEqual(normalize_name(flip_comma_name('Walker III, Kenneth')),
+                         normalize_name('Kenneth Walker'))
+        # A name with no comma must pass through untouched, so this is safe to
+        # call on every feed.
+        self.assertEqual(flip_comma_name('Jahmyr Gibbs'), 'Jahmyr Gibbs')
+
+    def test_exact_name_and_position_match(self):
+        player = make_player('Jahmyr Gibbs', 'RB')
+        result = self._matcher().match(self._row('Jahmyr Gibbs', 'RB'))
+        self.assertEqual(result.player, player)
+        self.assertEqual(result.method, 'exact')
+
+    def test_same_name_different_position_does_not_collide(self):
+        """Josh Allen the QB and Josh Allen the edge rusher both appear in MFL's
+        feed. Position is part of the key precisely so the RB never inherits the
+        QB's ADP."""
+        qb = make_player('Josh Allen', 'QB')
+        make_player('Josh Allen', 'WR')
+        result = self._matcher().match(self._row('Josh Allen', 'QB'))
+        self.assertEqual(result.player, qb)
+
+    def test_fuzzy_match_within_position(self):
+        player = make_player('DJ Moore', 'WR')
+        result = self._matcher().match(self._row('D.J. Moore', 'WR'))
+        self.assertEqual(result.player, player)
+        self.assertTrue(result.is_fuzzy)
+
+    def test_fuzzy_never_crosses_position(self):
+        make_player('DJ Moore', 'WR')
+        result = self._matcher().match(self._row('D.J. Moore', 'RB'))
+        self.assertFalse(result.matched)
+
+    def test_unrelated_name_is_a_miss_not_a_guess(self):
+        make_player('Jahmyr Gibbs', 'RB')
+        result = self._matcher().match(self._row('Bijan Robinson', 'RB'))
+        self.assertFalse(result.matched)
+        self.assertIsNone(result.player)
+
+    def test_defense_matches_on_team_code_across_dialects(self):
+        """The three feeds name the same defense three different ways, so DEF is
+        matched on team CODE — and the codes themselves need folding: MFL says
+        GBP where this DB says GB."""
+        from draft.models import NFLTeam
+
+        team = NFLTeam.objects.create(code='GB', year=2026)
+        defense = make_player('Green Bay Defense', 'DEF')
+        Player.objects.filter(pk=defense.pk).update(team=team)
+
+        matcher = self._matcher()
+        for feed_name, feed_code in [('Green Bay Defense', 'GB'),
+                                     ('Packers, Green Bay', 'GBP'),
+                                     ('Green Bay Packers', 'GB')]:
+            result = matcher.match(self._row(feed_name, 'DEF', team=feed_code))
+            self.assertEqual(result.player, defense, f'{feed_name} / {feed_code}')
+            self.assertEqual(result.method, 'team')
+
+    def test_jacksonville_code_alias(self):
+        """FantasyPros says JAC, this DB says JAX — the alias that was silently
+        dropping a defense before it was caught."""
+        from draft.models import NFLTeam
+
+        team = NFLTeam.objects.create(code='JAX', year=2026)
+        defense = make_player('Jacksonville Defense', 'DEF')
+        Player.objects.filter(pk=defense.pk).update(team=team)
+
+        result = self._matcher().match(
+            self._row('Jacksonville Jaguars', 'DEF', team='JAC'))
+        self.assertEqual(result.player, defense)
+
+    def test_defense_without_a_team_link_falls_back_to_city(self):
+        """This DB really does have a defense with no team FK. Without the city
+        fallback it could never receive ADP from any source."""
+        make_player('Washington Defense', 'DEF')
+        result = self._matcher().match(
+            self._row('Washington Commanders', 'DEF', team='WAS'))
+        self.assertIsNotNone(result.player)
+        self.assertEqual(result.player.name, 'Washington Defense')
+
+    def test_cached_provider_id_short_circuits_name_matching(self):
+        """Once an id is learned, the name is irrelevant — which is what stops
+        the fuzzy pass re-rolling its dice every sync."""
+        player = make_player('Jahmyr Gibbs', 'RB')
+        Player.objects.filter(pk=player.pk).update(mfl_id='16162')
+
+        result = self._matcher(id_field='mfl_id').match(
+            self._row('Completely Different Name', 'RB', provider_id='16162'))
+        self.assertEqual(result.player, player)
+        self.assertEqual(result.method, 'id')
+
+    def test_alias_resolves_a_name_the_matcher_cannot(self):
+        """The hand-match escape hatch: the player IS here, spelled differently
+        enough that neither normalisation nor similarity connects them."""
+        from draft.models import AdpPlayerAlias
+
+        player = make_player('Marquise Brown', 'WR')
+        AdpPlayerAlias.objects.create(
+            feed_name='Hollywood Brown', position='WR', player=player)
+
+        result = self._matcher(source_key='mfl').match(
+            self._row('Hollywood Brown', 'WR'))
+        self.assertEqual(result.player, player)
+        self.assertEqual(result.method, 'alias')
+
+    def test_alias_overrides_a_wrong_fuzzy_match(self):
+        """The more dangerous failure is not a miss, it's a confident WRONG
+        match. An alias has to be able to correct one, which is why it sits
+        above every automatic rule."""
+        from draft.models import AdpPlayerAlias
+
+        make_player('DJ Moore', 'WR')
+        intended = make_player('DJ Chark', 'WR')
+        # Without the alias this fuzzy-matches to DJ Moore.
+        self.assertEqual(
+            self._matcher().match(self._row('D.J. Moore', 'WR')).player.name,
+            'DJ Moore')
+
+        AdpPlayerAlias.objects.create(
+            feed_name='D.J. Moore', position='WR', player=intended)
+
+        result = self._matcher(source_key='mfl').match(self._row('D.J. Moore', 'WR'))
+        self.assertEqual(result.player, intended)
+        self.assertEqual(result.method, 'alias')
+
+    def test_alias_scoped_to_one_source_does_not_leak_to_another(self):
+        from draft.models import AdpPlayerAlias
+
+        player = make_player('Real Player', 'RB')
+        AdpPlayerAlias.objects.create(
+            source='mfl', feed_name='Odd Spelling', position='RB', player=player)
+
+        self.assertEqual(
+            self._matcher(source_key='mfl').match(self._row('Odd Spelling', 'RB')).player,
+            player)
+        self.assertFalse(
+            self._matcher(source_key='fpros').match(self._row('Odd Spelling', 'RB')).matched)
+
+    def test_alias_matching_ignores_punctuation_and_case(self):
+        from draft.models import AdpPlayerAlias
+
+        player = make_player('Marquise Brown', 'WR')
+        AdpPlayerAlias.objects.create(
+            feed_name="Hollywood Brown", position='WR', player=player)
+
+        result = self._matcher(source_key='mfl').match(
+            self._row("HOLLYWOOD  BROWN", 'WR'))
+        self.assertEqual(result.player, player)
+
+    def test_remember_is_a_noop_when_ids_are_not_persisted(self):
+        """FFC's provider id IS Player.player_id, so it must be read but never
+        written back."""
+        player = make_player('Jahmyr Gibbs', 'RB', player_id=5672)
+        matcher = self._matcher(id_field='player_id', persist_id=False)
+        self.assertFalse(matcher.remember(player, '9999'))
+        self.assertEqual(player.player_id, 5672)
+
+
+class AdpProviderParseTests(TestCase):
+    """Feed parsing, against fabricated payloads shaped like the real ones. No
+    network: these have to keep passing when a provider is unreachable."""
+
+    def _mfl_players(self):
+        return {'players': {'player': [
+            {'id': '16162', 'name': 'Gibbs, Jahmyr', 'position': 'RB', 'team': 'DET'},
+            {'id': '9001', 'name': 'Backer, Line', 'position': 'LB', 'team': 'CHI'},
+            {'id': '9002', 'name': 'Boot, Kick', 'position': 'PK', 'team': 'CHI'},
+            {'id': '0151', 'name': 'Texans, Houston', 'position': 'Def', 'team': 'HOU'},
+        ]}}
+
+    def test_mfl_drops_kickers_and_idp_and_flips_names(self):
+        from draft.services.adp.providers import mfl
+
+        aav_payload = {'aav': {
+            'totalAuctions': '232',
+            'player': [
+                {'id': '16162', 'rank': '1', 'averageValue': '27.50'},
+                {'id': '9001', 'rank': '2', 'averageValue': '12.00'},   # IDP linebacker
+                {'id': '9002', 'rank': '3', 'averageValue': '3.00'},    # kicker
+                {'id': '0151', 'rank': '4', 'averageValue': '1.50'},    # team defense
+            ],
+        }}
+
+        result = mfl.parse(aav_payload, self._mfl_players())
+
+        # IDP and kickers must never reach the price curve.
+        self.assertEqual([row.position for row in result.rows], ['RB', 'DEF'])
+        self.assertEqual(result.rows[0].name, 'Jahmyr Gibbs')
+        self.assertEqual(result.rows[0].provider_id, '16162')
+        # MFL's own rank is the sort key; the dollar value is not stored.
+        self.assertEqual(result.rows[0].sort_value, 1)
+        self.assertEqual(result.sample_size, 232)
+
+    def test_mfl_falls_back_to_negated_value_when_rank_is_missing(self):
+        """sort_value is ASCENDING but auction values run the other way, so the
+        fallback has to invert or the board comes out backwards."""
+        from draft.services.adp.providers import mfl
+
+        result = mfl.parse(
+            {'aav': {'totalAuctions': '1', 'player': [
+                {'id': '16162', 'averageValue': '27.50'},
+                {'id': '0151', 'averageValue': '1.50'},
+            ]}},
+            self._mfl_players(),
+        )
+
+        self.assertEqual([row.sort_value for row in result.rows], [-27.5, -1.5])
+        # The expensive player must sort FIRST.
+        self.assertLess(result.rows[0].sort_value, result.rows[1].sort_value)
+
+    def test_mfl_skips_an_aav_id_with_no_player_row(self):
+        from draft.services.adp.providers import mfl
+
+        result = mfl.parse(
+            {'aav': {'totalAuctions': '1',
+                     'player': [{'id': 'ghost', 'rank': '1', 'averageValue': '5'}]}},
+            {'players': {'player': []}},
+        )
+        self.assertEqual(result.rows, [])
+
+    def test_fpros_maps_dst_and_uses_ecr_rank(self):
+        from draft.services.adp.providers import fpros
+
+        payload = {
+            'total_experts': 109,
+            'players': [
+                {'player_id': '22968', 'player_name': 'Jahmyr Gibbs',
+                 'player_position_id': 'RB', 'player_team_id': 'DET', 'rank_ecr': 1},
+                {'player_id': '1', 'player_name': 'Houston Texans',
+                 'player_position_id': 'DST', 'player_team_id': 'HOU', 'rank_ecr': 188},
+                {'player_id': '2', 'player_name': 'Kick Er',
+                 'player_position_id': 'K', 'player_team_id': 'HOU', 'rank_ecr': 200},
+            ],
+        }
+
+        result = fpros.parse(payload)
+
+        self.assertEqual([row.position for row in result.rows], ['RB', 'DEF'])
+        # The rank stands in for an average pick — FantasyPros has no ADP for
+        # unauthenticated callers.
+        self.assertEqual(result.rows[0].sort_value, 1)
+        self.assertEqual(result.rows[1].sort_value, 188)
+        self.assertEqual(result.sample_size, 109)
+
+    def test_ffc_stores_raw_adp_not_the_round_pick_string(self):
+        """The parser must read the feed's RAW `adp`, not its round.pick
+        `adp_formatted` string — the sync ranks on this value, so reading "1.01"
+        instead of 1.5 would scramble the ordering."""
+        from draft.services.adp.providers import ffc
+
+        payload = {'meta': {'total_drafts': 3144}, 'players': [
+            {'player_id': 5672, 'name': 'Jahmyr Gibbs', 'position': 'RB',
+             'team': 'DET', 'adp': 1.5, 'adp_formatted': '1.01'},
+            {'player_id': 9, 'name': 'Kick Er', 'position': 'PK',
+             'team': 'DET', 'adp': 150.0, 'adp_formatted': '15.01'},
+        ]}
+
+        result = ffc.parse(payload)
+
+        self.assertEqual(len(result.rows), 1)
+        self.assertEqual(result.rows[0].sort_value, 1.5)
+        self.assertEqual(result.sample_size, 3144)
+
+
+class AdpSyncTests(TestCase):
+    """A sync's defining property is what it LEAVES ALONE. If these fail, the
+    sync has grown the power to move the board."""
+
+    def setUp(self):
+        self.player = make_player('Jahmyr Gibbs', 'RB')
+        Player.objects.filter(pk=self.player.pk).update(
+            adp_formatted=305, projected_price=44)
+
+    def _feed(self, *rows):
+        from draft.services.adp.rows import AdpRow, FeedResult
+        return FeedResult(rows=[AdpRow(*row) for row in rows], sample_size=692)
+
+    def _sync(self, feed, **kwargs):
+        from draft.services.adp import sync as sync_module
+        source = sync_module.get_source('mfl')
+        patched = type(source)(**{**source.__dict__, 'fetch': lambda year: feed})
+        with mock.patch.object(sync_module, 'get_source', return_value=patched):
+            return sync_module.sync_source('mfl', year=2026, **kwargs)
+
+    def test_writes_only_its_own_column(self):
+        summary = self._sync(self._feed(('16162', 'Jahmyr Gibbs', 'RB', 'DET', 18.69)))
+
+        self.player.refresh_from_db()
+        self.assertEqual(summary.matched, 1)
+        # The column stores a RANK, not the feed's 18.69.
+        self.assertEqual(self.player.adp_mfl, 1)
+        self.assertEqual(self.player.mfl_id, '16162')
+        # The whole point: the board is untouched until apply_adp_source runs.
+        self.assertEqual(self.player.adp_formatted, 305)
+        self.assertEqual(int(self.player.projected_price), 44)
+        self.assertIsNone(self.player.adp_ffc)
+
+    def test_unmatched_rows_are_reported_and_never_created(self):
+        summary = self._sync(self._feed(('99', 'Nobody At All', 'WR', 'ATL', 5.0)))
+
+        self.assertEqual(summary.matched, 0)
+        self.assertEqual(summary.unmatched_names, ['Nobody At All (WR)'])
+        self.assertEqual(Player.objects.filter(year=2026).count(), 1)
+
+    def test_unmatched_rows_carry_the_feed_rank(self):
+        """Rank is what makes the list actionable: a miss at 40 matters, one at
+        700 is a bench player this board would never draft."""
+        summary = self._sync(self._feed(
+            ('98', 'Deep Guy', 'WR', 'ATL', 190.0),
+            ('99', 'Early Guy', 'RB', 'ATL', 12.0),
+        ))
+
+        self.assertEqual([(r.name, r.feed_rank) for r in summary.unmatched_rows],
+                         [('Early Guy', 1), ('Deep Guy', 2)])
+
+    def test_top_unmatched_cuts_off_past_the_feeds_top_200(self):
+        rows = [(str(i), f'Player {i}', 'WR', 'ATL', float(i)) for i in range(1, 206)]
+        summary = self._sync(self._feed(*rows))
+
+        self.assertEqual(summary.unmatched, 205)
+        self.assertEqual(len(summary.top_unmatched), 200)
+        self.assertEqual(summary.top_unmatched[-1].feed_rank, 200)
+
+    def test_an_alias_turns_an_unmatched_row_into_a_match(self):
+        """End to end: the escape hatch the admin's "Map to a player" link
+        writes actually feeds back into the next sync."""
+        from draft.models import AdpPlayerAlias
+
+        feed = self._feed(('77', 'Hollywood Brown', 'WR', 'ATL', 30.0))
+        self.assertEqual(self._sync(feed).matched, 0)
+
+        target = make_player('Marquise Brown', 'WR')
+        AdpPlayerAlias.objects.create(
+            feed_name='Hollywood Brown', position='WR', player=target)
+
+        summary = self._sync(feed)
+        target.refresh_from_db()
+        self.assertEqual(summary.matched, 1)
+        self.assertEqual(summary.unmatched, 0)
+        self.assertEqual(target.adp_mfl, 1)
+
+    def test_dry_run_writes_nothing(self):
+        summary = self._sync(
+            self._feed(('16162', 'Jahmyr Gibbs', 'RB', 'DET', 18.69)), dry_run=True)
+
+        self.player.refresh_from_db()
+        self.assertEqual(summary.matched, 1)
+        self.assertIsNone(self.player.adp_mfl)
+        self.assertFalse(Player.objects.exclude(mfl_id=None).exists())
+
+    def test_a_failing_feed_is_reported_not_raised(self):
+        """One dead provider must not abort a multi-source run."""
+        from draft.services.adp import sync as sync_module
+
+        source = sync_module.get_source('mfl')
+
+        def boom(year):
+            raise RuntimeError('503 Service Unavailable')
+
+        patched = type(source)(**{**source.__dict__, 'fetch': boom})
+        with mock.patch.object(sync_module, 'get_source', return_value=patched):
+            summary = sync_module.sync_source('mfl', year=2026)
+
+        self.assertFalse(summary.ok)
+        self.assertIn('503', summary.error)
+
+
+class ApplyAdpSourceTests(TestCase):
+    """Toggling the effective source: what gets re-derived, and what is
+    deliberately left alone."""
+
+    def setUp(self):
+        from draft.models import AdpSourceSync
+
+        self.ranked = make_player('Ranked RB', 'RB')
+        self.other = make_player('Other WR', 'WR')
+        # Covered by no source — the coverage-gap case.
+        self.unranked = make_player('Uncovered TE', 'TE')
+        Player.objects.filter(pk=self.ranked.pk).update(
+            adp_mfl=1, adp_formatted=99, projected_price=5)
+        Player.objects.filter(pk=self.other.pk).update(
+            adp_mfl=2, adp_formatted=1, projected_price=70)
+        Player.objects.filter(pk=self.unranked.pk).update(
+            adp_formatted=44, projected_price=33)
+        AdpSourceSync.objects.create(source='mfl', year=2026, matched=2)
+
+    def test_adp_formatted_is_a_dense_rank(self):
+        """1 is the first player off the board, with no gaps — not round.pick,
+        not the feed's own number."""
+        from draft.services.adp.apply import apply_source
+
+        apply_source('mfl', year=2026, price_basis='none')
+
+        ranks = sorted(Player.objects.filter(year=2026, adp_source='mfl')
+                       .values_list('adp_formatted', flat=True))
+        self.assertEqual(ranks, [1, 2])
+
+    def test_ranked_players_are_re_derived_and_re_priced(self):
+        from draft.services.adp.apply import apply_source
+
+        report = apply_source('mfl', year=2026, price_basis='default')
+
+        self.ranked.refresh_from_db()
+        self.other.refresh_from_db()
+        self.assertEqual(report.ranked, 2)
+        # The source's own ordering becomes ranks 1 and 2 — no arithmetic.
+        self.assertEqual(self.ranked.adp_formatted, 1)
+        self.assertEqual(self.other.adp_formatted, 2)
+        self.assertEqual(self.ranked.adp_source, 'mfl')
+        # Priced by ADP ORDER, so the first-ranked player takes the top of the
+        # curve regardless of what he was worth under the previous source.
+        self.assertGreater(self.ranked.projected_price, self.other.projected_price)
+
+    def test_players_the_source_does_not_rank_are_left_untouched(self):
+        """The user's rule: a sync/apply adds data, it does not overwrite. A
+        coverage gap must not bury a real player or wipe his price."""
+        from draft.services.adp.apply import apply_source
+
+        report = apply_source('mfl', year=2026, price_basis='default')
+
+        self.unranked.refresh_from_db()
+        self.assertEqual(report.unranked, 1)
+        self.assertEqual(self.unranked.adp_formatted, 44)
+        self.assertEqual(int(self.unranked.projected_price), 33)
+        # Marked, so the gap is findable in /admin.
+        self.assertEqual(self.unranked.adp_source, '')
+
+    def test_no_historical_picks_leaves_prices_alone(self):
+        """Preserves the existing guard: silently flattening every price looks
+        identical to success."""
+        from draft.services.adp.apply import apply_source
+
+        report = apply_source('mfl', year=2026, price_basis='historical')
+
+        self.ranked.refresh_from_db()
+        self.assertEqual(report.priced, 0)
+        self.assertEqual(int(self.ranked.projected_price), 5)
+        # ADP still moves — only pricing is withheld.
+        self.assertEqual(self.ranked.adp_formatted, 1)
+
+    def test_price_basis_none_moves_adp_only(self):
+        from draft.services.adp.apply import apply_source
+
+        apply_source('mfl', year=2026, price_basis='none')
+
+        self.ranked.refresh_from_db()
+        self.assertEqual(int(self.ranked.projected_price), 5)
+        self.assertEqual(self.ranked.adp_formatted, 1)
+
+    def test_dry_run_writes_nothing(self):
+        from draft.services.adp.apply import active_source, apply_source
+
+        report = apply_source('mfl', year=2026, price_basis='default', dry_run=True)
+
+        self.ranked.refresh_from_db()
+        self.assertEqual(report.ranked, 2)
+        self.assertEqual(self.ranked.adp_formatted, 99)
+        self.assertEqual(active_source(2026), '')
+
+    def test_applying_marks_exactly_one_source_active(self):
+        from draft.models import AdpSourceSync
+        from draft.services.adp.apply import active_source, apply_source
+
+        AdpSourceSync.objects.create(source='ffc', year=2026, is_active=True)
+
+        apply_source('mfl', year=2026, price_basis='none')
+
+        self.assertEqual(active_source(2026), 'mfl')
+        self.assertEqual(
+            AdpSourceSync.objects.filter(year=2026, is_active=True).count(), 1)
+
+    def test_unknown_source_is_rejected(self):
+        from draft.services.adp.apply import apply_source
+
+        with self.assertRaises(ValueError):
+            apply_source('espn', year=2026)
+
+
+class AdpRerankTests(TestCase):
+    """`rerank_year` is what keeps every ADP column a dense 1..N. It has to be
+    safe to run at any time, because it runs after every FFC refresh — a refresh
+    that creates a player mid-board would otherwise leave the ranks with a hole
+    or a duplicate."""
+
+    def _rank(self, name, formatted, ffc=None, mfl=None):
+        player = make_player(name, 'RB')
+        Player.objects.filter(pk=player.pk).update(
+            adp_formatted=formatted, adp_ffc=ffc, adp_mfl=mfl)
+        return player
+
+    def test_collapses_arbitrary_values_to_a_dense_index(self):
+        from draft.services.adp.ranking import rerank_year
+
+        self._rank('Third', 900, ffc=77)
+        self._rank('First', 5, ffc=1)
+        self._rank('Second', 40, ffc=12)
+
+        rerank_year(2026)
+
+        ordered = list(Player.objects.filter(year=2026)
+                       .order_by('adp_formatted').values_list('name', 'adp_formatted', 'adp_ffc'))
+        self.assertEqual(ordered, [('First', 1, 1), ('Second', 2, 2), ('Third', 3, 3)])
+
+    def test_is_idempotent(self):
+        """It runs on every refresh, so a second pass must be a no-op rather
+        than shuffling anything."""
+        from draft.services.adp.ranking import rerank_year
+
+        self._rank('A', 10)
+        self._rank('B', 20)
+        self._rank('C', 30)
+
+        rerank_year(2026)
+        second = rerank_year(2026)
+
+        self.assertEqual(second.total_changed, 0)
+        self.assertEqual(
+            list(Player.objects.filter(year=2026).order_by('adp_formatted')
+                 .values_list('name', 'adp_formatted')),
+            [('A', 1), ('B', 2), ('C', 3)])
+
+    def test_a_player_inserted_mid_board_closes_the_gap(self):
+        """The case that makes this mandatory after a refresh: FFC adds a player
+        between two existing ones."""
+        from draft.services.adp.ranking import rerank_year
+
+        self._rank('Early', 1)
+        self._rank('Late', 2)
+        rerank_year(2026)
+
+        newcomer = make_player('Newcomer', 'WR')
+        Player.objects.filter(pk=newcomer.pk).update(adp_formatted=1)
+
+        rerank_year(2026)
+
+        self.assertEqual(
+            sorted(Player.objects.filter(year=2026).values_list('adp_formatted', flat=True)),
+            [1, 2, 3])
+
+    def test_nulls_stay_null(self):
+        """A source that does not rank a player must not be handed an opinion."""
+        from draft.services.adp.ranking import rerank_year
+
+        self._rank('Ranked', 1, mfl=50)
+        self._rank('Unranked By Mfl', 2, mfl=None)
+
+        rerank_year(2026)
+
+        self.assertEqual(Player.objects.get(name='Ranked').adp_mfl, 1)
+        self.assertIsNone(Player.objects.get(name='Unranked By Mfl').adp_mfl)
+
+    def test_ties_break_on_name_so_the_result_is_deterministic(self):
+        from draft.services.adp.ranking import rerank_year
+
+        self._rank('Zebra', 7)
+        self._rank('Aardvark', 7)
+
+        rerank_year(2026)
+
+        self.assertEqual(Player.objects.get(name='Aardvark').adp_formatted, 1)
+        self.assertEqual(Player.objects.get(name='Zebra').adp_formatted, 2)
+
+    def test_does_not_touch_prices(self):
+        """Player.save() floors projected_price at 1; reranking must not go
+        through it."""
+        from draft.services.adp.ranking import rerank_year
+
+        player = self._rank('Priced', 500)
+        Player.objects.filter(pk=player.pk).update(projected_price=44)
+
+        rerank_year(2026)
+
+        player.refresh_from_db()
+        self.assertEqual(int(player.projected_price), 44)
+        self.assertEqual(player.adp_formatted, 1)
+
+    def test_dry_run_reports_without_writing(self):
+        from draft.services.adp.ranking import rerank_year
+
+        self._rank('A', 90)
+        self._rank('B', 10)
+
+        report = rerank_year(2026, dry_run=True)
+
+        self.assertEqual(report.total_changed, 2)
+        self.assertEqual(Player.objects.get(name='A').adp_formatted, 90)
+
+    def test_year_is_isolated(self):
+        from draft.services.adp.ranking import rerank_year
+
+        other = make_player('Other Season', 'RB', year=2025)
+        Player.objects.filter(pk=other.pk).update(adp_formatted=888)
+        self._rank('This Season', 400)
+
+        rerank_year(2026)
+
+        self.assertEqual(Player.objects.get(name='This Season').adp_formatted, 1)
+        self.assertEqual(Player.objects.get(name='Other Season').adp_formatted, 888)
+
+    def test_rejects_a_column_that_is_not_an_adp_rank(self):
+        from draft.services.adp.ranking import rerank_year
+
+        with self.assertRaises(ValueError):
+            rerank_year(2026, columns=['projected_price'])
+
+
+class FfcRefreshReranksTests(TestCase):
+    """The FFC refresh is the reason reranking is automatic: it creates players
+    and writes feed-order values, so the ranks have to be rebuilt afterwards or
+    the board carries duplicates."""
+
+    def test_refresh_leaves_every_column_densely_ranked(self):
+        from draft.management.commands import add_players
+
+        # A player NOT in the feed, holding a stale rank that would otherwise
+        # collide with the freshly imported ones.
+        stale = make_player('Off Feed WR', 'WR', player_id=9001)
+        Player.objects.filter(pk=stale.pk).update(adp_formatted=1, adp_ffc=None)
+
+        feed = {'meta': {'total_drafts': 10}, 'players': [
+            {'player_id': 5001, 'name': 'Feed One', 'position': 'RB',
+             'team': 'ATL', 'adp': 1.5, 'adp_formatted': '1.01'},
+            {'player_id': 5002, 'name': 'Feed Two', 'position': 'WR',
+             'team': 'ATL', 'adp': 12.5, 'adp_formatted': '2.03'},
+            {'player_id': 5003, 'name': 'Kick Er', 'position': 'PK',
+             'team': 'ATL', 'adp': 99.0, 'adp_formatted': '10.09'},
+        ]}
+
+        with mock.patch.object(add_players, 'get_data', return_value=feed):
+            summary = add_players.refresh_players_from_ffc(year=2026)
+
+        self.assertIsNotNone(summary.rerank)
+        ranks = sorted(Player.objects.filter(year=2026)
+                       .values_list('adp_formatted', flat=True))
+        # Three players (the kicker is dropped), densely ranked with no clash
+        # between the newcomers and the off-feed holdover.
+        self.assertEqual(ranks, [1, 2, 3])
+        # The feed's round.pick string is never stored.
+        self.assertEqual(Player.objects.get(name='Feed One').adp_ffc, 1)
+        self.assertEqual(Player.objects.get(name='Feed Two').adp_ffc, 2)
+        self.assertIsNone(Player.objects.get(name='Off Feed WR').adp_ffc)

@@ -1,0 +1,88 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<h1>{{ report.label }} is now the effective ADP &mdash; {{ report.year }}</h1>
+
+<ul class="messagelist">
+    <li class="success">
+        {{ report.ranked }} player(s) re-derived from this source.
+    </li>
+    {% if report.caveat %}
+    <li class="warning">{{ report.caveat }}</li>
+    {% endif %}
+    {% if not report.synced_at %}
+    <li class="error">
+        This source has never been synced, so nothing was ranked. Run
+        &ldquo;Sync ADP sources&rdquo; first.
+    </li>
+    {% endif %}
+</ul>
+
+{% if warnings %}
+<h2>Warnings</h2>
+<pre>{% for line in warnings %}{{ line }}
+{% endfor %}</pre>
+{% endif %}
+
+<ul>
+    <li>Synced {{ report.synced_at|date:"Y-m-d H:i"|default:"never" }}.</li>
+    {% if report.previous_source and report.previous_source != report.source %}
+    <li>Previous effective source: <code>{{ report.previous_source }}</code>.</li>
+    {% endif %}
+    <li>
+        <strong>{{ report.unranked }}</strong> player(s) are not ranked by this source &mdash;
+        their ADP and price were left exactly as the previous source set them. Filter the
+        player list by an empty <code>adp_source</code> to see them.
+    </li>
+    <li>Pricing: {{ report.price_note }}{% if report.priced %} ({{ report.priced }} recalculated){% endif %}.</li>
+</ul>
+
+<h2>Top 25</h2>
+<table>
+    <thead>
+        <tr><th>#</th><th>ADP</th><th>Player</th><th>Position</th><th>Projected price</th></tr>
+    </thead>
+    <tbody>
+        {% for player in report.top %}
+        <tr>
+            <td>{{ forloop.counter }}</td>
+            <td>{{ player.adp_formatted }}</td>
+            <td>{{ player.name }}</td>
+            <td>{{ player.position }}</td>
+            <td>{{ player.projected_price }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% if report.movers %}
+<h2>Biggest ADP moves</h2>
+<p>
+    Where this source disagrees most with the one it replaced. A large move is not
+    automatically a better read &mdash; a source that ranks fewer players compresses
+    everyone below the gap upwards.
+</p>
+<table>
+    <thead>
+        <tr><th>Player</th><th>Position</th><th>Was</th><th>Now</th><th>Change</th></tr>
+    </thead>
+    <tbody>
+        {% for move in report.movers %}
+        <tr>
+            <td>{{ move.name }}</td>
+            <td>{{ move.position }}</td>
+            <td>{{ move.previous }}</td>
+            <td>{{ move.current }}</td>
+            <td>
+                {% if move.delta_ranks > 0 %}up {{ move.delta_ranks }}{% else %}down {{ move.delta_ranks|cut:"-" }}{% endif %} picks
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+<div class="submit-row">
+    <a href="../" class="button">Back to players</a>
+</div>
+{% endblock %}

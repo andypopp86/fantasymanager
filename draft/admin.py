@@ -5,7 +5,10 @@ from django.template.response import TemplateResponse
 from django.urls import path
 from django.utils import timezone
 from draft import models as d
-from draft.services.draft.adp_refresh import refresh_and_sync
+from draft.services.adp.apply import PRICE_BASIS_CHOICES, apply_source, source_status
+from draft.services.adp.sources import SOURCE_KEYS
+from draft.services.adp.sync import sync_source
+from draft.services.draft.adp_refresh import capture_draft_warnings, refresh_and_sync
 
 class SuccessFilter(admin.SimpleListFilter):
     title = 'Success'
@@ -134,8 +137,13 @@ class RiskBandFilter(admin.SimpleListFilter):
 
 
 class PlayerAdmin(admin.ModelAdmin):
-    # Working order: what you set during prep first, reference columns last.
-    list_display = ('name', 'position', 'team', 'year', 'target_tier', 'years_experience', 'risk_score', 'risk_summary', 'is_projection', 'has_injury', 'defensive_impact', 'projected_price', 'my_price', 'my_price_rationale', 'adp_formatted', 'favorite', 'override_price', 'player_id')
+    # The three per-source ranks sit immediately after the name so a row can be
+    # read across in one glance — they only mean anything COMPARED, and a wide
+    # changelist put them far enough apart to defeat that. `adp_formatted` (the
+    # effective rank) and `adp_source` stay back with the derived columns; they
+    # answer a different question than "where do the three markets disagree".
+    # Rest of the order: what you set during prep first, reference columns last.
+    list_display = ('name', 'adp_ffc', 'adp_mfl', 'adp_fpros', 'position', 'team', 'year', 'target_tier', 'years_experience', 'risk_score', 'risk_summary', 'is_projection', 'has_injury', 'defensive_impact', 'projected_price', 'my_price', 'my_price_rationale', 'adp_formatted', 'adp_source', 'favorite', 'override_price', 'player_id')
     # `name` is the link column, pinned explicitly. Django otherwise links
     # list_display[0], which is no longer player_id — and a link column may
     # never be list_editable, so leaving it implicit would break the moment the
@@ -157,10 +165,13 @@ class PlayerAdmin(admin.ModelAdmin):
     save_on_top = True
     # Adds the "Refresh ADP + prices" button to the changelist's object-tools.
     change_list_template = 'admin/draft/player/change_list.html'
+    # Derived by sync_adp / apply_adp_source, so hand-edits would be silently
+    # overwritten by the next run. Readable in the change form, never editable.
+    readonly_fields = ('adp_source', 'adp_ffc', 'adp_mfl', 'adp_fpros')
 
     def get_urls(self):
         # BEFORE super(), or the admin's catch-all <path:object_id>/ route
-        # swallows 'refresh-adp' and tries to open a player with that pk.
+        # swallows these and tries to open a player with that pk.
         return [
             path(
                 'refresh-adp/',
@@ -168,6 +179,16 @@ class PlayerAdmin(admin.ModelAdmin):
                 # adds the never-cache headers; a bare view here would be open.
                 self.admin_site.admin_view(self.refresh_adp_view),
                 name='draft_player_refresh_adp',
+            ),
+            path(
+                'sync-adp/',
+                self.admin_site.admin_view(self.sync_adp_view),
+                name='draft_player_sync_adp',
+            ),
+            path(
+                'apply-adp/',
+                self.admin_site.admin_view(self.apply_adp_view),
+                name='draft_player_apply_adp',
             ),
         ] + super().get_urls()
 
@@ -208,9 +229,93 @@ class PlayerAdmin(admin.ModelAdmin):
         )
         context['report'] = report
         return TemplateResponse(request, 'admin/draft/refresh_adp_result.html', context)
+
+    # --- Multi-source ADP ------------------------------------------------
+    # Two buttons rather than one, because the two halves have very different
+    # risk profiles and that should be visible in the UI. Syncing only fills
+    # per-source columns and cannot change what the board shows, so it is safe
+    # at any time; applying rewrites every ADP and price for the year. Pairing
+    # them behind one button would drag the safe half down to the dangerous
+    # half's confirmation burden — and the entire point of storing every source
+    # is that the second half needs no network call and is freely reversible.
+
+    def sync_adp_view(self, request):
+        current_year = timezone.now().year
+        context = {
+            **self.admin_site.each_context(request),
+            'title': 'Sync ADP sources',
+            'current_year': current_year,
+            'opts': self.model._meta,
+        }
+        if request.method != 'POST':
+            context['statuses'] = source_status(current_year)
+            return TemplateResponse(request, 'admin/draft/sync_adp_confirm.html', context)
+
+        # Unknown keys are dropped rather than 400'd: the checkboxes are the
+        # only thing that produces them, so anything else is a hand-crafted POST.
+        chosen = [key for key in request.POST.getlist('sources') if key in SOURCE_KEYS]
+        if not chosen:
+            self.message_user(request, 'No sources selected - nothing was synced.',
+                              messages.WARNING)
+            context['statuses'] = source_status(current_year)
+            return TemplateResponse(request, 'admin/draft/sync_adp_confirm.html', context)
+
+        # Fuzzy matches log at WARNING, so this is how "we guessed at this
+        # player" reaches the page instead of only the container's stdout.
+        with capture_draft_warnings() as collector:
+            summaries = [sync_source(key, year=current_year) for key in chosen]
+
+        matched = sum(s.matched for s in summaries if s.ok)
+        failed = [s.label for s in summaries if not s.ok]
+        self.message_user(
+            request,
+            f'Synced {len(summaries) - len(failed)} source(s), {matched} player ADPs written.'
+            + (f' FAILED: {", ".join(failed)}.' if failed else ''),
+            messages.WARNING if failed else messages.SUCCESS,
+        )
+        context['summaries'] = summaries
+        context['warnings'] = collector.records
+        return TemplateResponse(request, 'admin/draft/sync_adp_result.html', context)
+
+    def apply_adp_view(self, request):
+        current_year = timezone.now().year
+        context = {
+            **self.admin_site.each_context(request),
+            'title': 'Apply ADP source',
+            'current_year': current_year,
+            'opts': self.model._meta,
+            'price_bases': PRICE_BASIS_CHOICES,
+        }
+        if request.method != 'POST':
+            context['statuses'] = source_status(current_year)
+            return TemplateResponse(request, 'admin/draft/apply_adp_confirm.html', context)
+
+        source = request.POST.get('source')
+        if source not in SOURCE_KEYS:
+            self.message_user(request, 'Pick a source to apply.', messages.WARNING)
+            context['statuses'] = source_status(current_year)
+            return TemplateResponse(request, 'admin/draft/apply_adp_confirm.html', context)
+
+        basis = request.POST.get('price_basis')
+        if basis not in PRICE_BASIS_CHOICES:
+            basis = 'historical'
+
+        with capture_draft_warnings() as collector:
+            report = apply_source(source, year=current_year, price_basis=basis)
+
+        self.message_user(
+            request,
+            f'{report.label} is now the effective ADP for {current_year}: '
+            f'{report.ranked} player(s) re-derived, {report.unranked} left untouched.',
+            messages.SUCCESS,
+        )
+        context['report'] = report
+        context['warnings'] = collector.records
+        return TemplateResponse(request, 'admin/draft/apply_adp_result.html', context)
+
     # Team last on purpose — it renders every code as a link, so leading with it
     # pushes the short, frequently-used filters below the fold.
-    list_filter = ('position', 'year', 'target_tier', 'years_experience', 'risk_score', RiskBandFilter, 'is_projection', 'has_injury', 'defensive_impact', 'favorite', MyPriceVarianceFilter, PlayerTeamFilter)
+    list_filter = ('position', 'year', 'target_tier', 'years_experience', 'risk_score', RiskBandFilter, 'is_projection', 'has_injury', 'defensive_impact', 'favorite', 'adp_source', MyPriceVarianceFilter, PlayerTeamFilter)
 
     def formfield_for_dbfield(self, db_field, request, **kwargs):
         # A default TextField renders as a 10-row textarea, which blows the
@@ -224,7 +329,7 @@ class PlayerAdmin(admin.ModelAdmin):
         if db_field.name == 'risk_summary':
             kwargs['widget'] = Textarea(attrs={'rows': 4, 'cols': 34})
         return super().formfield_for_dbfield(db_field, request, **kwargs)
-    fields = ('name', 'position', 'team', 'year', 'notes', 'target_tier', 'years_experience', 'risk_score', 'risk_summary', 'is_projection', 'has_injury', 'defensive_impact', 'projected_price', 'adp_price', 'my_price', 'my_price_rationale', 'skepticism', 'adp_formatted', 'favorite', 'override_price', 'player_id', )
+    fields = ('name', 'position', 'team', 'year', 'notes', 'target_tier', 'years_experience', 'risk_score', 'risk_summary', 'is_projection', 'has_injury', 'defensive_impact', 'projected_price', 'adp_price', 'my_price', 'my_price_rationale', 'skepticism', 'adp_formatted', 'adp_source', 'adp_ffc', 'adp_mfl', 'adp_fpros', 'favorite', 'override_price', 'player_id', )
     
 class DraftAdmin(admin.ModelAdmin):
     list_display = ('draft_name', 'year', 'drafter', 'projected_draft', 'available_to_spectators', 'date_created')
@@ -423,3 +528,56 @@ admin.site.register(d.HistoricalPlayerStats, HistoricalPlayerStatsAdmin)
 admin.site.register(d.PlayerStats, PlayerStatsAdmin)
 admin.site.register(d.PositionADP, PositionADPAdmin)
 admin.site.register(d.PlanChange, PlanChangeAdmin)
+
+
+class AdpSourceSyncAdmin(admin.ModelAdmin):
+    """Read-only-ish view of when each ADP source was last pulled and how well
+    it matched. `is_active` is shown but not editable here: flipping the boolean
+    would mark a source active WITHOUT re-deriving adp_formatted or prices, so
+    the record would claim something the Player rows don't reflect. Use the
+    "Apply ADP source" button on the player changelist, which does both."""
+
+    list_display = ('source', 'year', 'synced_at', 'feed_rows', 'matched',
+                    'fuzzy_matched', 'unmatched', 'sample_size', 'is_active')
+    list_filter = ('source', 'year', 'is_active')
+    readonly_fields = ('source', 'year', 'synced_at', 'feed_rows', 'matched',
+                       'fuzzy_matched', 'unmatched', 'unmatched_names',
+                       'sample_size', 'is_active')
+
+    def has_add_permission(self, request):
+        return False
+
+
+admin.site.register(d.AdpSourceSync, AdpSourceSyncAdmin)
+
+
+class AdpPlayerAliasAdmin(admin.ModelAdmin):
+    """Hand-made feed-name -> Player links.
+
+    Reached from the "unmatched" list on the Sync ADP result page, which links
+    here with the name, position and source prefilled — the only ergonomic way
+    to work through a list of misses.
+
+    Worth knowing before using it: most unmatched rows are NOT spelling
+    problems, they are players this DB does not carry (rookies, and anyone added
+    to a feed since the last FFC refresh). An alias cannot conjure a Player row.
+    If the name has no counterpart here, run "Refresh ADP + prices" instead —
+    that is the only thing that creates players.
+    """
+
+    list_display = ('feed_name', 'position', 'player', 'source', 'note')
+    list_filter = ('source', 'position')
+    search_fields = ('feed_name', 'player__name')
+    autocomplete_fields = ('player',)
+    fields = ('feed_name', 'position', 'player', 'source', 'note')
+
+    def get_changeform_initial_data(self, request):
+        # Prefilled by the links on the sync result page.
+        return {
+            'feed_name': request.GET.get('feed_name', ''),
+            'position': request.GET.get('position', ''),
+            'source': request.GET.get('source', ''),
+        }
+
+
+admin.site.register(d.AdpPlayerAlias, AdpPlayerAliasAdmin)
