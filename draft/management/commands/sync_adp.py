@@ -71,7 +71,7 @@ class Command(BaseCommand):
             for row in shown:
                 self.stdout.write(
                     f'    {row.feed_rank:>4}  {row.name:30} {row.position:4} '
-                    f'{row.team_code:4} pick {row.overall_pick:.1f}')
+                    f'{row.team_code:4} src {row.sort_value:.1f}')
             if len(shown) < summary.unmatched:
                 self.stdout.write(
                     f'    ... and {summary.unmatched - len(shown)} deeper '

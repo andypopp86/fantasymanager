@@ -44,7 +44,7 @@ def parse(payload):
         if not position:
             continue
         try:
-            overall_pick = float(entry['adp'])
+            sort_value = float(entry['adp'])
         except (KeyError, TypeError, ValueError):
             logger.warning('FFC row for %s has an unreadable adp %r',
                            entry.get('name'), entry.get('adp'))
@@ -54,7 +54,7 @@ def parse(payload):
             name=entry.get('name', ''),
             position=position,
             team_code=(entry.get('team') or '').upper(),
-            overall_pick=overall_pick,
+            sort_value=sort_value,
         ))
 
     sample_size = None

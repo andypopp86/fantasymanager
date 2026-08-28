@@ -3,7 +3,7 @@
 READ THIS BEFORE TRUSTING THE NUMBERS: this is not ADP. FantasyPros' actual ADP
 data sits behind their paid API key — the `type=ADP` variant of this endpoint
 returns `count: 0` for an unauthenticated caller. What comes back here is ECR,
-the consensus RANK of ~109 experts, so `overall_pick` carries an ordinal, not an
+the consensus RANK of ~109 experts, so `sort_value` carries an ordinal, not an
 average pick.
 
 That's still useful as a source, because the price curve and every sort consume
@@ -71,7 +71,7 @@ def parse(payload):
             name=entry.get('player_name', ''),
             position=position,
             team_code=(entry.get('player_team_id') or '').upper(),
-            overall_pick=rank,
+            sort_value=rank,
         ))
 
     sample_size = None

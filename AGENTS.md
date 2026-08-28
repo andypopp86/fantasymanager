@@ -612,18 +612,30 @@ provider module, and nothing else branches):
 
 - `ffc` — Fantasy Football Calculator. Also the ROSTER source; `add_players`
   still owns creating players and now fills `adp_ffc` in passing.
-- `mfl` — MyFantasyLeague. Real leagues, ~692 drafts. Two calls (the ADP feed
-  carries ids only, so the ~2,600-row player table resolves names).
-  **⚠ SUPERFLEX CONTAMINATION — the trap that matters.** MFL ranks **7 QBs in
-  its top 50; FFC ranks 1**, and a 1QB league takes one or two. Median shift vs
-  FFC: QB **−28**, TE **−16**, WR **+16**. That is the signature of
-  superflex/2QB leagues, which MFL is the platform of choice for. **Applying
-  this source to a 1QB auction inflates every QB price.** It remains a good
-  second opinion at RB/WR; treat its QB and TE ranks as belonging to a different
-  format. Also: dynasty/devy rookie drafts are mixed in (~49 of its top 150 are
-  college players — they match nothing here and drop out), and neither
-  `IS_MOCK` (0 and 1 both return 692 drafts) nor `IS_KEEPER` (rejects every
-  documented value) filters any of it.
+- `mfl` — MyFantasyLeague **AUCTION VALUES** (`TYPE=aav`, `IS_KEEPER=N`), ~232
+  redraft auctions. Two calls (the feed carries ids only, so the ~2,600-row
+  player table resolves names). **It deliberately does NOT read MFL's ADP
+  feed**, which is badly superflex-contaminated: that feed ranks 7-8 QBs inside
+  its top 50 where FFC ranks 1, which would inflate every QB price in this 1QB
+  auction. `IS_MOCK`, `IS_KEEPER`, `IS_PPR`, `FCOUNT` and `CUTOFF` were all
+  measured against it and none moved the QB density. AAV draws on a different
+  population — superflex lives in snake and dynasty formats, auctions are
+  overwhelmingly 1QB — and lands at 3 QBs in the top 50, in line with
+  FantasyPros' 4. Don't switch it back to `TYPE=adp`.
+  - `IS_KEEPER=N` restricts to REDRAFT. Valid letters are N/K/R (redraft,
+    keeper, rookie-only), combinable; the default `NKR` mixed in 229 rookie-only
+    drafts out of 692. The parameter rejects anything outside those letters,
+    which is why an early attempt with `IS_KEEPER=Redraft` errored and made the
+    filter look broken. The franchise filter is `FCOUNT` (8/10/12/14/16), not
+    `FRANCHISES`. `IS_MOCK` genuinely does nothing on the ADP endpoint — 0 and 1
+    both return the same 692 drafts.
+  - The dollar figures are NOT stored; `adp_mfl` holds a rank like every other
+    source. MFL normalises AAV to a $1000 total pool, so using them as real
+    money would need scaling to this league's budget.
+  - Residual skew vs FFC, worth knowing when reading the column: median QB −24,
+    RB −8, WR +14, DEF +29. FFC's 1-QB-in-the-top-50 is itself likely the
+    outlier (casual mock drafters wait too long on QB); MFL AAV, FantasyPros and
+    the wider market cluster at 3-5.
 - `fpros` — FantasyPros. **This is ECR, not ADP** — their real ADP endpoint
   returns `count: 0` without a paid key. Scoring is `HALF` to match the
   hardcoded `half-ppr` FFC pull.

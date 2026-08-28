@@ -64,7 +64,7 @@
         <thead>
             <tr>
                 <th>Feed rank</th><th>Name</th><th>Pos</th><th>Team</th>
-                <th>Avg pick</th><th></th>
+                <th>Source value</th><th></th>
             </tr>
         </thead>
         <tbody>
@@ -74,7 +74,7 @@
                 <td>{{ row.name }}</td>
                 <td>{{ row.position }}</td>
                 <td>{{ row.team_code }}</td>
-                <td>{{ row.overall_pick|floatformat:1 }}</td>
+                <td>{{ row.sort_value|floatformat:1 }}</td>
                 <td>
                     <a href="{% url 'admin:draft_adpplayeralias_add' %}?feed_name={{ row.name|urlencode }}&amp;position={{ row.position|urlencode }}&amp;source={{ summary.source|urlencode }}">
                         Map to a player

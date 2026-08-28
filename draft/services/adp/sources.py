@@ -49,15 +49,14 @@ SOURCES = {
     ),
     'mfl': Source(
         key='mfl',
-        label='MyFantasyLeague',
+        label='MyFantasyLeague (auction values)',
         adp_field='adp_mfl',
         id_field='mfl_id',
         persist_id=True,
-        sample_unit='drafts',
+        sample_unit='auctions',
         fetch=mfl.fetch,
-        caveat='SUPERFLEX CONTAMINATION: 7 QBs in its top 50 vs FFC\'s 1, so QB prices '
-               'will be badly inflated for a 1QB league. Mocks and dynasty rookie drafts '
-               'are also mixed in - IS_MOCK and IS_KEEPER do not filter this feed.',
+        caveat='Auction values from REDRAFT leagues, ranked. Reads AAV rather than MFL\'s '
+               'ADP feed, which is superflex-contaminated (8 QBs in its top 50 vs 3 here).',
     ),
     'fpros': Source(
         key='fpros',

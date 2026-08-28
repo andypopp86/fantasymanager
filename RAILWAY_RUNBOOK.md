@@ -103,6 +103,10 @@ railway ssh --service app -- python manage.py apply_adp_source
 railway ssh --service app -- python manage.py apply_adp_source --source mfl
 ```
 
+Note `mfl` reads MyFantasyLeague's AUCTION VALUES (`TYPE=aav`), not its ADP
+feed — the ADP feed is superflex-contaminated and would inflate every QB price
+in a 1QB auction. See `AGENTS.md` before changing that.
+
 Add `--dry-run` to either to see the outcome without writing. **Don't run
 `apply_adp_source` during a live draft** — it rewrites every projected price the
 budget plan sits on. Full design notes in `AGENTS.md` under "Multi-source ADP";

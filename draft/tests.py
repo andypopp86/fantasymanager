@@ -1024,7 +1024,7 @@ class AdpMatchingTests(TestCase):
     def _row(self, name, position, team='ATL', pick=10.0, provider_id='x1'):
         from draft.services.adp.rows import AdpRow
         return AdpRow(provider_id=provider_id, name=name, position=position,
-                      team_code=team, overall_pick=pick)
+                      team_code=team, sort_value=pick)
 
     def _matcher(self, **kwargs):
         from draft.services.adp.matching import PlayerMatcher
@@ -1205,39 +1205,60 @@ class AdpProviderParseTests(TestCase):
     """Feed parsing, against fabricated payloads shaped like the real ones. No
     network: these have to keep passing when a provider is unreachable."""
 
-    def test_mfl_drops_kickers_and_idp_and_flips_names(self):
-        from draft.services.adp.providers import mfl
-
-        adp_payload = {'adp': {
-            'totalDrafts': '692',
-            'player': [
-                {'id': '16162', 'averagePick': '1.75'},
-                {'id': '9001', 'averagePick': '40.00'},   # IDP linebacker
-                {'id': '9002', 'averagePick': '55.00'},   # kicker
-                {'id': '0151', 'averagePick': '91.28'},   # team defense
-            ],
-        }}
-        players_payload = {'players': {'player': [
+    def _mfl_players(self):
+        return {'players': {'player': [
             {'id': '16162', 'name': 'Gibbs, Jahmyr', 'position': 'RB', 'team': 'DET'},
             {'id': '9001', 'name': 'Backer, Line', 'position': 'LB', 'team': 'CHI'},
             {'id': '9002', 'name': 'Boot, Kick', 'position': 'PK', 'team': 'CHI'},
             {'id': '0151', 'name': 'Texans, Houston', 'position': 'Def', 'team': 'HOU'},
         ]}}
 
-        result = mfl.parse(adp_payload, players_payload)
+    def test_mfl_drops_kickers_and_idp_and_flips_names(self):
+        from draft.services.adp.providers import mfl
+
+        aav_payload = {'aav': {
+            'totalAuctions': '232',
+            'player': [
+                {'id': '16162', 'rank': '1', 'averageValue': '27.50'},
+                {'id': '9001', 'rank': '2', 'averageValue': '12.00'},   # IDP linebacker
+                {'id': '9002', 'rank': '3', 'averageValue': '3.00'},    # kicker
+                {'id': '0151', 'rank': '4', 'averageValue': '1.50'},    # team defense
+            ],
+        }}
+
+        result = mfl.parse(aav_payload, self._mfl_players())
 
         # IDP and kickers must never reach the price curve.
         self.assertEqual([row.position for row in result.rows], ['RB', 'DEF'])
         self.assertEqual(result.rows[0].name, 'Jahmyr Gibbs')
-        self.assertEqual(result.rows[0].overall_pick, 1.75)
         self.assertEqual(result.rows[0].provider_id, '16162')
-        self.assertEqual(result.sample_size, 692)
+        # MFL's own rank is the sort key; the dollar value is not stored.
+        self.assertEqual(result.rows[0].sort_value, 1)
+        self.assertEqual(result.sample_size, 232)
 
-    def test_mfl_skips_an_adp_id_with_no_player_row(self):
+    def test_mfl_falls_back_to_negated_value_when_rank_is_missing(self):
+        """sort_value is ASCENDING but auction values run the other way, so the
+        fallback has to invert or the board comes out backwards."""
         from draft.services.adp.providers import mfl
 
         result = mfl.parse(
-            {'adp': {'totalDrafts': '1', 'player': [{'id': 'ghost', 'averagePick': '5'}]}},
+            {'aav': {'totalAuctions': '1', 'player': [
+                {'id': '16162', 'averageValue': '27.50'},
+                {'id': '0151', 'averageValue': '1.50'},
+            ]}},
+            self._mfl_players(),
+        )
+
+        self.assertEqual([row.sort_value for row in result.rows], [-27.5, -1.5])
+        # The expensive player must sort FIRST.
+        self.assertLess(result.rows[0].sort_value, result.rows[1].sort_value)
+
+    def test_mfl_skips_an_aav_id_with_no_player_row(self):
+        from draft.services.adp.providers import mfl
+
+        result = mfl.parse(
+            {'aav': {'totalAuctions': '1',
+                     'player': [{'id': 'ghost', 'rank': '1', 'averageValue': '5'}]}},
             {'players': {'player': []}},
         )
         self.assertEqual(result.rows, [])
@@ -1262,8 +1283,8 @@ class AdpProviderParseTests(TestCase):
         self.assertEqual([row.position for row in result.rows], ['RB', 'DEF'])
         # The rank stands in for an average pick — FantasyPros has no ADP for
         # unauthenticated callers.
-        self.assertEqual(result.rows[0].overall_pick, 1)
-        self.assertEqual(result.rows[1].overall_pick, 188)
+        self.assertEqual(result.rows[0].sort_value, 1)
+        self.assertEqual(result.rows[1].sort_value, 188)
         self.assertEqual(result.sample_size, 109)
 
     def test_ffc_stores_raw_adp_not_the_round_pick_string(self):
@@ -1282,7 +1303,7 @@ class AdpProviderParseTests(TestCase):
         result = ffc.parse(payload)
 
         self.assertEqual(len(result.rows), 1)
-        self.assertEqual(result.rows[0].overall_pick, 1.5)
+        self.assertEqual(result.rows[0].sort_value, 1.5)
         self.assertEqual(result.sample_size, 3144)
 
 

@@ -20,18 +20,22 @@ CANONICAL_POSITIONS = ('QB', 'RB', 'WR', 'TE', 'DEF')
 class AdpRow:
     """One player's ADP as a provider reports it, translated.
 
-    `overall_pick` is the unit that makes sources comparable: the average
-    OVERALL pick number, not round.pick. FantasyPros is the honest exception —
-    it has no average pick, so its consensus rank goes here instead. That's
-    sound because everything consuming this only uses the ordering, but it is
-    why the model field carries a warning comment.
+    `sort_value` is an ORDERING KEY, ascending — lower means drafted earlier. It
+    is deliberately not named for a unit, because the providers do not share
+    one: FFC reports an average overall pick, MFL an auction-value rank,
+    FantasyPros an expert consensus rank. All three sort the same way, and
+    ordering is the only thing anything downstream consumes (the sync turns it
+    into a dense rank immediately, and the price curve is index-based).
+
+    A provider whose feed is "higher is better" — MFL's auction values — must
+    invert before putting a number here.
     """
 
     provider_id: str
     name: str
     position: str
     team_code: str
-    overall_pick: float
+    sort_value: float
 
 
 @dataclasses.dataclass

@@ -37,7 +37,7 @@ class UnmatchedRow:
     name: str
     position: str
     team_code: str
-    overall_pick: float
+    sort_value: float
     feed_rank: int
 
 
@@ -108,14 +108,14 @@ def sync_source(source_key, year=None, dry_run=False):
                             persist_id=source.persist_id, source_key=source.key)
     # Ranked by the feed's own ordering so an unmatched row can report how early
     # this source drafts the player it couldn't find.
-    ranked_rows = sorted(feed.rows, key=lambda r: r.overall_pick)
+    ranked_rows = sorted(feed.rows, key=lambda r: r.sort_value)
     matches = []
     for feed_rank, row in enumerate(ranked_rows, start=1):
         result = matcher.match(row)
         if not result.matched:
             summary.unmatched_rows.append(UnmatchedRow(
                 name=row.name, position=row.position, team_code=row.team_code,
-                overall_pick=row.overall_pick, feed_rank=feed_rank,
+                sort_value=row.sort_value, feed_rank=feed_rank,
             ))
             continue
 
@@ -132,7 +132,7 @@ def sync_source(source_key, year=None, dry_run=False):
     # Ranked over MATCHED players only, so the column reads 1..N with no holes
     # where the feed listed somebody this DB doesn't carry. Sorting is already
     # done above; the name breaks ties so equal picks get a stable order.
-    matches.sort(key=lambda pair: (pair[1].overall_pick, pair[0].name))
+    matches.sort(key=lambda pair: (pair[1].sort_value, pair[0].name))
     for rank, (player, row) in enumerate(matches, start=1):
         setattr(player, source.adp_field, rank)
         fields = [source.adp_field]
