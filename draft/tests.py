@@ -1642,6 +1642,50 @@ class AdpRerankTests(TestCase):
         self.assertEqual(Player.objects.get(name='This Season').adp_formatted, 1)
         self.assertEqual(Player.objects.get(name='Other Season').adp_formatted, 888)
 
+    def test_reranking_is_a_bounded_number_of_queries(self):
+        """Regression guard for the bug that stalled a production deploy.
+
+        Two failure modes hid behind the same symptom, and a correctness-only
+        test caught neither:
+
+        1. `Player.objects.values_list('year', flat=True).distinct()` compiles to
+           SELECT DISTINCT year, adp_formatted, because Meta.ordering is
+           ['adp_formatted'] and Django folds ordering columns into DISTINCT. It
+           yields one entry per (year, ADP) PAIR - 861 of them on the real DB
+           instead of 5 - so the work multiplied by the number of distinct ADPs.
+        2. Updating row-by-row ran at ~5/sec against the hosted database.
+
+        Both are invisible on a small single-year fixture, so this asserts on
+        QUERY COUNT rather than on the resulting ranks.
+        """
+        from draft.services.adp.ranking import RANKED_COLUMNS, rerank_year
+
+        for index in range(12):
+            player = make_player(f'Player {index:02d}', 'RB')
+            Player.objects.filter(pk=player.pk).update(
+                adp_formatted=100 - index, adp_ffc=100 - index)
+        # A second year must not inflate the work for the first.
+        for index in range(12):
+            other = make_player(f'Old {index:02d}', 'RB', year=2025)
+            Player.objects.filter(pk=other.pk).update(adp_formatted=100 - index)
+
+        # Per ranked column: one SELECT of the rows, one COUNT of the NULLs,
+        # and one batched UPDATE - except adp_mfl and adp_fpros have no rows
+        # here, so they skip the UPDATE. 3 + 3 + 2 + 2. Anything proportional to
+        # the row count, or to the number of distinct ADP values, blows straight
+        # through this.
+        self.assertEqual(len(RANKED_COLUMNS), 4)
+        with self.assertNumQueries(10):
+            rerank_year(2026)
+
+        self.assertEqual(
+            list(Player.objects.filter(year=2026).order_by('adp_formatted')
+                 .values_list('name', 'adp_formatted')[:3]),
+            [('Player 11', 1), ('Player 10', 2), ('Player 09', 3)])
+        # The other year is untouched, so its ranks are still the raw values.
+        self.assertEqual(
+            Player.objects.get(name='Old 00').adp_formatted, 100)
+
     def test_rejects_a_column_that_is_not_an_adp_rank(self):
         from draft.services.adp.ranking import rerank_year
 
