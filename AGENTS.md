@@ -612,30 +612,35 @@ provider module, and nothing else branches):
 
 - `ffc` — Fantasy Football Calculator. Also the ROSTER source; `add_players`
   still owns creating players and now fills `adp_ffc` in passing.
-- `mfl` — MyFantasyLeague **AUCTION VALUES** (`TYPE=aav`, `IS_KEEPER=N`), ~232
-  redraft auctions. Two calls (the feed carries ids only, so the ~2,600-row
-  player table resolves names). **It deliberately does NOT read MFL's ADP
-  feed**, which is badly superflex-contaminated: that feed ranks 7-8 QBs inside
-  its top 50 where FFC ranks 1, which would inflate every QB price in this 1QB
-  auction. `IS_MOCK`, `IS_KEEPER`, `IS_PPR`, `FCOUNT` and `CUTOFF` were all
-  measured against it and none moved the QB density. AAV draws on a different
-  population — superflex lives in snake and dynasty formats, auctions are
-  overwhelmingly 1QB — and lands at 3 QBs in the top 50, in line with
-  FantasyPros' 4. Don't switch it back to `TYPE=adp`.
-  - `IS_KEEPER=N` restricts to REDRAFT. Valid letters are N/K/R (redraft,
-    keeper, rookie-only), combinable; the default `NKR` mixed in 229 rookie-only
-    drafts out of 692. The parameter rejects anything outside those letters,
-    which is why an early attempt with `IS_KEEPER=Redraft` errored and made the
-    filter look broken. The franchise filter is `FCOUNT` (8/10/12/14/16), not
-    `FRANCHISES`. `IS_MOCK` genuinely does nothing on the ADP endpoint — 0 and 1
-    both return the same 692 drafts.
-  - The dollar figures are NOT stored; `adp_mfl` holds a rank like every other
-    source. MFL normalises AAV to a $1000 total pool, so using them as real
-    money would need scaling to this league's budget.
-  - Residual skew vs FFC, worth knowing when reading the column: median QB −24,
-    RB −8, WR +14, DEF +29. FFC's 1-QB-in-the-top-50 is itself likely the
-    outlier (casual mock drafters wait too long on QB); MFL AAV, FantasyPros and
-    the wider market cluster at 3-5.
+- `sharks` — **FantasySharks expert ranks, served via MFL's `TYPE=playerRanks`**
+  (`SOURCE` only accepts `sharks`; `mfl`/`adp`/`aav` return empty). ~564 skill
+  rows, cleanly 1QB: **QB@30=0, QB@50=0, QB@100=4** against FFC's 0/1/11 — it
+  ranks QBs *later* than FFC, the ordinary 1QB expert stance. Expert opinion,
+  not market data, and one analyst shop rather than FantasyPros' ~109-expert
+  consensus. Uses MFL player ids, which is why the cached id column is still
+  `Player.mfl_id`.
+  - **MyFantasyLeague's own ADP and AAV were both tried and both removed. Don't
+    bring either back.** `TYPE=adp`: MFL's drafter base is ~43% superflex with
+    no 1QB filter in any feed, putting 8 QBs in its top 50 vs FFC's 1 (median
+    shift QB −28, TE −16, WR +16). `TYPE=aav`: fixed QB density but overvalued
+    veterans so badly the top of the board broke — McCaffrey 1st (FFC 7),
+    Barkley 2nd (FFC 17), Gibbs 6th when he is the consensus 1 — which applied
+    $72 to McCaffrey and $67 to Barkley. `PERIOD=AUG15` gives the identical top,
+    so it is not offseason staleness; the 232-auction sample is just too small.
+  - **A 1QB-filtered rebuild of MFL's ADP is possible but not worth it.**
+    `adp&DETAILS=1` lists the sample's leagues and `TYPE=league` publicly exposes
+    each one's `starters.position` QB `limit` (`"1"` = 1QB, `"1-2"` = superflex),
+    and `TYPE=draftResults` is public too. But `IS_MOCK=1` returns zero drafts —
+    MFL's entire recent redraft pool is *mock* drafts — so the rebuild yields
+    ~71 mock drafts against FFC's ~8,000. Same kind of data, ~1% of the sample,
+    for ~320 calls against an API that returns **HTTP 429** under load.
+  - MFL API doc errors worth remembering: `IS_MOCK` is documented BACKWARDS
+    (UI is the truth — 0 = all, 1 = *exclude* mocks, 2 = mocks only);
+    `IS_KEEPER` takes letters N/K/R, combinable, bracket syntax `[NK]`, and
+    rejects anything else; the franchise filter is `FCOUNT`, not `FRANCHISES`;
+    `IS_PPR` is 3=any/1=non-PPR/2=PPR. `playerProfile` reports `adp: "N/A"`.
+  - **MFL rate-limits.** Keep this provider at two calls; never go per-player or
+    per-league.
 - `fpros` — FantasyPros. **This is ECR, not ADP** — their real ADP endpoint
   returns `count: 0` without a paid key. Scoring is `HALF` to match the
   hardcoded `half-ppr` FFC pull.

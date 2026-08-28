@@ -1143,7 +1143,7 @@ class AdpMatchingTests(TestCase):
         AdpPlayerAlias.objects.create(
             feed_name='Hollywood Brown', position='WR', player=player)
 
-        result = self._matcher(source_key='mfl').match(
+        result = self._matcher(source_key='sharks').match(
             self._row('Hollywood Brown', 'WR'))
         self.assertEqual(result.player, player)
         self.assertEqual(result.method, 'alias')
@@ -1164,7 +1164,7 @@ class AdpMatchingTests(TestCase):
         AdpPlayerAlias.objects.create(
             feed_name='D.J. Moore', position='WR', player=intended)
 
-        result = self._matcher(source_key='mfl').match(self._row('D.J. Moore', 'WR'))
+        result = self._matcher(source_key='sharks').match(self._row('D.J. Moore', 'WR'))
         self.assertEqual(result.player, intended)
         self.assertEqual(result.method, 'alias')
 
@@ -1173,10 +1173,10 @@ class AdpMatchingTests(TestCase):
 
         player = make_player('Real Player', 'RB')
         AdpPlayerAlias.objects.create(
-            source='mfl', feed_name='Odd Spelling', position='RB', player=player)
+            source='sharks', feed_name='Odd Spelling', position='RB', player=player)
 
         self.assertEqual(
-            self._matcher(source_key='mfl').match(self._row('Odd Spelling', 'RB')).player,
+            self._matcher(source_key='sharks').match(self._row('Odd Spelling', 'RB')).player,
             player)
         self.assertFalse(
             self._matcher(source_key='fpros').match(self._row('Odd Spelling', 'RB')).matched)
@@ -1188,7 +1188,7 @@ class AdpMatchingTests(TestCase):
         AdpPlayerAlias.objects.create(
             feed_name="Hollywood Brown", position='WR', player=player)
 
-        result = self._matcher(source_key='mfl').match(
+        result = self._matcher(source_key='sharks').match(
             self._row("HOLLYWOOD  BROWN", 'WR'))
         self.assertEqual(result.player, player)
 
@@ -1206,6 +1206,8 @@ class AdpProviderParseTests(TestCase):
     network: these have to keep passing when a provider is unreachable."""
 
     def _mfl_players(self):
+        """MFL's player table — the FantasySharks ranks are served on MFL ids,
+        so resolving a name still needs this second payload."""
         return {'players': {'player': [
             {'id': '16162', 'name': 'Gibbs, Jahmyr', 'position': 'RB', 'team': 'DET'},
             {'id': '9001', 'name': 'Backer, Line', 'position': 'LB', 'team': 'CHI'},
@@ -1213,52 +1215,39 @@ class AdpProviderParseTests(TestCase):
             {'id': '0151', 'name': 'Texans, Houston', 'position': 'Def', 'team': 'HOU'},
         ]}}
 
-    def test_mfl_drops_kickers_and_idp_and_flips_names(self):
-        from draft.services.adp.providers import mfl
+    def test_sharks_drops_kickers_and_idp_and_flips_names(self):
+        from draft.services.adp.providers import sharks
 
-        aav_payload = {'aav': {
-            'totalAuctions': '232',
-            'player': [
-                {'id': '16162', 'rank': '1', 'averageValue': '27.50'},
-                {'id': '9001', 'rank': '2', 'averageValue': '12.00'},   # IDP linebacker
-                {'id': '9002', 'rank': '3', 'averageValue': '3.00'},    # kicker
-                {'id': '0151', 'rank': '4', 'averageValue': '1.50'},    # team defense
-            ],
-        }}
+        ranks_payload = {'player_ranks': {'player': [
+            {'id': '16162', 'rank': '1', 'last_week': '2', 'change': '1'},
+            {'id': '9001', 'rank': '2', 'last_week': '2', 'change': '0'},   # IDP
+            {'id': '9002', 'rank': '3', 'last_week': '3', 'change': '0'},   # kicker
+            {'id': '0151', 'rank': '4', 'last_week': '4', 'change': '0'},   # defense
+        ]}}
 
-        result = mfl.parse(aav_payload, self._mfl_players())
+        result = sharks.parse(ranks_payload, self._mfl_players())
 
         # IDP and kickers must never reach the price curve.
         self.assertEqual([row.position for row in result.rows], ['RB', 'DEF'])
         self.assertEqual(result.rows[0].name, 'Jahmyr Gibbs')
         self.assertEqual(result.rows[0].provider_id, '16162')
-        # MFL's own rank is the sort key; the dollar value is not stored.
         self.assertEqual(result.rows[0].sort_value, 1)
-        self.assertEqual(result.sample_size, 232)
+        # One analyst shop, so there is no draft or expert count to report.
+        self.assertIsNone(result.sample_size)
 
-    def test_mfl_falls_back_to_negated_value_when_rank_is_missing(self):
-        """sort_value is ASCENDING but auction values run the other way, so the
-        fallback has to invert or the board comes out backwards."""
-        from draft.services.adp.providers import mfl
+    def test_sharks_handles_a_response_with_no_players(self):
+        """MFL omits the 'player' key entirely rather than returning an empty
+        list when a query matches nothing."""
+        from draft.services.adp.providers import sharks
 
-        result = mfl.parse(
-            {'aav': {'totalAuctions': '1', 'player': [
-                {'id': '16162', 'averageValue': '27.50'},
-                {'id': '0151', 'averageValue': '1.50'},
-            ]}},
-            self._mfl_players(),
-        )
+        result = sharks.parse({'player_ranks': {}}, self._mfl_players())
+        self.assertEqual(result.rows, [])
 
-        self.assertEqual([row.sort_value for row in result.rows], [-27.5, -1.5])
-        # The expensive player must sort FIRST.
-        self.assertLess(result.rows[0].sort_value, result.rows[1].sort_value)
+    def test_sharks_skips_a_rank_id_with_no_player_row(self):
+        from draft.services.adp.providers import sharks
 
-    def test_mfl_skips_an_aav_id_with_no_player_row(self):
-        from draft.services.adp.providers import mfl
-
-        result = mfl.parse(
-            {'aav': {'totalAuctions': '1',
-                     'player': [{'id': 'ghost', 'rank': '1', 'averageValue': '5'}]}},
+        result = sharks.parse(
+            {'player_ranks': {'player': [{'id': 'ghost', 'rank': '1'}]}},
             {'players': {'player': []}},
         )
         self.assertEqual(result.rows, [])
@@ -1322,10 +1311,10 @@ class AdpSyncTests(TestCase):
 
     def _sync(self, feed, **kwargs):
         from draft.services.adp import sync as sync_module
-        source = sync_module.get_source('mfl')
+        source = sync_module.get_source('sharks')
         patched = type(source)(**{**source.__dict__, 'fetch': lambda year: feed})
         with mock.patch.object(sync_module, 'get_source', return_value=patched):
-            return sync_module.sync_source('mfl', year=2026, **kwargs)
+            return sync_module.sync_source('sharks', year=2026, **kwargs)
 
     def test_writes_only_its_own_column(self):
         summary = self._sync(self._feed(('16162', 'Jahmyr Gibbs', 'RB', 'DET', 18.69)))
@@ -1333,7 +1322,7 @@ class AdpSyncTests(TestCase):
         self.player.refresh_from_db()
         self.assertEqual(summary.matched, 1)
         # The column stores a RANK, not the feed's 18.69.
-        self.assertEqual(self.player.adp_mfl, 1)
+        self.assertEqual(self.player.adp_sharks, 1)
         self.assertEqual(self.player.mfl_id, '16162')
         # The whole point: the board is untouched until apply_adp_source runs.
         self.assertEqual(self.player.adp_formatted, 305)
@@ -1382,7 +1371,7 @@ class AdpSyncTests(TestCase):
         target.refresh_from_db()
         self.assertEqual(summary.matched, 1)
         self.assertEqual(summary.unmatched, 0)
-        self.assertEqual(target.adp_mfl, 1)
+        self.assertEqual(target.adp_sharks, 1)
 
     def test_dry_run_writes_nothing(self):
         summary = self._sync(
@@ -1390,21 +1379,21 @@ class AdpSyncTests(TestCase):
 
         self.player.refresh_from_db()
         self.assertEqual(summary.matched, 1)
-        self.assertIsNone(self.player.adp_mfl)
+        self.assertIsNone(self.player.adp_sharks)
         self.assertFalse(Player.objects.exclude(mfl_id=None).exists())
 
     def test_a_failing_feed_is_reported_not_raised(self):
         """One dead provider must not abort a multi-source run."""
         from draft.services.adp import sync as sync_module
 
-        source = sync_module.get_source('mfl')
+        source = sync_module.get_source('sharks')
 
         def boom(year):
             raise RuntimeError('503 Service Unavailable')
 
         patched = type(source)(**{**source.__dict__, 'fetch': boom})
         with mock.patch.object(sync_module, 'get_source', return_value=patched):
-            summary = sync_module.sync_source('mfl', year=2026)
+            summary = sync_module.sync_source('sharks', year=2026)
 
         self.assertFalse(summary.ok)
         self.assertIn('503', summary.error)
@@ -1422,28 +1411,28 @@ class ApplyAdpSourceTests(TestCase):
         # Covered by no source — the coverage-gap case.
         self.unranked = make_player('Uncovered TE', 'TE')
         Player.objects.filter(pk=self.ranked.pk).update(
-            adp_mfl=1, adp_formatted=99, projected_price=5)
+            adp_sharks=1, adp_formatted=99, projected_price=5)
         Player.objects.filter(pk=self.other.pk).update(
-            adp_mfl=2, adp_formatted=1, projected_price=70)
+            adp_sharks=2, adp_formatted=1, projected_price=70)
         Player.objects.filter(pk=self.unranked.pk).update(
             adp_formatted=44, projected_price=33)
-        AdpSourceSync.objects.create(source='mfl', year=2026, matched=2)
+        AdpSourceSync.objects.create(source='sharks', year=2026, matched=2)
 
     def test_adp_formatted_is_a_dense_rank(self):
         """1 is the first player off the board, with no gaps — not round.pick,
         not the feed's own number."""
         from draft.services.adp.apply import apply_source
 
-        apply_source('mfl', year=2026, price_basis='none')
+        apply_source('sharks', year=2026, price_basis='none')
 
-        ranks = sorted(Player.objects.filter(year=2026, adp_source='mfl')
+        ranks = sorted(Player.objects.filter(year=2026, adp_source='sharks')
                        .values_list('adp_formatted', flat=True))
         self.assertEqual(ranks, [1, 2])
 
     def test_ranked_players_are_re_derived_and_re_priced(self):
         from draft.services.adp.apply import apply_source
 
-        report = apply_source('mfl', year=2026, price_basis='default')
+        report = apply_source('sharks', year=2026, price_basis='default')
 
         self.ranked.refresh_from_db()
         self.other.refresh_from_db()
@@ -1451,7 +1440,7 @@ class ApplyAdpSourceTests(TestCase):
         # The source's own ordering becomes ranks 1 and 2 — no arithmetic.
         self.assertEqual(self.ranked.adp_formatted, 1)
         self.assertEqual(self.other.adp_formatted, 2)
-        self.assertEqual(self.ranked.adp_source, 'mfl')
+        self.assertEqual(self.ranked.adp_source, 'sharks')
         # Priced by ADP ORDER, so the first-ranked player takes the top of the
         # curve regardless of what he was worth under the previous source.
         self.assertGreater(self.ranked.projected_price, self.other.projected_price)
@@ -1461,7 +1450,7 @@ class ApplyAdpSourceTests(TestCase):
         coverage gap must not bury a real player or wipe his price."""
         from draft.services.adp.apply import apply_source
 
-        report = apply_source('mfl', year=2026, price_basis='default')
+        report = apply_source('sharks', year=2026, price_basis='default')
 
         self.unranked.refresh_from_db()
         self.assertEqual(report.unranked, 1)
@@ -1475,7 +1464,7 @@ class ApplyAdpSourceTests(TestCase):
         identical to success."""
         from draft.services.adp.apply import apply_source
 
-        report = apply_source('mfl', year=2026, price_basis='historical')
+        report = apply_source('sharks', year=2026, price_basis='historical')
 
         self.ranked.refresh_from_db()
         self.assertEqual(report.priced, 0)
@@ -1486,7 +1475,7 @@ class ApplyAdpSourceTests(TestCase):
     def test_price_basis_none_moves_adp_only(self):
         from draft.services.adp.apply import apply_source
 
-        apply_source('mfl', year=2026, price_basis='none')
+        apply_source('sharks', year=2026, price_basis='none')
 
         self.ranked.refresh_from_db()
         self.assertEqual(int(self.ranked.projected_price), 5)
@@ -1495,7 +1484,7 @@ class ApplyAdpSourceTests(TestCase):
     def test_dry_run_writes_nothing(self):
         from draft.services.adp.apply import active_source, apply_source
 
-        report = apply_source('mfl', year=2026, price_basis='default', dry_run=True)
+        report = apply_source('sharks', year=2026, price_basis='default', dry_run=True)
 
         self.ranked.refresh_from_db()
         self.assertEqual(report.ranked, 2)
@@ -1508,9 +1497,9 @@ class ApplyAdpSourceTests(TestCase):
 
         AdpSourceSync.objects.create(source='ffc', year=2026, is_active=True)
 
-        apply_source('mfl', year=2026, price_basis='none')
+        apply_source('sharks', year=2026, price_basis='none')
 
-        self.assertEqual(active_source(2026), 'mfl')
+        self.assertEqual(active_source(2026), 'sharks')
         self.assertEqual(
             AdpSourceSync.objects.filter(year=2026, is_active=True).count(), 1)
 
@@ -1530,7 +1519,7 @@ class AdpRerankTests(TestCase):
     def _rank(self, name, formatted, ffc=None, mfl=None):
         player = make_player(name, 'RB')
         Player.objects.filter(pk=player.pk).update(
-            adp_formatted=formatted, adp_ffc=ffc, adp_mfl=mfl)
+            adp_formatted=formatted, adp_ffc=ffc, adp_sharks=mfl)
         return player
 
     def test_collapses_arbitrary_values_to_a_dense_index(self):
@@ -1587,12 +1576,12 @@ class AdpRerankTests(TestCase):
         from draft.services.adp.ranking import rerank_year
 
         self._rank('Ranked', 1, mfl=50)
-        self._rank('Unranked By Mfl', 2, mfl=None)
+        self._rank('Unranked By Sharks', 2, mfl=None)
 
         rerank_year(2026)
 
-        self.assertEqual(Player.objects.get(name='Ranked').adp_mfl, 1)
-        self.assertIsNone(Player.objects.get(name='Unranked By Mfl').adp_mfl)
+        self.assertEqual(Player.objects.get(name='Ranked').adp_sharks, 1)
+        self.assertIsNone(Player.objects.get(name='Unranked By Sharks').adp_sharks)
 
     def test_ties_break_on_name_so_the_result_is_deterministic(self):
         from draft.services.adp.ranking import rerank_year
@@ -1670,7 +1659,7 @@ class AdpRerankTests(TestCase):
             Player.objects.filter(pk=other.pk).update(adp_formatted=100 - index)
 
         # Per ranked column: one SELECT of the rows, one COUNT of the NULLs,
-        # and one batched UPDATE - except adp_mfl and adp_fpros have no rows
+        # and one batched UPDATE - except adp_sharks and adp_fpros have no rows
         # here, so they skip the UPDATE. 3 + 3 + 2 + 2. Anything proportional to
         # the row count, or to the number of distinct ADP values, blows straight
         # through this.

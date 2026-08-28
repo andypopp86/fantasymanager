@@ -14,7 +14,7 @@ deliberately, not because it doesn't work.
 
 import dataclasses
 
-from draft.services.adp.providers import ffc, fpros, mfl
+from draft.services.adp.providers import ffc, fpros, sharks
 
 
 @dataclasses.dataclass(frozen=True)
@@ -47,16 +47,18 @@ SOURCES = {
         fetch=ffc.fetch,
         caveat='Free public mock drafts - fresh, but a casual drafter pool.',
     ),
-    'mfl': Source(
-        key='mfl',
-        label='MyFantasyLeague (auction values)',
-        adp_field='adp_mfl',
+    'sharks': Source(
+        key='sharks',
+        label='FantasySharks (via MFL)',
+        adp_field='adp_sharks',
+        # MFL's player id: the ranks come from FantasySharks but are served on
+        # MFL ids, so this column keeps its name and its cached values.
         id_field='mfl_id',
         persist_id=True,
-        sample_unit='auctions',
-        fetch=mfl.fetch,
-        caveat='Auction values from REDRAFT leagues, ranked. Reads AAV rather than MFL\'s '
-               'ADP feed, which is superflex-contaminated (8 QBs in its top 50 vs 3 here).',
+        sample_unit='',
+        fetch=sharks.fetch,
+        caveat='Expert ranking, not market data - one analyst shop, unlike '
+               'FantasyPros\' ~109-expert consensus. Cleanly 1QB (0 QBs in its top 50).',
     ),
     'fpros': Source(
         key='fpros',

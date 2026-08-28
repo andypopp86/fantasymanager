@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 # Every column that holds a rank. `adp_formatted` is the effective one the board
 # sorts on; the rest are per-source and nullable.
-RANKED_COLUMNS = ('adp_formatted', 'adp_ffc', 'adp_mfl', 'adp_fpros')
+RANKED_COLUMNS = ('adp_formatted', 'adp_ffc', 'adp_sharks', 'adp_fpros')
 
 
 @dataclasses.dataclass
