@@ -2,6 +2,7 @@ import React, { useEffect } from "react";
 import AvailablePlayer from "./AvailablePlayer.tsx";
 import { useState } from "react";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { byFavoriteThenAdp } from "../utils/draftHelpers";
 
 export const AvailablePlayers = ({draftContext, draftSend}) => {
     // On a phone the filter form would push the player list off-screen, so it
@@ -188,8 +189,11 @@ export const AvailablePlayers = ({draftContext, draftSend}) => {
         }
         const stat = document.getElementById("stat") as HTMLSelectElement;
         const statValue = stat.value;
-        const sortedPlayers = filteredPlayers.sort((a, b) => {
-            return parseFloat(b[statValue]) - parseFloat(a[statValue]);
+        // Same favorite/ADP tiebreak as the default list (useDraftData): every
+        // stat ties somewhere, and $ ties constantly at the bottom of the board.
+        // Sorted on a COPY — filteredPlayers is state, and Array.sort mutates.
+        const sortedPlayers = [...filteredPlayers].sort((a, b) => {
+            return (parseFloat(b[statValue]) - parseFloat(a[statValue])) || byFavoriteThenAdp(a, b);
         });
         setStatField(statValue);
         setStatAbbreviation(ABBREV_NAMES[statValue]);

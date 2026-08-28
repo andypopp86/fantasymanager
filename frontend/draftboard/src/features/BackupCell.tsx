@@ -8,41 +8,39 @@ import type { BackupPickRow, SlotName } from "../lib/draft.schemas";
 // row is the whole point — a shelf only means anything beside the slot it backs
 // up, so a stolen WR1 target and its replacement read as one line.
 //
-// Every handler stops propagation: the enclosing <tr> is itself a drop/tap
-// target for the BUDGET slot (and a click there UNBUDGETS), so an un-stopped
-// event here would clear the budgeted player instead of touching the shelf.
+// The cell is DRAG-ONLY. Clicking does nothing (bar the ✕): dragging a filled
+// cell onto a budget row promotes that player into the slot, and dragging it
+// onto another cell moves them along the shelf. Clicking used to promote, which
+// made every stray click on the widest part of the row a plan edit.
 //
-// Writes are LOCAL ONLY (backup_picks in Dexie, no server counterpart) except
-// promotion, which edits the budget through mutations.promoteBackup.
+// The onClick that IS here only stops propagation, and has to stay: the
+// enclosing <tr> is a drop/tap target for the BUDGET slot and a click there
+// UNBUDGETS, so an un-stopped click in this cell would clear the budgeted
+// player. Every other handler stops propagation for the same reason.
+//
+// Writes are LOCAL ONLY (backup_cells in Dexie, no server counterpart) except
+// promotion, which edits the budget and is owned by the parent's drop handler.
 
 type BackupCellProps = {
     draftId: number,
-    drafterId: number,
     slot: SlotName,
     rank: number,
     cell: BackupPickRow | null,
     // The BUDGET slot's eligibility list — a backup stands in for ONE slot, so
     // it has to satisfy that slot's positions like any other candidate for it.
     allowed: string[],
-    // The budget slot's current occupant (projected pick shape), and whether
-    // that occupant is a player the DRAFTER has already drafted.
-    occupantPick: any,
-    settled: boolean,
-    nominated: any,
     draggedPlayer: any,
+    draftSend: (event: any) => void,
     // player_id (stringified) -> the manager who drafted them, whole field.
     takenBy: Record<string, string>,
 };
 
 export default function BackupCell({
-    draftId, drafterId, slot, rank, cell, allowed, occupantPick, settled,
-    nominated, draggedPlayer, takenBy,
+    draftId, slot, rank, cell, allowed, draggedPlayer, draftSend, takenBy,
 }: BackupCellProps) {
     const [isDragOver, setIsDragOver] = useState(false);
 
-    const hasNomination = !!(nominated && nominated.player_id);
     const taken = cell ? takenBy[String(cell.player_id)] : null;
-    const isTapTarget = !cell && hasNomination && allowed.includes(nominated.position);
     const price = cell ? parseInt(String(cell.projected_price)) || 0 : 0;
 
     // Planned at the projection, matching the budget slots themselves — the live
@@ -51,40 +49,27 @@ export default function BackupCell({
         mutations.backupPick(draftId, player, slot, rank, projectedPrice);
     };
 
-    // Clicking a filled cell swaps it with the budget slot it backs up.
-    const promote = () => {
+    // Picking the cell up. `origin` is what tells every drop target this came
+    // off a shelf rather than out of the player list: the budget row reads it to
+    // promote (and to hand the displaced player back to THIS cell), and a
+    // sibling cell reads it to move instead of copy.
+    const handleDragStart = (e: React.DragEvent) => {
         if (!cell) return;
-        if (taken) {
-            alert(`${cell.player_name} was drafted by ${taken} — pick a different backup for ${slot}.`);
-            return;
-        }
-        if (settled) {
-            alert(`${occupantPick.player_name} is already drafted at ${slot}, so the slot is settled.`);
-            return;
-        }
-        const occupant = occupantPick.player_id
-            ? {
-                player_id: occupantPick.player_id,
-                player_name: occupantPick.player_name,
-                position: occupantPick.position,
-                projected_price: occupantPick.projected_price,
-            }
-            : null;
-        mutations.promoteBackup(draftId, drafterId, slot, rank, cell, occupant);
-    };
-
-    const handleClick = (e: React.MouseEvent) => {
         e.stopPropagation();
-        if (cell) {
-            promote();
-            return;
-        }
-        if (!hasNomination) return;
-        if (!allowed.includes(nominated.position)) {
-            alert(`${nominated.position} is not eligible for ${slot}.`);
-            return;
-        }
-        park(nominated, nominated.projected_price ?? 0);
+        draftSend({
+            type: "drag_player",
+            player: {
+                player: {
+                    player_id: cell.player_id,
+                    name: cell.player_name,
+                    player_name: cell.player_name,
+                    position: cell.position,
+                    projected_price: cell.projected_price,
+                },
+                projected_price: cell.projected_price,
+                origin: { slot, rank },
+            },
+        });
     };
 
     const handleDrop = (e: React.DragEvent) => {
@@ -96,13 +81,22 @@ export default function BackupCell({
             alert(`${draggedPlayer.player.position} is not eligible for ${slot}.`);
             return;
         }
+        // From another cell: a move (the source empties, and a full destination
+        // swaps back into it). From anywhere else: a copy, so the same player
+        // can back up several slots at once.
+        if (draggedPlayer.origin) {
+            mutations.moveBackup(draftId, draggedPlayer.origin, { slot, rank });
+            return;
+        }
         park(draggedPlayer.player, draggedPlayer.projected_price ?? draggedPlayer.player.projected_price ?? 0);
     };
 
     return (
         <td
             className="border-l border-gray-300 px-1"
-            onClick={handleClick}
+            draggable={!!cell}
+            onDragStart={handleDragStart}
+            onClick={(e) => e.stopPropagation()}
             onDrop={handleDrop}
             onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(true); }}
             onDragLeave={() => setIsDragOver(false)}
@@ -110,17 +104,15 @@ export default function BackupCell({
                 background: isDragOver ? "blue"
                     : taken ? "#fecaca"
                     : cell ? POSITION_BG_COLORS[cell.position]
-                    : isTapTarget ? "#dbeafe"
                     : "white",
                 color: cell && !taken ? POSITION_FG_COLORS[cell.position] : "black",
+                cursor: cell ? "grab" : "default",
             }}
             title={cell
                 ? taken
                     ? `${cell.player_name} was drafted by ${taken}`
-                    : `Swap ${cell.player_name} ($${price}) into ${slot}`
-                : isTapTarget
-                    ? `Back up ${slot} with ${nominated.name}`
-                    : `${slot} backup ${rank} — drag a player here`}
+                    : `Drag ${cell.player_name} ($${price}) onto a budget row to slot them, or onto another cell to move them`
+                : `${slot} backup ${rank} — drag a player here`}
         >
             {cell ? (
                 <span className="flex items-center gap-1">
@@ -132,16 +124,14 @@ export default function BackupCell({
                     <span className="whitespace-nowrap">${price}</span>
                     <button
                         className="ml-auto px-0.5 hover:text-red-600"
-                        onClick={(e) => { e.stopPropagation(); mutations.unbackupPick(draftId, cell.player_id); }}
+                        onClick={(e) => { e.stopPropagation(); mutations.unbackupPick(draftId, slot, rank); }}
                         title={`Clear ${slot} backup ${rank}`}
                     >
                         ✕
                     </button>
                 </span>
             ) : (
-                <span className="block text-center text-gray-300 w-28">
-                    {isTapTarget ? "＋" : "·"}
-                </span>
+                <span className="block text-center text-gray-300 w-28">·</span>
             )}
         </td>
     );

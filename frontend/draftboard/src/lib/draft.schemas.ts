@@ -177,6 +177,10 @@ export type PlayerDetail = {
     position: string,
     projected_price?: number | string,
     adp_price?: number | string,
+    // The one EFFECTIVE ADP: an integer RANK, 1 = first off the board. Nothing
+    // renders it; it is the tiebreak the available-players list sorts on when
+    // projected prices are equal (see hooks/useDraftData.ts).
+    adp_formatted?: number | string,
     // The drafter's hand-set WALK-AWAY price — stop bidding above this. Null =
     // no view. Shown in the nomination area, coloured against the effective
     // projected price.
@@ -356,9 +360,10 @@ export type BudgetPickRow = {
 //
 // `slot` is the BUDGET slot being backed up (QB1, WR1, BENCH3 …) and `rank` is
 // the depth position on that slot's shelf (1..BACKUP_DEPTH), so a row is
-// addressed by (slot, rank). Because a backup stands in for one specific slot,
-// it must satisfy that slot's `allowed_positions` like any other candidate for
-// it.
+// addressed by (slot, rank) — the CELL, not the player, which is why one player
+// may hold cells on several shelves at once (a handcuff RB behind both RB1 and
+// RB2). Because a backup stands in for one specific slot, it must satisfy that
+// slot's `allowed_positions` like any other candidate for it.
 export const BACKUP_DEPTH = 3;
 
 export type BackupPickRow = {

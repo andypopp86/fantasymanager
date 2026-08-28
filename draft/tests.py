@@ -1717,3 +1717,58 @@ class FfcRefreshReranksTests(TestCase):
         self.assertEqual(Player.objects.get(name='Feed One').adp_ffc, 1)
         self.assertEqual(Player.objects.get(name='Feed Two').adp_ffc, 2)
         self.assertIsNone(Player.objects.get(name='Off Feed WR').adp_ffc)
+
+
+class AvailablePlayerOrderingTests(TestCase):
+    """The $1 tail is the biggest block on the board, so its order has to mean
+    something. Equal-priced players fall back to the effective ADP rank."""
+
+    def setUp(self):
+        self.draft = Draft.objects.create(year=2026, draft_name="ordering")
+
+    def add(self, name, position, price, adp, favorite=None):
+        player = make_player(name, position)
+        Player.objects.filter(pk=player.pk).update(
+            projected_price=price, adp_formatted=adp, favorite=favorite)
+        DraftPick.objects.create(draft=self.draft, player=player, drafted=False)
+        return player
+
+    def names(self):
+        from draft.services.draft.draft import DraftReadService
+
+        picks = DraftReadService(user=None).get_available_players(draft_id=self.draft.id)
+        return [pick.player.name for pick in picks]
+
+    def test_equal_priced_players_order_by_effective_adp(self):
+        # Inserted worst-ADP-first so insertion order can't produce the answer.
+        self.add("Dollar C", "WR", 1, 300)
+        self.add("Dollar B", "RB", 1, 200)
+        self.add("Dollar A", "TE", 1, 100)
+
+        self.assertEqual(self.names(), ["Dollar A", "Dollar B", "Dollar C"])
+
+    def test_price_still_outranks_adp(self):
+        self.add("Cheap Sleeper", "WR", 1, 50)
+        self.add("Expensive Stud", "RB", 60, 400)
+
+        self.assertEqual(self.names(), ["Expensive Stud", "Cheap Sleeper"])
+
+    def test_favorite_tiers_outrank_adp_at_the_same_price(self):
+        # Tri-state, so all three tiers separate before ADP is consulted: the
+        # avoided player has the best ADP and still sorts last. The client
+        # mirrors this in byFavoriteThenAdp (utils/draftHelpers.ts).
+        self.add("Avoided", "TE", 1, 50, favorite=False)
+        self.add("Neutral", "WR", 1, 100)
+        self.add("Hearted", "RB", 1, 250, favorite=True)
+
+        self.assertEqual(self.names(), ["Hearted", "Neutral", "Avoided"])
+
+    def test_serializer_carries_adp_formatted(self):
+        from draft.api.views.draft import DraftPicksOutputSerializer
+        from draft.services.draft.draft import DraftReadService
+
+        self.add("Ranked WR", "WR", 1, 137)
+        picks = DraftReadService(user=None).get_available_players(draft_id=self.draft.id)
+        row = DraftPicksOutputSerializer.serialize(list(picks)[0])
+
+        self.assertEqual(row["player"]["adp_formatted"], 137)

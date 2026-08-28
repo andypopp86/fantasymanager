@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../lib/db";
+import { byFavoriteThenAdp } from "../utils/draftHelpers";
 import { BACKUP_DEPTH } from "../lib/draft.schemas";
 import type { BackupPickRow, BudgetPickRow, DraftPickRow, PickSlot, SlotName } from "../lib/draft.schemas";
 
@@ -17,9 +18,10 @@ export const useDraftData = (draftId: number) => {
     const pickRows = useLiveQuery(() => db.draft_picks.where("draftId").equals(draftId).toArray(), [draftId]);
     const budgetRows = useLiveQuery(() => db.budget_picks.where("draftId").equals(draftId).toArray(), [draftId]);
     const watchRows = useLiveQuery(() => db.watch_picks.where("draftId").equals(draftId).toArray(), [draftId]);
-    // Local-only shelf of alternates (lib/db.ts v5) — never hydrated from, or
-    // pushed to, the server.
-    const backupRows = useLiveQuery(() => db.backup_picks.where("draftId").equals(draftId).toArray(), [draftId]);
+    // Local-only shelf of alternates (lib/db.ts v7) — never hydrated from, or
+    // pushed to, the server. One row per CELL, so the same player can appear on
+    // more than one slot's shelf.
+    const backupRows = useLiveQuery(() => db.backup_cells.where("draftId").equals(draftId).toArray(), [draftId]);
     // Writes waiting for the server to come back (lib/writeQueue.ts).
     const pendingWrites = useLiveQuery(() => db.pending_writes.where("draftId").equals(draftId).count(), [draftId]) ?? 0;
 
@@ -28,10 +30,15 @@ export const useDraftData = (draftId: number) => {
             return { hydrated: false, drafterId: 0, managers: [], undraftedPlayers: [], budgetedPlayers: {}, watchedPlayers: [], backupsBySlot: {}, budgetSpent: 0, pendingWrites };
         }
 
+        // Price desc, then favorite desc, then effective ADP asc — the same
+        // order the server sorts in, re-established here because it is LOST in
+        // transit: Dexie hands rows back in primary-key order (player_id), so
+        // without this the whole $1 tail is shuffled into an order that means
+        // nothing (see byFavoriteThenAdp).
         const undraftedPlayers = pickRows
             .filter((row) => !row.drafted)
-            .sort((a, b) => Number(b.projected_price) - Number(a.projected_price))
-            .map((row) => ({ player: row.player, projected_price: row.projected_price, ...row.stats }));
+            .map((row) => ({ player: row.player, projected_price: row.projected_price, ...row.stats }))
+            .sort((a, b) => Number(b.projected_price) - Number(a.projected_price) || byFavoriteThenAdp(a, b));
 
         const draftedByManager: Record<number, DraftPickRow[]> = {};
         pickRows.forEach((row) => {

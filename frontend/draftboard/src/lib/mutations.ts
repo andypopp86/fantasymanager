@@ -194,9 +194,11 @@ export const applyBudgetChanges = async (
 // write queue — these are the only mutations here that never talk to the
 // server (promoteBackup being the exception, since it also writes the budget).
 //
-// One row per player, like budget_picks: parking someone already parked
-// elsewhere MOVES them, and the target cell's occupant is replaced (the UI
-// shows cell contents, so filling a full cell is a deliberate swap).
+// One row per CELL, not per player (lib/db.ts v7): the same player may back up
+// several slots at once — a handcuff RB legitimately stands behind both RB1 and
+// RB2 — so parking someone leaves every other cell holding them untouched. The
+// target cell's own occupant is still replaced: the UI shows cell contents, so
+// dropping onto a full cell is a deliberate overwrite.
 export const backupPick = async (
     draftId: number,
     player: { player_id: number | string, name?: string, player_name?: string, position: string },
@@ -204,32 +206,53 @@ export const backupPick = async (
     rank: number,
     projectedPrice: number | string,
 ) => {
-    await db.transaction("rw", db.backup_picks, async () => {
-        await db.backup_picks.where("[draftId+slot+rank]").equals([draftId, slot, rank]).delete();
-        await db.backup_picks.delete([draftId, player.player_id]);
-        await db.backup_picks.put({
-            draftId,
-            player_id: player.player_id,
-            slot,
-            rank,
-            player_name: player.name || player.player_name || "",
-            position: player.position,
-            projected_price: projectedPrice,
-        });
+    await db.backup_cells.put({
+        draftId,
+        player_id: player.player_id,
+        slot,
+        rank,
+        player_name: player.name || player.player_name || "",
+        position: player.position,
+        projected_price: projectedPrice,
     });
 };
 
-export const unbackupPick = async (draftId: number, playerId: number | string) => {
-    await db.backup_picks.delete([draftId, playerId]);
+// Clears ONE cell. Addressed by (slot, rank) rather than by player, because a
+// player may sit in several cells and only the one clicked should empty.
+export const unbackupPick = async (draftId: number, slot: SlotName, rank: number) => {
+    await db.backup_cells.delete([draftId, slot, rank]);
 };
 
-// Promote a backup into the budget slot it was parked behind — the whole point
-// of the shelf, and one click because the slot is not a choice: a WR1 backup
-// goes to WR1.
+// Drag a backup from one cell to another. A move, not a copy: the source cell
+// empties. If the destination is occupied the two SWAP, so a drag onto a full
+// cell reorders the shelf instead of throwing a player away.
+export const moveBackup = async (
+    draftId: number,
+    from: { slot: SlotName, rank: number },
+    to: { slot: SlotName, rank: number },
+) => {
+    if (from.slot === to.slot && from.rank === to.rank) return;
+    await db.transaction("rw", db.backup_cells, async () => {
+        const source = await db.backup_cells.get([draftId, from.slot, from.rank]);
+        if (!source) return;
+        const target = await db.backup_cells.get([draftId, to.slot, to.rank]);
+        await db.backup_cells.put({ ...source, slot: to.slot, rank: to.rank });
+        if (target) {
+            await db.backup_cells.put({ ...target, slot: from.slot, rank: from.rank });
+        } else {
+            await db.backup_cells.delete([draftId, from.slot, from.rank]);
+        }
+    });
+};
+
+// Promote a backup off its shelf cell (`from`) into a budget slot (`toSlot`) —
+// the whole point of the shelf. Dragging is the only way in: `toSlot` is
+// usually the slot the cell sits beside, but a backup can be dropped on any
+// budget row whose positions it satisfies.
 //
 // It is a SWAP, not a replacement: whoever held the budget slot lands in the
 // cell the promoted player just vacated, so the plan never loses a player it
-// had picked out (and clicking the same cell again swaps them straight back).
+// had picked out (and dragging them back swaps them straight back).
 // `occupant` may be null, in which case this is a plain placement.
 //
 // The budget half goes through applyBudgetChanges to inherit its ordering
@@ -240,35 +263,36 @@ export const unbackupPick = async (draftId: number, playerId: number | string) =
 export const promoteBackup = async (
     draftId: number,
     drafterId: number,
-    slot: SlotName,
-    rank: number,
+    from: { slot: SlotName, rank: number },
+    toSlot: SlotName,
     backup: { player_id: number | string, player_name: string, position: string, projected_price: number | string },
     occupant: { player_id: number | string, player_name: string, position: string, projected_price: number | string } | null,
 ) => {
     await applyBudgetChanges(draftId, drafterId, {
         unbudget: occupant ? [occupant.player_id] : [],
         place: [{
-            slot,
+            slot: toSlot,
             player: { player_id: backup.player_id, name: backup.player_name, position: backup.position },
             projectedPrice: backup.projected_price,
         }],
     });
     // Local shelf second: if the budget writes throw, the shelf still reads the
-    // way the user left it rather than half-applied.
-    await db.transaction("rw", db.backup_picks, async () => {
-        await db.backup_picks.delete([draftId, backup.player_id]);
-        if (occupant) {
-            await db.backup_picks.put({
-                draftId,
-                player_id: occupant.player_id,
-                slot,
-                rank,
-                player_name: occupant.player_name,
-                position: occupant.position,
-                projected_price: occupant.projected_price,
-            });
-        }
-    });
+    // way the user left it rather than half-applied. Only the cell dragged FROM
+    // is touched — the promoted player may back up other slots too, and those
+    // shelves are still valid.
+    if (occupant) {
+        await db.backup_cells.put({
+            draftId,
+            player_id: occupant.player_id,
+            slot: from.slot,
+            rank: from.rank,
+            player_name: occupant.player_name,
+            position: occupant.position,
+            projected_price: occupant.projected_price,
+        });
+    } else {
+        await db.backup_cells.delete([draftId, from.slot, from.rank]);
+    }
 };
 
 export const watchPick = async (
