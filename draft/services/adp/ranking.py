@@ -66,12 +66,14 @@ def rerank_year(year=None, columns=None, dry_run=False):
         if column not in RANKED_COLUMNS:
             raise ValueError(f'{column!r} is not a ranked ADP column')
 
+        # `.order_by(column, 'name')` also clears Player.Meta.ordering, which
+        # matters: Django folds ordering columns into DISTINCT/GROUP BY and that
+        # bit this feature once already (see migration 0089).
         rows = list(
             d.Player.objects
             .filter(year=year)
             .exclude(**{f'{column}__isnull': True})
             .order_by(column, 'name')
-            .values_list('pk', column)
         )
         result = ColumnRerank(
             column=column,
@@ -79,15 +81,20 @@ def rerank_year(year=None, columns=None, dry_run=False):
             unranked=d.Player.objects.filter(year=year, **{f'{column}__isnull': True}).count(),
         )
 
-        for index, (pk, current) in enumerate(rows, start=1):
-            if current == index:
+        moved = []
+        for index, obj in enumerate(rows, start=1):
+            if getattr(obj, column) == index:
                 continue
             result.changed += 1
-            if not dry_run:
-                # Queryset update, not Player.save(): save() floors
-                # projected_price at 1, and reranking has no business touching a
-                # price.
-                d.Player.objects.filter(pk=pk).update(**{column: index})
+            setattr(obj, column, index)
+            moved.append(obj)
+
+        if moved and not dry_run:
+            # bulk_update, not a save() per row: Player.save() floors
+            # projected_price at 1, and reranking has no business touching a
+            # price. It is also the difference between one statement and N —
+            # this runs inline in the admin refresh request.
+            d.Player.objects.bulk_update(moved, [column], batch_size=500)
 
         report.columns.append(result)
         if result.changed:

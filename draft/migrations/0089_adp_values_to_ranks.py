@@ -26,17 +26,29 @@ RANKED_COLUMNS = ('adp_formatted', 'adp_ffc', 'adp_mfl', 'adp_fpros')
 
 def to_ranks(apps, schema_editor):
     Player = apps.get_model('draft', 'Player')
-    for year in Player.objects.values_list('year', flat=True).distinct():
+    # `.order_by()` FIRST, and it is load-bearing. Player.Meta.ordering is
+    # ['adp_formatted'], and Django folds ordering columns into a DISTINCT
+    # SELECT — so a bare `.values_list('year', flat=True).distinct()` compiles to
+    # SELECT DISTINCT year, adp_formatted and yields one yea r per (year, ADP)
+    # PAIR: 861 values instead of 5 on the real database. That turned this into
+    # ~861 x 1,237 = a million updates. Note `.count()` does NOT reproduce it —
+    # Django strips ORDER BY for counts, so counting says 5 while iterating says
+    # 861.
+    years = sorted(set(
+        Player.objects.order_by().values_list('year', flat=True).distinct()))
+    for year in years:
         for column in RANKED_COLUMNS:
             rows = list(
                 Player.objects
                 .filter(year=year)
                 .exclude(**{f'{column}__isnull': True})
                 .order_by(column, 'name')
-                .values_list('pk', flat=True)
             )
-            for index, pk in enumerate(rows, start=1):
-                Player.objects.filter(pk=pk).update(**{column: index})
+            for index, obj in enumerate(rows, start=1):
+                setattr(obj, column, index)
+            # One statement per batch instead of one per row. The per-row loop
+            # this replaces ran at ~5 updates/sec against the hosted database.
+            Player.objects.bulk_update(rows, [column], batch_size=500)
 
 
 def noop_reverse(apps, schema_editor):
