@@ -183,12 +183,18 @@ class Player(models.Model):
     # Null = that provider does not rank this player (coverage differs a lot:
     # FFC ~199, MFL ~205 after dropping IDP, FantasyPros ~210 of a 941-row feed).
     adp_ffc = models.PositiveIntegerField(null=True, blank=True)
-    adp_mfl = models.PositiveIntegerField(null=True, blank=True)
+    # FantasySharks expert ranks, served through MFL's playerRanks endpoint.
+    # This slot used to hold MyFantasyLeague's own ADP; that was removed because
+    # MFL's drafter base is ~43% superflex and it has no 1QB filter in any feed,
+    # which put 8 QBs in its top 50 against FFC's 1. See providers/sharks.py.
+    adp_sharks = models.PositiveIntegerField(null=True, blank=True)
     # FantasyPros ships an expert CONSENSUS RANK, not an average pick — their
     # real ADP endpoint is behind a paid key. Ranked like the others, but don't
     # read it as market data.
     adp_fpros = models.PositiveIntegerField(null=True, blank=True)
-    # Provider ids, learned once. The feeds key on their own ids while this
+    # Provider ids, learned once. `mfl_id` is MyFantasyLeague's player id, still
+    # the join key for the FantasySharks ranks (MFL serves them on its own ids).
+    # The feeds key on their own ids while this
     # table keys on FFC's (player_id), so the first sync has to resolve by name
     # — fuzzy, and occasionally wrong. Persisting the id it landed on turns
     # every later sync into an exact lookup, so the fuzzy pass only ever sees

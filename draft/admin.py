@@ -143,7 +143,7 @@ class PlayerAdmin(admin.ModelAdmin):
     # effective rank) and `adp_source` stay back with the derived columns; they
     # answer a different question than "where do the three markets disagree".
     # Rest of the order: what you set during prep first, reference columns last.
-    list_display = ('name', 'adp_ffc', 'adp_mfl', 'adp_fpros', 'position', 'team', 'year', 'target_tier', 'years_experience', 'risk_score', 'risk_summary', 'is_projection', 'has_injury', 'defensive_impact', 'projected_price', 'my_price', 'my_price_rationale', 'adp_formatted', 'adp_source', 'favorite', 'override_price', 'player_id')
+    list_display = ('name', 'adp_ffc', 'adp_sharks', 'adp_fpros', 'position', 'team', 'year', 'target_tier', 'years_experience', 'risk_score', 'risk_summary', 'is_projection', 'has_injury', 'defensive_impact', 'projected_price', 'my_price', 'my_price_rationale', 'adp_formatted', 'adp_source', 'favorite', 'override_price', 'player_id')
     # `name` is the link column, pinned explicitly. Django otherwise links
     # list_display[0], which is no longer player_id — and a link column may
     # never be list_editable, so leaving it implicit would break the moment the
@@ -167,7 +167,7 @@ class PlayerAdmin(admin.ModelAdmin):
     change_list_template = 'admin/draft/player/change_list.html'
     # Derived by sync_adp / apply_adp_source, so hand-edits would be silently
     # overwritten by the next run. Readable in the change form, never editable.
-    readonly_fields = ('adp_source', 'adp_ffc', 'adp_mfl', 'adp_fpros')
+    readonly_fields = ('adp_source', 'adp_ffc', 'adp_sharks', 'adp_fpros')
 
     def get_urls(self):
         # BEFORE super(), or the admin's catch-all <path:object_id>/ route
@@ -329,7 +329,7 @@ class PlayerAdmin(admin.ModelAdmin):
         if db_field.name == 'risk_summary':
             kwargs['widget'] = Textarea(attrs={'rows': 4, 'cols': 34})
         return super().formfield_for_dbfield(db_field, request, **kwargs)
-    fields = ('name', 'position', 'team', 'year', 'notes', 'target_tier', 'years_experience', 'risk_score', 'risk_summary', 'is_projection', 'has_injury', 'defensive_impact', 'projected_price', 'adp_price', 'my_price', 'my_price_rationale', 'skepticism', 'adp_formatted', 'adp_source', 'adp_ffc', 'adp_mfl', 'adp_fpros', 'favorite', 'override_price', 'player_id', )
+    fields = ('name', 'position', 'team', 'year', 'notes', 'target_tier', 'years_experience', 'risk_score', 'risk_summary', 'is_projection', 'has_injury', 'defensive_impact', 'projected_price', 'adp_price', 'my_price', 'my_price_rationale', 'skepticism', 'adp_formatted', 'adp_source', 'adp_ffc', 'adp_sharks', 'adp_fpros', 'favorite', 'override_price', 'player_id', )
     
 class DraftAdmin(admin.ModelAdmin):
     list_display = ('draft_name', 'year', 'drafter', 'projected_draft', 'available_to_spectators', 'date_created')

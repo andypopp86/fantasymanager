@@ -103,10 +103,10 @@ railway ssh --service app -- python manage.py apply_adp_source
 railway ssh --service app -- python manage.py apply_adp_source --source mfl
 ```
 
-**Do not `apply_adp_source --source mfl`.** MyFantasyLeague is a comparison
-column only: superflex leagues skew it (8 QBs in its top 50 vs FFC's 1) and MFL
-offers no 1QB filter in any of its feeds. Applying it puts wildly wrong prices on
-the board. `ffc` and `fpros` are the two safe choices. See `AGENTS.md`.
+Sources are `ffc` (market), `fpros` and `sharks` (expert). MyFantasyLeague's own
+ADP and AAV were both removed — superflex skew and veteran overvaluation
+respectively — and `sharks` reads MFL's `playerRanks` instead. See `AGENTS.md`
+before adding any MFL feed back.
 
 Add `--dry-run` to either to see the outcome without writing. **Don't run
 `apply_adp_source` during a live draft** — it rewrites every projected price the

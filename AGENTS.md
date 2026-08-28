@@ -612,35 +612,35 @@ provider module, and nothing else branches):
 
 - `ffc` — Fantasy Football Calculator. Also the ROSTER source; `add_players`
   still owns creating players and now fills `adp_ffc` in passing.
-- `mfl` — MyFantasyLeague ADP (`TYPE=adp`, `PERIOD=RECENT`, `IS_KEEPER=N`).
-  **COMPARISON COLUMN ONLY — never apply it as the effective source.** It is a
-  real second opinion at RB/WR and it is wrong about QBs in a way that wrecks a
-  1QB auction: 8 QBs inside its top 50 where FFC has 1, median shift QB −28,
-  TE −16, WR +16. That is superflex bleeding into the averages.
-  - **MFL has no 1QB view, and it is not a paywall.** Their own ADP report UI
-    filters on position, rookies, injuries, cutoff, franchise count, PPR, draft
-    type, mock status and period — there is no lineup/superflex filter anywhere.
-  - **`TYPE=aav` was tried as a way out and is worse — don't go back to it.**
-    Auction leagues really are mostly 1QB and QB density did fall to 3 in the top
-    50, but auction values overvalue veterans so badly the top of the board falls
-    apart: McCaffrey 1st (FFC 7), Barkley 2nd (FFC 17), Henry 4th (FFC 10),
-    Gibbs 6th when he is the consensus 1. Applied, that put $72 on McCaffrey and
-    $67 on Barkley. `PERIOD=AUG15` (207 of 232 auctions) gives the identical top,
-    so it is not an offseason artifact — the sample is just small and skewed.
-  - **The API docs are wrong about `IS_MOCK`.** The reference says 1 = mocks
-    only; the report UI is the truth: 0 = all, 1 = EXCLUDE mocks, 2 = mocks only.
-    With the right value, `IS_MOCK=1` returns `totalDrafts: 0` — **every** recent
-    MFL redraft draft is a mock. So this is the same KIND of data as FFC's, from
-    a superflex-heavy user base; there is no non-mock population to filter to.
-  - `IS_KEEPER` takes letters N/K/R (redraft/keeper/rookie-only), combinable,
-    bracket syntax `[NK]` allowed. It rejects anything else, which is why an
-    early `IS_KEEPER=Redraft` errored and made the filter look broken. The
-    default `NKR` mixed in 229 rookie-only drafts of 692 (~49 college players in
-    the top 150); `N` removes them and is kept.
-  - Franchise filter is `FCOUNT` (8/10/12/14/16), not `FRANCHISES`. `IS_PPR` in
-    the UI is 3=any/1=non-PPR/2=PPR, not the −1/0/1 the API reference lists.
-  - A response filtered to nothing omits the `player` key entirely rather than
-    returning an empty list — the parser handles that.
+- `sharks` — **FantasySharks expert ranks, served via MFL's `TYPE=playerRanks`**
+  (`SOURCE` only accepts `sharks`; `mfl`/`adp`/`aav` return empty). ~564 skill
+  rows, cleanly 1QB: **QB@30=0, QB@50=0, QB@100=4** against FFC's 0/1/11 — it
+  ranks QBs *later* than FFC, the ordinary 1QB expert stance. Expert opinion,
+  not market data, and one analyst shop rather than FantasyPros' ~109-expert
+  consensus. Uses MFL player ids, which is why the cached id column is still
+  `Player.mfl_id`.
+  - **MyFantasyLeague's own ADP and AAV were both tried and both removed. Don't
+    bring either back.** `TYPE=adp`: MFL's drafter base is ~43% superflex with
+    no 1QB filter in any feed, putting 8 QBs in its top 50 vs FFC's 1 (median
+    shift QB −28, TE −16, WR +16). `TYPE=aav`: fixed QB density but overvalued
+    veterans so badly the top of the board broke — McCaffrey 1st (FFC 7),
+    Barkley 2nd (FFC 17), Gibbs 6th when he is the consensus 1 — which applied
+    $72 to McCaffrey and $67 to Barkley. `PERIOD=AUG15` gives the identical top,
+    so it is not offseason staleness; the 232-auction sample is just too small.
+  - **A 1QB-filtered rebuild of MFL's ADP is possible but not worth it.**
+    `adp&DETAILS=1` lists the sample's leagues and `TYPE=league` publicly exposes
+    each one's `starters.position` QB `limit` (`"1"` = 1QB, `"1-2"` = superflex),
+    and `TYPE=draftResults` is public too. But `IS_MOCK=1` returns zero drafts —
+    MFL's entire recent redraft pool is *mock* drafts — so the rebuild yields
+    ~71 mock drafts against FFC's ~8,000. Same kind of data, ~1% of the sample,
+    for ~320 calls against an API that returns **HTTP 429** under load.
+  - MFL API doc errors worth remembering: `IS_MOCK` is documented BACKWARDS
+    (UI is the truth — 0 = all, 1 = *exclude* mocks, 2 = mocks only);
+    `IS_KEEPER` takes letters N/K/R, combinable, bracket syntax `[NK]`, and
+    rejects anything else; the franchise filter is `FCOUNT`, not `FRANCHISES`;
+    `IS_PPR` is 3=any/1=non-PPR/2=PPR. `playerProfile` reports `adp: "N/A"`.
+  - **MFL rate-limits.** Keep this provider at two calls; never go per-player or
+    per-league.
 - `fpros` — FantasyPros. **This is ECR, not ADP** — their real ADP endpoint
   returns `count: 0` without a paid key. Scoring is `HALF` to match the
   hardcoded `half-ppr` FFC pull.
