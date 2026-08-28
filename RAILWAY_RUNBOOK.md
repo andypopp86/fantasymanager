@@ -103,9 +103,10 @@ railway ssh --service app -- python manage.py apply_adp_source
 railway ssh --service app -- python manage.py apply_adp_source --source mfl
 ```
 
-Note `mfl` reads MyFantasyLeague's AUCTION VALUES (`TYPE=aav`), not its ADP
-feed — the ADP feed is superflex-contaminated and would inflate every QB price
-in a 1QB auction. See `AGENTS.md` before changing that.
+**Do not `apply_adp_source --source mfl`.** MyFantasyLeague is a comparison
+column only: superflex leagues skew it (8 QBs in its top 50 vs FFC's 1) and MFL
+offers no 1QB filter in any of its feeds. Applying it puts wildly wrong prices on
+the board. `ffc` and `fpros` are the two safe choices. See `AGENTS.md`.
 
 Add `--dry-run` to either to see the outcome without writing. **Don't run
 `apply_adp_source` during a live draft** — it rewrites every projected price the

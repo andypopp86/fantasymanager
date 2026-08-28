@@ -1,37 +1,53 @@
-"""MyFantasyLeague AUCTION VALUES (AAV), not its ADP.
+"""MyFantasyLeague ADP.
 
-This deliberately reads `TYPE=aav` rather than `TYPE=adp`, and the reason is
-worth keeping: MFL's ADP feed is badly superflex-contaminated. It ranks 7-8 QBs
-inside its top 50 where FFC ranks 1, a median 28 ranks earlier by position, which
-would inflate every QB price in a 1QB auction. No parameter filters it —
-`IS_MOCK`, `IS_KEEPER`, `IS_PPR`, `FCOUNT` and `CUTOFF` were all measured and
-none moved the QB density.
+**This source is a COMPARISON COLUMN, not something to apply as the effective
+source.** It is a genuine second opinion at RB and WR, and it is wrong about
+quarterbacks in a way that will wreck a 1QB auction. The caveat in sources.py
+says so on the admin confirm page. Everything below is why.
 
-The AAV feed draws from a different population and does not have the problem:
-superflex lives mostly in snake and dynasty formats, while auction leagues are
-overwhelmingly 1QB. Measured, QBs inside the top 50 drop from 8 to 3 — in line
-with FantasyPros (4), and close enough to FFC (1) to be usable. Same provider,
-same drafters this board wanted a second opinion from, without the format skew.
+MFL has no 1QB view. Their own ADP report UI filters on position, rookies,
+injuries, cutoff, franchise count, PPR, draft type, mock status and period —
+there is no lineup or superflex filter anywhere, so this is not a paywall, it
+simply does not exist. Measured against FFC, MFL ranks 8 QBs inside its top 50
+where FFC ranks 1, a median 28 ranks earlier, with TE -16 and WR +16. That is
+superflex bleeding into the averages, and nothing removes it.
 
-`IS_KEEPER=N` restricts it to REDRAFT leagues. MFL's default is `NKR`, which
-mixes in keeper and rookie-only drafts; rookie-only alone was 229 of 692 in the
-ADP feed and put ~49 college players in its top 150. Valid letters are N
-(redraft), K (keeper), R (rookie-only), combinable — the parameter rejects
-anything else, which is why an earlier attempt with `IS_KEEPER=Redraft` errored
-and made it look like the filter was broken.
+TYPE=aav was tried as a way out and is WORSE. Auction leagues really are mostly
+1QB, and QB density did drop to 3 in the top 50 — but auction values overvalue
+established veterans so badly that the top of the board falls apart: McCaffrey
+1st (FFC 7), Barkley 2nd (FFC 17), Henry 4th (FFC 10), against Gibbs 6th when he
+is the consensus 1. Since projected_price is assigned by rank position, that put
+$72 on McCaffrey and $67 on Barkley. Restricting to the most recent window
+(PERIOD=AUG15, 207 of 232 auctions) gives the identical top, so it is not an
+offseason artifact — the 232-auction sample is just too small and too skewed.
+Don't switch back to aav.
 
-Two structural quirks remain:
+Parameters, corrected against MFL's report UI, because the API docs are wrong in
+two places and both errors cost time:
+
+  * IS_MOCK is documented BACKWARDS. The API reference says 1 = mocks only,
+    0 = exclude mocks. The UI is the truth: 0 = All Drafts, 1 = EXCLUDE mocks,
+    2 = mocks only. With the correct values, IS_MOCK=1 returns totalDrafts: 0 —
+    every one of MFL's ~290 recent redraft drafts is a MOCK. So this feed is the
+    same KIND of data as FFC's, just from a superflex-heavy user base. There is
+    no non-mock MFL population to filter down to.
+  * IS_KEEPER takes letters N/K/R (redraft, keeper, rookie-only), combinable,
+    and supports bracket syntax like [NK]. It rejects anything else, which is
+    why an early attempt with IS_KEEPER=Redraft errored and made the parameter
+    look broken. The default NKR was mixing in 229 rookie-only drafts out of
+    692, which is where ~49 college players in the top 150 came from.
+    IS_KEEPER=N removes them and is kept below.
+  * The franchise filter is FCOUNT (8/10/12/14/16), not FRANCHISES.
+  * IS_PPR values in the UI are 3=any, 1=non-PPR, 2=PPR — not the -1/0/1 the
+    API reference lists.
+
+Two structural quirks:
 
   * The feed carries ids and nothing else, so resolving a name needs a SECOND
     call to the player table (~2,600 rows). Both are unauthenticated.
   * It is not scoped to a roster type, so it includes IDP and kickers. Those are
     dropped here, at the provider, so nothing downstream can give an IDP
     linebacker a slot in the auction price curve.
-
-The dollar figures are NOT stored. `Player.adp_mfl` holds a rank like every
-other source, because that is what makes the columns comparable across a row.
-MFL normalises AAV to a $1000 total pool, so if these are ever wanted as real
-money they need scaling to this league's budget.
 """
 
 import logging
@@ -43,8 +59,10 @@ from draft.services.adp.matching import flip_comma_name
 
 logger = logging.getLogger(__name__)
 
-# IS_KEEPER=N -> redraft leagues only. See the module docstring.
-AAV_URL = 'https://api.myfantasyleague.com/{year}/export?TYPE=aav&JSON=1&IS_KEEPER=N'
+# IS_KEEPER=N -> redraft only. PERIOD=RECENT -> the latest window MFL exposes.
+# See the module docstring before changing either, and before adding IS_MOCK.
+ADP_URL = ('https://api.myfantasyleague.com/{year}/export'
+           '?TYPE=adp&JSON=1&PERIOD=RECENT&IS_KEEPER=N')
 PLAYERS_URL = 'https://api.myfantasyleague.com/{year}/export?TYPE=players&JSON=1'
 
 # MFL's position vocabulary -> ours. Everything absent from this map is dropped:
@@ -68,37 +86,31 @@ def _get(url):
     return response.json()
 
 
-def parse(aav_payload, players_payload):
+def parse(adp_payload, players_payload):
     """Pure: two MFL payloads in, a FeedResult out. No network, so tests use
     fixtures."""
-    aav = aav_payload['aav']
+    adp = adp_payload['adp']
     by_id = {entry['id']: entry for entry in players_payload['players']['player']}
 
     rows = []
-    for entry in aav['player']:
+    # A filtered-to-nothing response (e.g. IS_MOCK=1) omits 'player' entirely
+    # rather than returning an empty list.
+    for entry in adp.get('player', []):
         meta = by_id.get(entry['id'])
         if not meta:
-            # An id in the AAV feed with no row in the player table. Rare, and
+            # An id in the ADP feed with no row in the player table. Rare, and
             # unresolvable — there's no name to match on.
-            logger.warning('MFL AAV id %s has no entry in the player table', entry['id'])
+            logger.warning('MFL ADP id %s has no entry in the player table', entry['id'])
             continue
         position = POSITION_MAP.get(meta.get('position'))
         if not position:
             continue
-        # MFL publishes its own rank alongside the value, already ordered by
-        # value descending, so it can be used as the ascending sort key
-        # directly. Falling back to -averageValue keeps the ordering correct if
-        # the field ever disappears, since sort_value is ascending and auction
-        # values run the other way.
         try:
-            sort_value = float(entry['rank'])
-        except (KeyError, TypeError, ValueError):
-            try:
-                sort_value = -float(entry['averageValue'])
-            except (KeyError, TypeError, ValueError):
-                logger.warning('MFL AAV row for %s has neither a usable rank nor value',
-                               meta.get('name'))
-                continue
+            sort_value = float(entry['averagePick'])
+        except (TypeError, ValueError, KeyError):
+            logger.warning('MFL ADP row for %s has an unreadable averagePick %r',
+                           meta.get('name'), entry.get('averagePick'))
+            continue
         rows.append(AdpRow(
             provider_id=str(entry['id']),
             # "Gibbs, Jahmyr" -> "Jahmyr Gibbs". Defenses come through as
@@ -112,11 +124,11 @@ def parse(aav_payload, players_payload):
 
     sample_size = None
     try:
-        sample_size = int(aav['totalAuctions'])
+        sample_size = int(adp['totalDrafts'])
     except (KeyError, TypeError, ValueError):
         pass
     return FeedResult(rows=rows, sample_size=sample_size)
 
 
 def fetch(year):
-    return parse(_get(AAV_URL.format(year=year)), _get(PLAYERS_URL.format(year=year)))
+    return parse(_get(ADP_URL.format(year=year)), _get(PLAYERS_URL.format(year=year)))

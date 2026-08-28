@@ -612,30 +612,35 @@ provider module, and nothing else branches):
 
 - `ffc` — Fantasy Football Calculator. Also the ROSTER source; `add_players`
   still owns creating players and now fills `adp_ffc` in passing.
-- `mfl` — MyFantasyLeague **AUCTION VALUES** (`TYPE=aav`, `IS_KEEPER=N`), ~232
-  redraft auctions. Two calls (the feed carries ids only, so the ~2,600-row
-  player table resolves names). **It deliberately does NOT read MFL's ADP
-  feed**, which is badly superflex-contaminated: that feed ranks 7-8 QBs inside
-  its top 50 where FFC ranks 1, which would inflate every QB price in this 1QB
-  auction. `IS_MOCK`, `IS_KEEPER`, `IS_PPR`, `FCOUNT` and `CUTOFF` were all
-  measured against it and none moved the QB density. AAV draws on a different
-  population — superflex lives in snake and dynasty formats, auctions are
-  overwhelmingly 1QB — and lands at 3 QBs in the top 50, in line with
-  FantasyPros' 4. Don't switch it back to `TYPE=adp`.
-  - `IS_KEEPER=N` restricts to REDRAFT. Valid letters are N/K/R (redraft,
-    keeper, rookie-only), combinable; the default `NKR` mixed in 229 rookie-only
-    drafts out of 692. The parameter rejects anything outside those letters,
-    which is why an early attempt with `IS_KEEPER=Redraft` errored and made the
-    filter look broken. The franchise filter is `FCOUNT` (8/10/12/14/16), not
-    `FRANCHISES`. `IS_MOCK` genuinely does nothing on the ADP endpoint — 0 and 1
-    both return the same 692 drafts.
-  - The dollar figures are NOT stored; `adp_mfl` holds a rank like every other
-    source. MFL normalises AAV to a $1000 total pool, so using them as real
-    money would need scaling to this league's budget.
-  - Residual skew vs FFC, worth knowing when reading the column: median QB −24,
-    RB −8, WR +14, DEF +29. FFC's 1-QB-in-the-top-50 is itself likely the
-    outlier (casual mock drafters wait too long on QB); MFL AAV, FantasyPros and
-    the wider market cluster at 3-5.
+- `mfl` — MyFantasyLeague ADP (`TYPE=adp`, `PERIOD=RECENT`, `IS_KEEPER=N`).
+  **COMPARISON COLUMN ONLY — never apply it as the effective source.** It is a
+  real second opinion at RB/WR and it is wrong about QBs in a way that wrecks a
+  1QB auction: 8 QBs inside its top 50 where FFC has 1, median shift QB −28,
+  TE −16, WR +16. That is superflex bleeding into the averages.
+  - **MFL has no 1QB view, and it is not a paywall.** Their own ADP report UI
+    filters on position, rookies, injuries, cutoff, franchise count, PPR, draft
+    type, mock status and period — there is no lineup/superflex filter anywhere.
+  - **`TYPE=aav` was tried as a way out and is worse — don't go back to it.**
+    Auction leagues really are mostly 1QB and QB density did fall to 3 in the top
+    50, but auction values overvalue veterans so badly the top of the board falls
+    apart: McCaffrey 1st (FFC 7), Barkley 2nd (FFC 17), Henry 4th (FFC 10),
+    Gibbs 6th when he is the consensus 1. Applied, that put $72 on McCaffrey and
+    $67 on Barkley. `PERIOD=AUG15` (207 of 232 auctions) gives the identical top,
+    so it is not an offseason artifact — the sample is just small and skewed.
+  - **The API docs are wrong about `IS_MOCK`.** The reference says 1 = mocks
+    only; the report UI is the truth: 0 = all, 1 = EXCLUDE mocks, 2 = mocks only.
+    With the right value, `IS_MOCK=1` returns `totalDrafts: 0` — **every** recent
+    MFL redraft draft is a mock. So this is the same KIND of data as FFC's, from
+    a superflex-heavy user base; there is no non-mock population to filter to.
+  - `IS_KEEPER` takes letters N/K/R (redraft/keeper/rookie-only), combinable,
+    bracket syntax `[NK]` allowed. It rejects anything else, which is why an
+    early `IS_KEEPER=Redraft` errored and made the filter look broken. The
+    default `NKR` mixed in 229 rookie-only drafts of 692 (~49 college players in
+    the top 150); `N` removes them and is kept.
+  - Franchise filter is `FCOUNT` (8/10/12/14/16), not `FRANCHISES`. `IS_PPR` in
+    the UI is 3=any/1=non-PPR/2=PPR, not the −1/0/1 the API reference lists.
+  - A response filtered to nothing omits the `player` key entirely rather than
+    returning an empty list — the parser handles that.
 - `fpros` — FantasyPros. **This is ECR, not ADP** — their real ADP endpoint
   returns `count: 0` without a paid key. Scoring is `HALF` to match the
   hardcoded `half-ppr` FFC pull.

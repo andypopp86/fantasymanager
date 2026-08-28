@@ -49,14 +49,16 @@ SOURCES = {
     ),
     'mfl': Source(
         key='mfl',
-        label='MyFantasyLeague (auction values)',
+        label='MyFantasyLeague',
         adp_field='adp_mfl',
         id_field='mfl_id',
         persist_id=True,
-        sample_unit='auctions',
+        sample_unit='drafts',
         fetch=mfl.fetch,
-        caveat='Auction values from REDRAFT leagues, ranked. Reads AAV rather than MFL\'s '
-               'ADP feed, which is superflex-contaminated (8 QBs in its top 50 vs 3 here).',
+        caveat='COMPARISON ONLY - DO NOT APPLY AS THE EFFECTIVE SOURCE. Superflex '
+               'leagues skew it: 8 QBs in its top 50 vs FFC\'s 1, a median 28 ranks '
+               'early, and MFL offers no 1QB filter in any feed. Useful as a second '
+               'opinion at RB/WR; it will wreck QB prices in a 1QB auction.',
     ),
     'fpros': Source(
         key='fpros',

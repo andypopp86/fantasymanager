@@ -1216,49 +1216,43 @@ class AdpProviderParseTests(TestCase):
     def test_mfl_drops_kickers_and_idp_and_flips_names(self):
         from draft.services.adp.providers import mfl
 
-        aav_payload = {'aav': {
-            'totalAuctions': '232',
+        adp_payload = {'adp': {
+            'totalDrafts': '290',
             'player': [
-                {'id': '16162', 'rank': '1', 'averageValue': '27.50'},
-                {'id': '9001', 'rank': '2', 'averageValue': '12.00'},   # IDP linebacker
-                {'id': '9002', 'rank': '3', 'averageValue': '3.00'},    # kicker
-                {'id': '0151', 'rank': '4', 'averageValue': '1.50'},    # team defense
+                {'id': '16162', 'averagePick': '1.85'},
+                {'id': '9001', 'averagePick': '40.00'},   # IDP linebacker
+                {'id': '9002', 'averagePick': '55.00'},   # kicker
+                {'id': '0151', 'averagePick': '91.28'},   # team defense
             ],
         }}
 
-        result = mfl.parse(aav_payload, self._mfl_players())
+        result = mfl.parse(adp_payload, self._mfl_players())
 
         # IDP and kickers must never reach the price curve.
         self.assertEqual([row.position for row in result.rows], ['RB', 'DEF'])
         self.assertEqual(result.rows[0].name, 'Jahmyr Gibbs')
         self.assertEqual(result.rows[0].provider_id, '16162')
-        # MFL's own rank is the sort key; the dollar value is not stored.
-        self.assertEqual(result.rows[0].sort_value, 1)
-        self.assertEqual(result.sample_size, 232)
+        self.assertEqual(result.rows[0].sort_value, 1.85)
+        self.assertEqual(result.sample_size, 290)
 
-    def test_mfl_falls_back_to_negated_value_when_rank_is_missing(self):
-        """sort_value is ASCENDING but auction values run the other way, so the
-        fallback has to invert or the board comes out backwards."""
+    def test_mfl_handles_a_response_filtered_to_nothing(self):
+        """MFL omits the 'player' key entirely rather than returning an empty
+        list when a filter matches no drafts - IS_MOCK=1 does exactly this,
+        since every recent redraft draft is a mock."""
         from draft.services.adp.providers import mfl
 
         result = mfl.parse(
-            {'aav': {'totalAuctions': '1', 'player': [
-                {'id': '16162', 'averageValue': '27.50'},
-                {'id': '0151', 'averageValue': '1.50'},
-            ]}},
+            {'adp': {'totalDrafts': '0', 'totalPicks': '0'}},
             self._mfl_players(),
         )
+        self.assertEqual(result.rows, [])
+        self.assertEqual(result.sample_size, 0)
 
-        self.assertEqual([row.sort_value for row in result.rows], [-27.5, -1.5])
-        # The expensive player must sort FIRST.
-        self.assertLess(result.rows[0].sort_value, result.rows[1].sort_value)
-
-    def test_mfl_skips_an_aav_id_with_no_player_row(self):
+    def test_mfl_skips_an_adp_id_with_no_player_row(self):
         from draft.services.adp.providers import mfl
 
         result = mfl.parse(
-            {'aav': {'totalAuctions': '1',
-                     'player': [{'id': 'ghost', 'rank': '1', 'averageValue': '5'}]}},
+            {'adp': {'totalDrafts': '1', 'player': [{'id': 'ghost', 'averagePick': '5'}]}},
             {'players': {'player': []}},
         )
         self.assertEqual(result.rows, [])
