@@ -243,6 +243,20 @@ filter and Rebudget only treat `true` as favorited. Ordering gotcha: Postgres
 sorts nulls first on `DESC`, so rank explicitly (see `favorite_rank` in
 `get_picks`) instead of ordering by `-player__favorite`.
 
+**Available-players ordering is price desc → favorite desc → `adp_formatted`
+asc**, and it is applied TWICE: `get_available_players` orders the payload, and
+`useDraftData` re-establishes the same order client-side. The client's is the one
+you actually see — Dexie hands rows back in primary-key order (by `player_id`),
+so the server's order is lost in transit; a client sort that drops a key drops
+it from the board, however carefully the queryset was ordered. The tiebreaks are
+not cosmetic: prices cluster hard at the bottom and there are dozens of $1
+players, so without them that whole tail is shuffled into an order that means
+nothing. `adp_formatted` is serialized purely so the client can sort on it;
+nothing renders it. The shared comparator is `byFavoriteThenAdp` in
+`utils/draftHelpers.ts` (with `favoriteRank` mirroring the server's tri-state
+`favorite_rank` annotation), and the Available Players stat-selector sort uses it
+too — every stat ties somewhere.
+
 **Player warning flags** — hand-set judgement fields drawn as icons in the
 nomination area so the drafter doesn't misprice a bid. All are inline-editable in
 /admin (player list, or the TEAM list for coaching). The `good`/`bad` ones use
@@ -989,7 +1003,7 @@ removable.
 > (The *backend* half — the `PlanChange` model + `update_plan_changes` — DOES run on
 > every drafter pick.) Consolidate rather than extend the dead frontend pieces.
 
-**Backups** (`features/BackupCell.tsx`, `backup_picks` in Dexie v6) — every
+**Backups** (`features/BackupCell.tsx`, `backup_cells` in Dexie v7) — every
 BUDGET slot carries its own shelf of pre-picked alternates, `BACKUP_DEPTH` (3)
 deep, rendered as **extra columns on the Budgeted Players table** (`B1 B2 B3`,
 one cell per rank). Rows are addressed by `(slot, rank)`.
@@ -1001,31 +1015,44 @@ be one ROW, not two components to read across. Anything added here belongs on
 the budget row.
 
 - **LOCAL ONLY.** No endpoint, no `BudgetPlayer` row, nothing in the offline
-  write queue — `backupPick` / `unbackupPick` are the only mutations in
-  `mutations.ts` that never talk to the server, and `hydrateDraft` leaves
-  `backup_picks` alone (a refetch has no opinion on them, and wiping them would
-  lose the feature on every load). They live and die on one browser; a
+  write queue — `backupPick` / `unbackupPick` / `moveBackup` are the only
+  mutations in `mutations.ts` that never talk to the server, and `hydrateDraft`
+  leaves `backup_cells` alone (a refetch has no opinion on them, and wiping them
+  would lose the feature on every load). They live and die on one browser; a
   draft-day machine swap loses the shelf, which is accepted.
 - **Not the budget.** Backups are absent from `budgetSpent` — a candidate is not
   a commitment. But they ARE slot-specific, so a backup must satisfy its row's
-  `allowed_positions` like any other candidate for it (guarded on drop and tap,
-  with the board's blue-tint affordance on eligible empty cells).
-- One row per player, like `budget_picks`, so parking someone already parked
-  MOVES them; filling an occupied cell replaces its occupant.
-- **In:** drop an available player on a cell, or tap a cell while someone is
-  nominated (priced from the projection, like the budget slots themselves).
-  **Out:** ✕ clears a cell; clicking a filled cell calls
-  `mutations.promoteBackup`.
+  `allowed_positions` like any other candidate for it (guarded on every drop).
+- **One row per CELL, not per player** (`backup_cells`, keyed
+  `[draftId+slot+rank]`). A player may hold cells on several shelves at once —
+  a handcuff RB legitimately backs up both RB1 and RB2 — so parking someone
+  leaves every other cell holding them untouched. Dexie can't re-key a store in
+  place, hence the rename from `backup_picks`: v7 creates `backup_cells` and
+  COPIES the rows across, v8 drops the old store.
+- **Drag is the only interaction.** The cell's `onClick` does nothing but
+  `stopPropagation` (see below) — it used to promote, which turned every stray
+  click on the widest part of the row into a plan edit.
+  **In:** drop an available/nominated player on a cell — a COPY, so they keep
+  any other cells they hold (priced from the projection, like the budget slots
+  themselves). **Move:** drag a filled cell onto another cell — `moveBackup`,
+  which empties the source and SWAPS if the destination is occupied.
+  **Promote:** drag a filled cell onto a budget ROW. **Out:** ✕ clears just that
+  cell (addressed by `(slot, rank)`, since the player may sit in others).
+- **Promotion lives in `BudgetedPicks.handleDrop`,** not in the cell: the drag
+  payload carries `origin: {slot, rank}`, which only `BackupCell` sets, and that
+  is what tells the budget row's drop handler to promote rather than budget. It
+  is therefore not limited to the shelf's own row — a backup can be dropped on
+  any budget row whose `allowed_positions` it satisfies.
 - **Promotion is a SWAP, not a replacement** — the displaced budget occupant
   lands in the cell the promoted player just vacated, so the plan never loses a
-  player it had picked out and a second click puts things back. The budget half
+  player it had picked out and dragging back puts things right. The budget half
   goes through `applyBudgetChanges` to inherit its ordering contract; the
   occupant is genuinely leaving the budget, so unbudgeting them is correct here.
-  No staging modal: the slot isn't a choice, which is the whole point of keying
-  shelves to slots.
+  No staging modal.
 - **Every cell handler calls `stopPropagation`.** The enclosing `<tr>` is itself
   a drop/tap target for the budget slot and a click on it UNBUDGETS, so an
-  un-stopped event in a backup cell clears the budgeted player instead.
+  un-stopped event in a backup cell clears the budgeted player instead. That is
+  the ONLY reason the cell still has an `onClick` at all.
 - Two guards, both `alert()` like the budget row's ineligible tap: a backup the
   field has already drafted can't be promoted (struck through and labelled with
   who took them — `takenBy` is built once in `BudgetedPicks` from the LOCAL

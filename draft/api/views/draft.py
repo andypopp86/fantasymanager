@@ -225,6 +225,10 @@ class DraftPicksOutputSerializer(BaseSerializer):
         projected_price = serializers.DecimalField(max_digits=8, decimal_places=2)
         position_price = serializers.DecimalField(max_digits=8, decimal_places=2)
         adp_price = serializers.DecimalField(max_digits=8, decimal_places=2)
+        # Integer RANK (1 = first off the board), not a decimal round.pick.
+        # Nothing renders it — the board sorts on it, as the tiebreak between
+        # equal-priced players (see DraftReadService.get_available_players).
+        adp_formatted = serializers.IntegerField()
         # The drafter's walk-away price, shown in the nomination area.
         my_price = serializers.DecimalField(max_digits=8, decimal_places=2, allow_null=True)
         # my_price_rationale is deliberately NOT serialized — it's prep-time

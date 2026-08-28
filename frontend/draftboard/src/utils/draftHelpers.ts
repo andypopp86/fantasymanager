@@ -45,3 +45,30 @@ export const checkForPositionLimitHit = (managers, draftDetails, position, manag
         alert(`Manager ${manager.manager_name} has hit the ${position} position limit (${positionLimit})`);
     }
 }
+
+// The effective-ADP rank of an available-players row (1 = first off the board).
+// Missing/unparseable sorts LAST rather than first, so a row without an ADP
+// never jumps the queue ahead of ranked players.
+export const adpRank = (row: any) => {
+    const rank = parseInt(String(row?.player?.adp_formatted ?? ""), 10);
+    return Number.isNaN(rank) ? Number.MAX_SAFE_INTEGER : rank;
+};
+
+// Favorite is tri-state: true = target, null/undefined = neutral, false = avoid.
+// Ranked into a number so it can be sorted DESCENDING without hitting the null
+// trap the server's `favorite_rank` annotation exists for.
+export const favoriteRank = (row: any) => {
+    const favorite = row?.player?.favorite;
+    if (favorite === true) return 2;
+    if (favorite === false) return 0;
+    return 1;
+};
+
+// Tiebreak for every available-players sort, mirroring the server's ordering:
+// targets first, then by ADP. Prices cluster hard at the bottom — there are
+// dozens of $1 players — so without a secondary key equal-priced rows land in
+// whatever order Dexie yields them (primary-key order, i.e. by player_id),
+// which reads as random. Hearts float their tier to the top of the tail, and
+// ADP puts the rest in roughly the order the league will take them.
+export const byFavoriteThenAdp = (a: any, b: any) =>
+    (favoriteRank(b) - favoriteRank(a)) || (adpRank(a) - adpRank(b));

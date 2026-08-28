@@ -24,22 +24,6 @@ export const BudgetedPicks = ({draftContext, draftSend, backupsShown = false, on
         mutations.reslotBudget(draftContext.draftId, draftContext.drafterId, assignments);
     };
 
-    const handleDrop = (e) => {
-        const targetSlot = draftContext.budgetSlotTargeted
-        const budgetSlots = draftContext.budgetedPlayers
-        const draggedPlayer = draftContext.draggedPlayer.player
-        const actualSlot = budgetSlots[targetSlot]
-        const allowedPositions = actualSlot.allowed_positions
-        if (allowedPositions.includes(draggedPlayer.position) && !actualSlot.pick.player_id) {
-            mutations.budgetPick(
-                draftContext.draftId,
-                draftContext.drafterId,
-                draggedPlayer,
-                targetSlot,
-                draftContext.draggedPlayer.projected_price,
-            );
-        }
-    }
     // Who holds every drafted player, for the backup cells: a backup whose
     // player got taken is struck through and named with its taker instead of
     // silently sitting there. Read from the LOCAL manager projections, so a pick
@@ -53,6 +37,82 @@ export const BudgetedPicks = ({draftContext, draftSend, backupsShown = false, on
         });
         return map;
     }, [draftContext.managers]);
+
+    // The drafter's own picks, for the settled check below.
+    const drafterPlayerIds = useMemo(() => {
+        const drafter = (draftContext.managers || []).find(
+            (manager) => manager.manager_id === draftContext.drafterId);
+        return new Set(Object.values(drafter?.draft_picks || {})
+            .map((pickSlot: any) => String(pickSlot.pick.player_id))
+            .filter((playerId) => playerId && playerId !== "undefined"));
+    }, [draftContext.managers, draftContext.drafterId]);
+
+    // Dropping on a budget row. Two sources land here, told apart by `origin`,
+    // which only a BackupCell sets (features/BackupCell.tsx):
+    //   - a player from the list/nomination -> budget them, if the slot is open
+    //   - a player off a backup shelf -> PROMOTE them into this slot, and hand
+    //     whoever held it back to the cell they came from
+    // Promotion is the whole reason the shelf exists, and dragging is now its
+    // only trigger — the cells no longer promote on click.
+    const handleDrop = (e) => {
+        const targetSlot = draftContext.budgetSlotTargeted
+        const budgetSlots = draftContext.budgetedPlayers
+        const dragged = draftContext.draggedPlayer
+        const draggedPlayer = dragged?.player
+        const actualSlot = budgetSlots[targetSlot]
+        if (!draggedPlayer || !actualSlot) return;
+        const allowedPositions = actualSlot.allowed_positions || []
+        if (!allowedPositions.includes(draggedPlayer.position)) return;
+
+        if (!dragged.origin) {
+            if (!actualSlot.pick.player_id) {
+                mutations.budgetPick(
+                    draftContext.draftId,
+                    draftContext.drafterId,
+                    draggedPlayer,
+                    targetSlot,
+                    dragged.projected_price,
+                );
+            }
+            return;
+        }
+
+        if (takenBy[String(draggedPlayer.player_id)]) {
+            alert(`${draggedPlayer.name} was drafted by ${takenBy[String(draggedPlayer.player_id)]} — pick a different backup for ${targetSlot}.`);
+            return;
+        }
+        const occupantPick = actualSlot.pick;
+        // A budget row mirroring one of the DRAFTER's own picks is settled:
+        // nothing in this table can undo a pick, so a backup must not be
+        // promoted over it (it would leave the pick standing with no budget
+        // row). Keyed on the PLAYER, like the staging modal's locks — the row
+        // may have been re-slotted away from the pick's slot.
+        if (occupantPick.player_id && drafterPlayerIds.has(String(occupantPick.player_id))) {
+            alert(`${occupantPick.player_name} is already drafted at ${targetSlot}, so the slot is settled.`);
+            return;
+        }
+        const occupant = occupantPick.player_id
+            ? {
+                player_id: occupantPick.player_id,
+                player_name: occupantPick.player_name,
+                position: occupantPick.position,
+                projected_price: occupantPick.projected_price,
+            }
+            : null;
+        mutations.promoteBackup(
+            draftContext.draftId,
+            draftContext.drafterId,
+            dragged.origin,
+            targetSlot,
+            {
+                player_id: draggedPlayer.player_id,
+                player_name: draggedPlayer.player_name || draggedPlayer.name,
+                position: draggedPlayer.position,
+                projected_price: dragged.projected_price ?? draggedPlayer.projected_price,
+            },
+            occupant,
+        );
+    }
 
     const backupsBySlot = draftContext.backupsBySlot || {};
     const ranks = Array.from({ length: BACKUP_DEPTH }, (_, index) => index + 1);

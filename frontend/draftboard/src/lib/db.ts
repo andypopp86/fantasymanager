@@ -23,13 +23,22 @@ import type { BackupPickRow, BudgetPickRow, DraftMetaRow, DraftPickRow, PendingW
 //       ([draftId+slot+rank]) instead of three slot-agnostic parking spots.
 //       The upgrade CLEARS the table: v5 rows carried slot="BACKUP1..3", which
 //       names no budget slot, so there is nothing to migrate them to.
+//   v7: backup_cells replaces backup_picks — same rows, but keyed by the CELL
+//       ([draftId+slot+rank]) instead of the player. One player may now sit on
+//       several shelves at once (the same handcuff backs up RB1 and RB2), which
+//       a player-keyed store made impossible: putting them in a second cell
+//       overwrote the first. Renamed rather than re-keyed because IndexedDB
+//       can't change a store's primary key in place; the upgrade COPIES the
+//       rows across, so nobody loses a shelf.
+//   v8: backup_picks dropped, now that v7 has copied it into backup_cells.
 class DraftboardDB extends Dexie {
     draft_picks!: Table<DraftPickRow, [number, number | string]>;
     budget_picks!: Table<BudgetPickRow, [number, number | string]>;
     watch_picks!: Table<WatchPickRow, [number, number | string]>;
     draft_meta!: Table<DraftMetaRow, number>;
     pending_writes!: Table<PendingWriteRow, number>;
-    backup_picks!: Table<BackupPickRow, [number, number | string]>;
+    // Keyed by the CELL: [draftId, slot, rank].
+    backup_cells!: Table<BackupPickRow, [number, string, number]>;
 
     constructor() {
         super("draftboard");
@@ -55,6 +64,23 @@ class DraftboardDB extends Dexie {
         this.version(6).stores({
             backup_picks: "[draftId+player_id], draftId, [draftId+slot], [draftId+slot+rank]",
         }).upgrade((tx) => tx.table("backup_picks").clear());
+        this.version(7).stores({
+            backup_cells: "[draftId+slot+rank], draftId, [draftId+slot], [draftId+player_id]",
+        }).upgrade(async (tx) => {
+            // backup_picks still exists at this version (v8 drops it), so the
+            // shelves survive the re-keying. Guarded because a throw in an
+            // upgrade fails the whole db.open(), which would take the board down
+            // with it — losing a shelf is bad, losing the board is worse.
+            try {
+                const rows = await tx.table("backup_picks").toArray();
+                if (rows.length) await tx.table("backup_cells").bulkPut(rows);
+            } catch (err) {
+                console.warn("backup_picks -> backup_cells migration skipped", err);
+            }
+        });
+        this.version(8).stores({
+            backup_picks: null,
+        });
     }
 }
 
@@ -76,7 +102,7 @@ export const hydrateDraft = async (
 ) => {
     const { draftDetails, availablePlayers, managerPicks, budgetedPicks, watchedPlayers } = payloads;
 
-    // backup_picks is NOT in anything below, on purpose: the backup slots are a
+    // backup_cells is NOT in anything below, on purpose: the backup slots are a
     // local-only shelf the server knows nothing about, so a refetch has no
     // opinion on them and wiping them would lose the whole feature every load.
 

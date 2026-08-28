@@ -296,7 +296,13 @@ class DraftReadService(BaseService):
                 When(player__favorite__isnull=True, then=1),
                 default=0,
             )
-        ).order_by("-player__projected_price", "-favorite_rank")
+        )
+        # adp_formatted (the one EFFECTIVE ADP rank, 1 = first off the board) is
+        # the last tiebreak: prices cluster hard at the bottom — there are dozens
+        # of $1 players — and without it equal-priced players come back in
+        # whatever order the table happens to yield, which reads as random.
+        picks = picks.order_by(
+            "-player__projected_price", "-favorite_rank", "player__adp_formatted")
         return picks
     
     def get_budgeted_picks(self, draft_id):
