@@ -137,8 +137,13 @@ class RiskBandFilter(admin.SimpleListFilter):
 
 
 class PlayerAdmin(admin.ModelAdmin):
-    # Working order: what you set during prep first, reference columns last.
-    list_display = ('name', 'position', 'team', 'year', 'target_tier', 'years_experience', 'risk_score', 'risk_summary', 'is_projection', 'has_injury', 'defensive_impact', 'projected_price', 'my_price', 'my_price_rationale', 'adp_formatted', 'adp_source', 'adp_ffc', 'adp_mfl', 'adp_fpros', 'favorite', 'override_price', 'player_id')
+    # The three per-source ranks sit immediately after the name so a row can be
+    # read across in one glance — they only mean anything COMPARED, and a wide
+    # changelist put them far enough apart to defeat that. `adp_formatted` (the
+    # effective rank) and `adp_source` stay back with the derived columns; they
+    # answer a different question than "where do the three markets disagree".
+    # Rest of the order: what you set during prep first, reference columns last.
+    list_display = ('name', 'adp_ffc', 'adp_mfl', 'adp_fpros', 'position', 'team', 'year', 'target_tier', 'years_experience', 'risk_score', 'risk_summary', 'is_projection', 'has_injury', 'defensive_impact', 'projected_price', 'my_price', 'my_price_rationale', 'adp_formatted', 'adp_source', 'favorite', 'override_price', 'player_id')
     # `name` is the link column, pinned explicitly. Django otherwise links
     # list_display[0], which is no longer player_id — and a link column may
     # never be list_editable, so leaving it implicit would break the moment the
