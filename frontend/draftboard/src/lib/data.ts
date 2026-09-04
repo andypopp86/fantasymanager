@@ -348,11 +348,13 @@ export const draftRetrieve = <
       })
     }
 
+    // (year, name) is a plan's identity: an already-taken pair answers 409
+    // unless `overwrite` says to replace that plan.
     export const draftPlanCreate = <
     TData = AxiosResponse<DraftPlanOutput>,
     >(
       draft_id: number,
-      params: { name: string },
+      params: { name: string, overwrite?: boolean },
       options?: AxiosRequestConfig,
     ): Promise<TData> => {
       return axios.default.post(`/api/drafts/draft/${draft_id}/create_plan/`, {
@@ -465,11 +467,42 @@ export const draftRetrieve = <
       })
     }
 
+    // Parks a player on `position_slot`'s shelf at `rank`, or moves them if
+    // they're already on that shelf. Backups never touch the mock's budget.
+    export const mockDraftSetBackup = <
+    TData = AxiosResponse<MockDraftDetail>,
+    >(
+      mock_draft_id: number,
+      player_id: number,
+      params: { position_slot: string, rank: number },
+      options?: AxiosRequestConfig,
+    ): Promise<TData> => {
+      return axios.default.post(`/api/drafts/draft/mocks/${mock_draft_id}/backup/${player_id}/`, {
+          options,
+          params,
+      })
+    }
+
+    export const mockDraftClearBackup = <
+    TData = AxiosResponse<MockDraftDetail>,
+    >(
+      mock_draft_id: number,
+      params: { position_slot: string, rank: number },
+      options?: AxiosRequestConfig,
+    ): Promise<TData> => {
+      return axios.default.post(`/api/drafts/draft/mocks/${mock_draft_id}/clear_backup/`, {
+          options,
+          params,
+      })
+    }
+
+    // Carries the mock's backup shelves into the plan. Same 409-then-overwrite
+    // contract as draftPlanCreate.
     export const mockDraftCreatePlan = <
     TData = AxiosResponse<DraftPlanOutput>,
     >(
       mock_draft_id: number,
-      params: { name: string },
+      params: { name: string, overwrite?: boolean },
       options?: AxiosRequestConfig,
     ): Promise<TData> => {
       return axios.default.post(`/api/drafts/draft/mocks/${mock_draft_id}/create_plan/`, {

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { draftPlansRetrieve, draftPlanCreate, draftPlanDelete } from "../lib/data";
-import { applyPlanSelections } from "../lib/mutations";
+import { applyPlanSelections, seedBackupsFromPlan } from "../lib/mutations";
 import { useDraftData } from "../hooks/useDraftData";
 import { POSITION_BG_COLORS, POSITION_FG_COLORS } from "../utils/colors";
 import type { DraftPlanPlayer } from "../lib/draft.schemas";
@@ -15,6 +15,10 @@ const planPrice = (player: DraftPlanPlayer) =>
 // player, unchecked keep the current budget row. Slots whose budget row is an
 // actually-drafted player default to UNCHECKED (protected, but overridable);
 // plan players already drafted by anyone are disabled outright.
+//
+// A merged slot also takes the plan's BACKUP shelf (authored on the mock draft
+// this plan came from), replacing that slot's local cells. That's the only way a
+// shelf crosses browsers — the board's own backups never leave Dexie.
 export default function DraftPlanPage() {
     const { draftId: draftIdParam } = useParams();
     const draftId = Number(draftIdParam);
@@ -61,7 +65,8 @@ export default function DraftPlanPage() {
             const samePlayer = planPlayer && String(planPlayer.player_id) === String(current.player_id);
             // Nothing to merge: empty plan slot, an unavailable player, or a no-op.
             const disabled = !planPlayer || !!planTakenBy || !!samePlayer;
-            return { slot, current, currentIsDrafted, planPlayer, planTakenBy, samePlayer, disabled };
+            const planBackups = (selectedPlan?.backups?.[slot] || []).filter(Boolean) as DraftPlanPlayer[];
+            return { slot, current, currentIsDrafted, planPlayer, planTakenBy, samePlayer, disabled, planBackups };
         });
     }, [data.budgetedPlayers, draftedBy, drafterName, selectedPlan]);
 
@@ -99,19 +104,50 @@ export default function DraftPlanPage() {
                 projectedPrice: planPrice(planPlayer!),
             }));
         if (selections.length === 0) return;
+        // Only the slots actually merged: an unchecked row keeps its budget
+        // player, so overwriting its shelf would leave alternates for a pick
+        // the plan didn't make.
+        const shelves = selections
+            .map(({ slot }) => ({
+                slot,
+                cells: (selectedPlan.backups?.[slot] || [])
+                    .map((player, index) => ({ player, rank: index + 1 }))
+                    .filter(({ player }) => !!player)
+                    .map(({ player, rank }) => ({
+                        rank,
+                        player: { player_id: player!.player_id, name: player!.name, position: player!.position },
+                        projectedPrice: planPrice(player!),
+                    })),
+            }))
+            .filter(({ cells }) => cells.length > 0);
         setApplying(true);
         try {
             await applyPlanSelections(draftId, data.drafterId, selections);
+            if (shelves.length) await seedBackupsFromPlan(draftId, shelves);
             navigate(`/draft/${draftId}`);
         } finally {
             setApplying(false);
         }
     };
 
+    // year + name identifies a plan, so re-using a name replaces that plan —
+    // the server answers 409 until the client confirms it. (A snapshot of a
+    // draft carries no backups: the board's shelf never leaves the browser.)
     const savePlanFromDraft = () => {
         const name = window.prompt("Name for the new plan (snapshot of this draft's drafted results):");
         if (!name) return;
-        draftPlanCreate(draftId, { name }).then(() => refetchPlans());
+        const save = (overwrite: boolean): Promise<unknown> =>
+            draftPlanCreate(draftId, { name, overwrite })
+                .then(() => refetchPlans())
+                .catch((err: any) => {
+                    if (err?.response?.status === 409 && !overwrite
+                        && window.confirm(`A ${data.draftDetails?.year || ""} plan named “${name}” already exists. Replace it?`)) {
+                        return save(true);
+                    }
+                    if (err?.response?.status === 409) return undefined;
+                    throw err;
+                });
+        save(false);
     };
 
     const deletePlan = (planId: number) => {
@@ -209,11 +245,12 @@ export default function DraftPlanPage() {
                             <th className="text-left px-6 py-2">Slot</th>
                             <th className="text-left px-3 py-2">Current budget</th>
                             <th className="text-left px-3 py-2">Plan</th>
+                            <th className="text-left px-3 py-2" title="Alternates saved with the plan; merging a slot copies them onto its shelf">Backups</th>
                             <th className="px-6 py-2">Merge</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {rows.map(({ slot, current, currentIsDrafted, planPlayer, planTakenBy, samePlayer, disabled }) => (
+                        {rows.map(({ slot, current, currentIsDrafted, planPlayer, planTakenBy, samePlayer, disabled, planBackups }) => (
                             <tr key={slot} className="border-b border-gray-100 hover:bg-gray-50">
                                 <td className="px-6 py-2 font-semibold text-gray-700">{slot}</td>
                                 <td className="px-3 py-2">
@@ -242,6 +279,24 @@ export default function DraftPlanPage() {
                                             </span>
                                             {planTakenBy && <span className="text-xs text-gray-500">drafted by {planTakenBy}</span>}
                                             {samePlayer && !planTakenBy && <span className="text-xs text-gray-500">already budgeted here</span>}
+                                        </span>
+                                    ) : (
+                                        <span className="text-gray-300">—</span>
+                                    )}
+                                </td>
+                                <td className="px-3 py-2">
+                                    {planBackups.length ? (
+                                        <span className="flex flex-wrap gap-1">
+                                            {planBackups.map((backup) => (
+                                                <span
+                                                    key={backup.player_id}
+                                                    className={"inline-block px-1.5 rounded text-xs" + (checkedSlots[slot] ? "" : " opacity-50")}
+                                                    style={{ background: POSITION_BG_COLORS[backup.position], color: POSITION_FG_COLORS[backup.position] }}
+                                                    title={draftedBy[String(backup.player_id)] ? `Drafted by ${draftedBy[String(backup.player_id)]}` : `Backup for ${slot}`}
+                                                >
+                                                    {backup.name}
+                                                </span>
+                                            ))}
                                         </span>
                                     ) : (
                                         <span className="text-gray-300">—</span>

@@ -6,9 +6,12 @@ import {
     mockDraftAvailablePlayersRetrieve,
     mockDraftSetPick,
     mockDraftClearSlot,
+    mockDraftSetBackup,
+    mockDraftClearBackup,
     mockDraftCreatePlan,
 } from "../lib/data";
 import { POSITION_BG_COLORS, POSITION_FG_COLORS } from "../utils/colors";
+import { BACKUP_DEPTH } from "../lib/draft.schemas";
 import type { MockDraftDetail, MockDraftPlayer } from "../lib/draft.schemas";
 
 const POSITION_FILTERS = ["QB", "RB", "WR", "TE", "DEF"];
@@ -22,6 +25,11 @@ const priceOf = (player: MockDraftPlayer) => parseInt(String(player.projected_pr
 // an eligible slot (empty ones are outlined blue, filled ones say "replace").
 // Eligibility comes from each slot's own allowed_positions, so the client never
 // sends a slot the server would reject.
+//
+// The B1..B3 columns are the slot's shelf of alternates, the same (slot, rank)
+// cells the board carries — but PERSISTED here, and snapshotted into the plan by
+// "Save as plan". This page is where a plan's backups get authored; the board's
+// own shelf stays local to its browser.
 //
 // Reads/writes go straight to the server via React Query — no Dexie, no offline
 // queue. This is prep-time work, and each write answers with the whole mock, so
@@ -91,6 +99,10 @@ export default function MockDraftPage() {
             .map(([slot, slotObj]) => ({
                 slot,
                 pick: slotObj.pick,
+                backups: slotObj.backups || [],
+                // One eligibility test for the row AND its shelf: an alternate
+                // stands in for this slot, so it has to satisfy the same
+                // allowed_positions.
                 eligible: !!selected && slotObj.allowed_positions.includes(selected.position),
             }));
     }, [mock, selected]);
@@ -142,6 +154,17 @@ export default function MockDraftPage() {
         runWrite(mockDraftSetPick(mockId, player.player_id, { position_slot: slot, price: priceOf(player) }));
     };
 
+    const placeBackup = (slot: string, rank: number) => {
+        if (!selected) return;
+        const player = selected;
+        setSelected(null);
+        runWrite(mockDraftSetBackup(mockId, player.player_id, { position_slot: slot, rank }));
+    };
+
+    const clearBackup = (slot: string, rank: number) => {
+        runWrite(mockDraftClearBackup(mockId, { position_slot: slot, rank }));
+    };
+
     const clearSlot = (slot: string) => {
         setPriceDrafts((prev) => {
             const next = { ...prev };
@@ -164,13 +187,27 @@ export default function MockDraftPage() {
         runWrite(mockDraftSetPick(mockId, playerId, { position_slot: slot, price }));
     };
 
+    // A plan is addressed by year + name, so re-using a name means replacing
+    // that plan. The server refuses with 409 until the client says so, which is
+    // where the confirm comes in — overwriting drops the old plan's slots AND
+    // its shelves.
     const saveAsPlan = () => {
         const name = window.prompt("Name for the plan built from this mock draft:", mock?.name || "");
         if (!name) return;
         setError(null);
-        mockDraftCreatePlan(mockId, { name })
-            .then(() => setSavedPlan(name))
-            .catch((err) => setError(String(err?.response?.data?.detail || err.message)));
+        const save = (overwrite: boolean) =>
+            mockDraftCreatePlan(mockId, { name, overwrite })
+                .then(() => setSavedPlan(name))
+                .catch((err) => {
+                    if (err?.response?.status === 409 && !overwrite) {
+                        if (window.confirm(`A ${mock?.year} plan named “${name}” already exists. Replace it?`)) {
+                            return save(true);
+                        }
+                        return;
+                    }
+                    setError(String(err?.response?.data?.detail || err.message));
+                });
+        save(false);
     };
 
     if (!mock) return null;
@@ -215,7 +252,7 @@ export default function MockDraftPage() {
                     <span className="flex-1" />
                     {selected && (
                         <span className="text-blue-700 font-semibold">
-                            Placing {selected.name} (${priceOf(selected)}) — click an eligible slot
+                            Placing {selected.name} (${priceOf(selected)}) — click an eligible slot, or a B1–B3 cell to back it up
                             <button className="ml-2 text-xs text-gray-500 underline" onClick={() => setSelected(null)}>cancel</button>
                         </span>
                     )}
@@ -223,7 +260,7 @@ export default function MockDraftPage() {
 
                 {savedPlan && (
                     <p className="px-4 py-2 bg-green-100 text-sm text-green-800">
-                        Plan “{savedPlan}” saved. Apply it from a draft’s Plans page.
+                        Plan “{savedPlan}” saved, backups included. Apply it from a draft’s Plans page.
                         <button className="ml-2 text-xs underline" onClick={() => setSavedPlan(null)}>dismiss</button>
                     </p>
                 )}
@@ -238,10 +275,28 @@ export default function MockDraftPage() {
 
                     {/* Roster */}
                     <div className="border-r border-gray-200">
-                        <h2 className="px-4 py-2 bg-gray-200 text-xs uppercase tracking-wide text-gray-600 font-semibold">Roster</h2>
+                        <h2 className="px-4 py-2 bg-gray-200 text-xs uppercase tracking-wide text-gray-600 font-semibold flex items-center justify-between">
+                            <span>Roster</span>
+                            <span className="font-normal normal-case tracking-normal text-gray-500">B1–B3 = backups, saved with the plan</span>
+                        </h2>
+                        {/* Seven columns don't fit a phone; horizontal only, the page keeps its own vertical scroll. */}
+                        <div className="overflow-x-auto">
                         <table className="w-full text-sm">
+                            <thead>
+                                <tr className="bg-gray-100 text-gray-500 text-xs uppercase tracking-wide">
+                                    <th className="text-left px-4 py-1">Slot</th>
+                                    <th className="text-left px-2 py-1">Player</th>
+                                    <th className="text-right px-2 py-1">$</th>
+                                    <th className="px-4 py-1" />
+                                    {Array.from({ length: BACKUP_DEPTH }, (_, index) => (
+                                        <th key={index} className="text-left px-1 py-1 font-semibold" title="Backup — saved with the plan">
+                                            B{index + 1}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
                             <tbody>
-                                {rows.map(({ slot, pick, eligible }) => (
+                                {rows.map(({ slot, pick, backups, eligible }) => (
                                     <tr
                                         key={slot}
                                         className={
@@ -290,10 +345,45 @@ export default function MockDraftPage() {
                                                 >✕</button>
                                             )}
                                         </td>
+                                        {/* The shelf. Every handler stops propagation: the <tr> itself
+                                            places into the BUDGET slot, so an un-stopped click here
+                                            would budget the player instead of backing them up. */}
+                                        {Array.from({ length: BACKUP_DEPTH }, (_, index) => {
+                                            const rank = index + 1;
+                                            const cell = backups[index] || null;
+                                            return (
+                                                <td
+                                                    key={rank}
+                                                    className={
+                                                        "px-1 py-2 w-20 text-xs border-l border-gray-100 " +
+                                                        (eligible ? "cursor-pointer outline outline-1 -outline-offset-1 outline-blue-300 hover:bg-blue-50" : "")
+                                                    }
+                                                    title={cell ? `${cell.name} — backup ${rank} for ${slot}` : `Backup ${rank} for ${slot}`}
+                                                    onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        if (eligible) placeBackup(slot, rank);
+                                                    }}
+                                                >
+                                                    {cell ? (
+                                                        <span className="flex items-center gap-1">
+                                                            <span className="truncate max-w-14 text-gray-700">{cell.name}</span>
+                                                            <button
+                                                                className="text-red-500 hover:text-red-700 shrink-0"
+                                                                title="Clear this backup"
+                                                                onClick={(event) => { event.stopPropagation(); clearBackup(slot, rank); }}
+                                                            >✕</button>
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-gray-300">{eligible ? "back up" : "—"}</span>
+                                                    )}
+                                                </td>
+                                            );
+                                        })}
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
+                        </div>
                     </div>
 
                     {/* Player list */}

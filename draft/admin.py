@@ -448,13 +448,26 @@ class BudgetPlayerAdmin(admin.ModelAdmin):
     def status_display(self, obj):
         return obj.get_status_display()
 
+class DraftPlanBackupInline(admin.TabularInline):
+    model = d.DraftPlanBackup
+    extra = 0
+    autocomplete_fields = ('player',)
+
+
 class DraftPlanAdmin(admin.ModelAdmin):
     list_display = ('name', 'year', 'date_created')
     list_filter = ('year',)
     search_fields = ('name',)
+    inlines = (DraftPlanBackupInline,)
 
 class MockPickInline(admin.TabularInline):
     model = d.MockPick
+    extra = 0
+    autocomplete_fields = ('player',)
+
+
+class MockBackupInline(admin.TabularInline):
+    model = d.MockBackup
     extra = 0
     autocomplete_fields = ('player',)
 
@@ -463,7 +476,7 @@ class MockDraftAdmin(admin.ModelAdmin):
     list_display = ('name', 'year', 'starting_budget', 'budget_spent', 'filled_slots', 'last_update_time')
     list_filter = ('year',)
     search_fields = ('name',)
-    inlines = (MockPickInline,)
+    inlines = (MockPickInline, MockBackupInline)
 
     @admin.display(description='Slots filled')
     def filled_slots(self, obj):

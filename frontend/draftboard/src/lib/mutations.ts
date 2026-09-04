@@ -217,6 +217,39 @@ export const backupPick = async (
     });
 };
 
+// Seed a slot's whole shelf from a DraftPlan's saved backups — the plan half of
+// the feature landing back on the board. The plan is the authority for the slots
+// being merged, so each named slot's shelf is REPLACED (its existing cells go
+// first): a half-merged shelf would be a plan nobody authored. Slots absent from
+// `shelves` keep whatever they hold.
+//
+// Local like every other backup write: the plan's copy came from the server, the
+// board's stays in this browser.
+export const seedBackupsFromPlan = async (
+    draftId: number,
+    shelves: {
+        slot: SlotName,
+        cells: { rank: number, player: { player_id: number | string, name: string, position: string }, projectedPrice: number | string }[],
+    }[],
+) => {
+    await db.transaction("rw", db.backup_cells, async () => {
+        for (const { slot, cells } of shelves) {
+            await db.backup_cells.where("[draftId+slot]").equals([draftId, slot]).delete();
+            for (const { rank, player, projectedPrice } of cells) {
+                await db.backup_cells.put({
+                    draftId,
+                    player_id: player.player_id,
+                    slot,
+                    rank,
+                    player_name: player.name,
+                    position: player.position,
+                    projected_price: projectedPrice,
+                });
+            }
+        }
+    });
+};
+
 // Clears ONE cell. Addressed by (slot, rank) rather than by player, because a
 // player may sit in several cells and only the one clicked should empty.
 export const unbackupPick = async (draftId: number, slot: SlotName, rank: number) => {

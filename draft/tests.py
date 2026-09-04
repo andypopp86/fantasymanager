@@ -69,6 +69,42 @@ class DraftPlanTests(TestCase):
 
         self.assertIsNone(plan.rb1)
 
+    def test_saving_a_taken_year_and_name_conflicts(self):
+        from draft.services.draft.draft_plan import PlanNameConflict
+        self.draft_player(self.qb, self.drafter, "QB1")
+        DraftPlanWriteService(user=None).create_from_draft(self.draft.id, name="dupe")
+
+        with self.assertRaises(PlanNameConflict):
+            DraftPlanWriteService(user=None).create_from_draft(self.draft.id, name="dupe")
+
+        self.assertEqual(DraftPlan.objects.filter(name="dupe").count(), 1)
+
+    def test_same_name_in_another_year_is_not_a_conflict(self):
+        other = Draft.objects.create(year=2025, draft_name="last year")
+        Manager.objects.create(draft=other, name="me", drafter=True, position=0)
+        DraftPlanWriteService(user=None).create_from_draft(self.draft.id, name="shared")
+
+        DraftPlanWriteService(user=None).create_from_draft(other.id, name="shared")
+
+        self.assertEqual(DraftPlan.objects.filter(name="shared").count(), 2)
+
+    def test_overwrite_replaces_the_plans_slots_in_place(self):
+        self.draft_player(self.qb, self.drafter, "QB1")
+        first = DraftPlanWriteService(user=None).create_from_draft(self.draft.id, name="same")
+
+        # A different roster saved under the same name: the old QB1 has to go,
+        # or an overwrite would read as a merge.
+        DraftPick.objects.filter(draft=self.draft).delete()
+        self.draft_player(self.rb, self.drafter, "RB1")
+        again = DraftPlanWriteService(user=None).create_from_draft(
+            self.draft.id, name="same", overwrite=True,
+        )
+
+        self.assertEqual(again.id, first.id)
+        self.assertIsNone(again.qb1)
+        self.assertEqual(again.rb1, self.rb)
+        self.assertEqual(DraftPlan.objects.count(), 1)
+
     def test_slot_players_covers_every_slot(self):
         plan = DraftPlan.objects.create(name="empty", year=2026)
         self.assertEqual(tuple(plan.slot_players().keys()), DRAFT_PLAN_SLOTS)
@@ -112,6 +148,41 @@ class DraftPlanAPITests(TestCase):
         detail = self.client.get(f"/api/drafts/draft/plans/{created.data['id']}/")
         self.assertEqual(detail.status_code, 200)
         self.assertEqual(detail.data["name"], "plan a")
+
+    def test_duplicate_name_answers_409_until_overwrite_is_confirmed(self):
+        first = self.client.post(
+            f"/api/drafts/draft/{self.draft.id}/create_plan/",
+            {"params": {"name": "same name"}},
+            content_type="application/json",
+        )
+        self.assertEqual(first.status_code, 201)
+
+        conflict = self.client.post(
+            f"/api/drafts/draft/{self.draft.id}/create_plan/",
+            {"params": {"name": "same name"}},
+            content_type="application/json",
+        )
+        self.assertEqual(conflict.status_code, 409)
+
+        overwritten = self.client.post(
+            f"/api/drafts/draft/{self.draft.id}/create_plan/",
+            {"params": {"name": "same name", "overwrite": True}},
+            content_type="application/json",
+        )
+        self.assertEqual(overwritten.status_code, 201)
+        self.assertEqual(overwritten.data["id"], first.data["id"])
+        self.assertEqual(DraftPlan.objects.count(), 1)
+
+    def test_plan_payload_carries_a_full_shelf_per_slot(self):
+        created = self.client.post(
+            f"/api/drafts/draft/{self.draft.id}/create_plan/",
+            {"params": {"name": "shelved"}},
+            content_type="application/json",
+        )
+
+        # A plan from a DRAFT has no backups (the board's shelf is local), but
+        # every slot still reports an empty shelf of the right length.
+        self.assertEqual(created.data["backups"]["QB1"], [None, None, None])
 
     def test_delete_plan(self):
         plan = DraftPlan.objects.create(name="doomed", year=2026)
@@ -904,6 +975,80 @@ class MockDraftTests(TestCase):
 
         self.assertNotIn("Mock K", [player.name for player in available])
 
+    def set_backup(self, player, slot, rank=1):
+        return self.service.set_backup(self.mock.id, player.player_id, slot, rank)
+
+    def test_backups_are_not_budgeted(self):
+        self.set_pick(self.rb, "RB1", price=45)
+        self.set_backup(self.other_rb, "RB1", rank=1)
+
+        self.assertEqual(self.mock.budget_spent, 45)
+
+    def test_backup_must_be_eligible_for_the_slot_it_backs_up(self):
+        from rest_framework.exceptions import ValidationError
+        with self.assertRaises(ValidationError):
+            self.set_backup(self.qb, "RB1")
+        self.assertEqual(self.mock.backups.count(), 0)
+
+    def test_rank_outside_the_shelf_is_rejected(self):
+        from rest_framework.exceptions import ValidationError
+        with self.assertRaises(ValidationError):
+            self.set_backup(self.rb, "RB1", rank=4)
+        with self.assertRaises(ValidationError):
+            self.set_backup(self.rb, "RB1", rank=0)
+
+    def test_reparking_on_the_same_shelf_moves_the_player(self):
+        self.set_backup(self.rb, "RB1", rank=1)
+        self.set_backup(self.rb, "RB1", rank=3)
+
+        shelf = self.mock.slot_backups()["RB1"]
+        self.assertIsNone(shelf[0])
+        self.assertEqual(shelf[2].player, self.rb)
+        self.assertEqual(self.mock.backups.count(), 1)
+
+    def test_filling_a_taken_cell_drops_its_occupant(self):
+        self.set_backup(self.rb, "RB1", rank=2)
+        self.set_backup(self.other_rb, "RB1", rank=2)
+
+        shelf = self.mock.slot_backups()["RB1"]
+        self.assertEqual(shelf[1].player, self.other_rb)
+        self.assertEqual(self.mock.backups.count(), 1)
+
+    def test_one_player_can_back_up_several_slots(self):
+        self.set_backup(self.rb, "RB1", rank=1)
+        self.set_backup(self.rb, "RB2", rank=1)
+
+        self.assertEqual(self.mock.slot_backups()["RB1"][0].player, self.rb)
+        self.assertEqual(self.mock.slot_backups()["RB2"][0].player, self.rb)
+
+    def test_clear_backup_empties_just_that_cell(self):
+        self.set_backup(self.rb, "RB1", rank=1)
+        self.set_backup(self.other_rb, "RB1", rank=2)
+
+        self.service.clear_backup(self.mock.id, "RB1", 1)
+
+        shelf = self.mock.slot_backups()["RB1"]
+        self.assertIsNone(shelf[0])
+        self.assertEqual(shelf[1].player, self.other_rb)
+
+    def test_available_players_still_include_backups(self):
+        self.set_backup(self.rb, "RB1", rank=1)
+
+        available = MockDraftReadService(user=None).get_available_players(self.mock.id)
+
+        self.assertIn("Mock RB", [player.name for player in available])
+
+    def test_create_plan_carries_the_backup_shelves(self):
+        self.set_pick(self.rb, "RB1", price=30)
+        self.set_backup(self.other_rb, "RB1", rank=2)
+
+        plan = DraftPlanWriteService(user=None).create_from_mock_draft(self.mock.id, name="with backups")
+
+        shelf = plan.slot_backups()["RB1"]
+        self.assertIsNone(shelf[0])
+        self.assertEqual(shelf[1].player, self.other_rb)
+        self.assertEqual(shelf[2], None)
+
     def test_create_plan_from_mock_draft(self):
         self.set_pick(self.qb, "QB1", price=30)
         self.set_pick(self.rb, "FLEX1", price=20)
@@ -963,6 +1108,62 @@ class MockDraftAPITests(TestCase):
         self.assertEqual(plan.status_code, 201)
         self.assertEqual(plan.data["slots"]["QB1"]["name"], "Api Mock QB")
 
+    def test_backup_pick_and_clear_roundtrip(self):
+        mock = MockDraft.objects.create(name="api shelf", year=2026)
+        backup_qb = make_player("Api Backup QB", "QB")
+
+        parked = self.client.post(
+            f"/api/drafts/draft/mocks/{mock.id}/backup/{backup_qb.player_id}/",
+            {"params": {"position_slot": "QB1", "rank": 2}},
+            content_type="application/json",
+        )
+        self.assertEqual(parked.status_code, 200)
+        shelf = parked.data["slots"]["QB1"]["backups"]
+        self.assertEqual([cell and cell["name"] for cell in shelf], [None, "Api Backup QB", None])
+        # An alternate is not a commitment.
+        self.assertEqual(parked.data["budget_spent"], 0)
+
+        plan = self.client.post(
+            f"/api/drafts/draft/mocks/{mock.id}/create_plan/",
+            {"params": {"name": "plan with a shelf"}},
+            content_type="application/json",
+        )
+        self.assertEqual(plan.status_code, 201)
+        self.assertEqual(plan.data["backups"]["QB1"][1]["name"], "Api Backup QB")
+
+        cleared = self.client.post(
+            f"/api/drafts/draft/mocks/{mock.id}/clear_backup/",
+            {"params": {"position_slot": "QB1", "rank": 2}},
+            content_type="application/json",
+        )
+        self.assertEqual(cleared.status_code, 200)
+        self.assertEqual(cleared.data["slots"]["QB1"]["backups"], [None, None, None])
+
+    def test_mock_plan_overwrite_is_confirmed_the_same_way(self):
+        mock = MockDraft.objects.create(name="api dupe", year=2026)
+
+        first = self.client.post(
+            f"/api/drafts/draft/mocks/{mock.id}/create_plan/",
+            {"params": {"name": "mock plan"}},
+            content_type="application/json",
+        )
+        self.assertEqual(first.status_code, 201)
+
+        conflict = self.client.post(
+            f"/api/drafts/draft/mocks/{mock.id}/create_plan/",
+            {"params": {"name": "mock plan"}},
+            content_type="application/json",
+        )
+        self.assertEqual(conflict.status_code, 409)
+
+        overwritten = self.client.post(
+            f"/api/drafts/draft/mocks/{mock.id}/create_plan/",
+            {"params": {"name": "mock plan", "overwrite": True}},
+            content_type="application/json",
+        )
+        self.assertEqual(overwritten.status_code, 201)
+        self.assertEqual(overwritten.data["id"], first.data["id"])
+
     def test_spectator_cannot_reach_any_mock_draft_endpoint(self):
         """Mock drafts are the drafter's private sketchpad — there is no
         spectator-visible flag for them, unlike Draft.available_to_spectators.
@@ -983,6 +1184,9 @@ class MockDraftAPITests(TestCase):
             (f"/api/drafts/draft/mocks/{mock.id}/pick/{player.player_id}/",
              {"position_slot": "RB1", "price": 5}),
             (f"/api/drafts/draft/mocks/{mock.id}/clear_slot/", {"position_slot": "RB1"}),
+            (f"/api/drafts/draft/mocks/{mock.id}/backup/{player.player_id}/",
+             {"position_slot": "RB1", "rank": 1}),
+            (f"/api/drafts/draft/mocks/{mock.id}/clear_backup/", {"position_slot": "RB1", "rank": 1}),
             (f"/api/drafts/draft/mocks/{mock.id}/create_plan/", {"name": "nope"}),
         ]
         for url in gets:
@@ -994,6 +1198,7 @@ class MockDraftAPITests(TestCase):
         # Nothing leaked through as a side effect.
         self.assertEqual(MockDraft.objects.count(), 1)
         self.assertEqual(mock.picks.count(), 0)
+        self.assertEqual(mock.backups.count(), 0)
         self.assertEqual(DraftPlan.objects.count(), 0)
 
     def test_spectator_draft_list_is_unaffected_by_mocks(self):

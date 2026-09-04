@@ -28,6 +28,7 @@ class MockDraftReadService(BaseService):
     def get_mock_draft(self, mock_draft_id):
         mock = d.MockDraft.objects.filter(id=mock_draft_id).prefetch_related(
             'picks__player', 'picks__player__team',
+            'backups__player', 'backups__player__team',
         ).first()
         if not mock:
             raise Http404
@@ -36,6 +37,9 @@ class MockDraftReadService(BaseService):
     def get_available_players(self, mock_draft_id):
         """Players eligible to be picked in this mock: the mock's YEAR, minus the
         ones already occupying a slot in it.
+
+        Backups do NOT come out of the list: an alternate is a candidate, not a
+        commitment, and the same player may back up several slots.
 
         Unlike a Draft's available_players — which reads DraftPick rows — a mock
         has no per-player rows, so availability comes straight from Player.
@@ -102,4 +106,43 @@ class MockDraftWriteService(BaseService):
         if not mock:
             raise Http404
         mock.picks.filter(position_slot=position_slot).delete()
+        mock.save(update_fields=['last_update_time'])
+
+    def set_backup(self, mock_draft_id, player_id, position_slot, rank):
+        """Park `player_id` on `position_slot`'s shelf at depth `rank`.
+
+        A backup stands in for one specific slot, so it has to satisfy that
+        slot's own eligibility — the same rule the budget row's shelf enforces
+        on the board. Within a shelf a player is unique, so re-parking someone
+        already on it MOVES them (their old cell empties) rather than colliding;
+        whoever held the target cell is dropped. Other slots' shelves are left
+        alone: a handcuff RB legitimately backs up both RB1 and RB2.
+        """
+        mock = d.MockDraft.objects.filter(id=mock_draft_id).first()
+        if not mock:
+            raise Http404
+        if not 1 <= int(rank) <= d.BACKUP_DEPTH:
+            raise ValidationError(f"rank must be between 1 and {d.BACKUP_DEPTH}")
+        player = d.Player.objects.filter(year=mock.year, player_id=player_id).first()
+        if not player:
+            raise ValidationError(f"No {mock.year} player with id {player_id}")
+        elig_err = validate_slot_eligibility(player, position_slot)
+        if elig_err:
+            raise ValidationError(elig_err)
+        shelf = mock.backups.filter(position_slot=position_slot)
+        shelf.filter(rank=rank).exclude(player=player).delete()
+        backup, _ = d.MockBackup.objects.get_or_create(
+            mock_draft=mock, position_slot=position_slot, player=player,
+            defaults={'rank': int(rank)},
+        )
+        backup.rank = int(rank)
+        backup.save()
+        mock.save(update_fields=['last_update_time'])
+        return backup
+
+    def clear_backup(self, mock_draft_id, position_slot, rank):
+        mock = d.MockDraft.objects.filter(id=mock_draft_id).first()
+        if not mock:
+            raise Http404
+        mock.backups.filter(position_slot=position_slot, rank=rank).delete()
         mock.save(update_fields=['last_update_time'])
