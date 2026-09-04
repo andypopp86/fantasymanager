@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { draftPlansRetrieve, draftPlanCreate, draftPlanDelete } from "../lib/data";
-import { applyPlanSelections } from "../lib/mutations";
+import { applyPlanToBoard } from "../lib/mutations";
 import { useDraftData } from "../hooks/useDraftData";
 import { POSITION_BG_COLORS, POSITION_FG_COLORS } from "../utils/colors";
 import type { DraftPlanPlayer } from "../lib/draft.schemas";
@@ -10,15 +10,20 @@ import type { DraftPlanPlayer } from "../lib/draft.schemas";
 const planPrice = (player: DraftPlanPlayer) =>
     parseInt(String(player.override_price ?? "")) || parseInt(String(player.projected_price)) || 1;
 
-// /draft/:draftId/plan — merge a saved DraftPlan into the current budget,
-// slot by slot. Each slot has a checkbox: checked slots take the plan's
-// player, unchecked keep the current budget row. Slots whose budget row is an
-// actually-drafted player default to UNCHECKED (protected, but overridable);
-// plan players already drafted by anyone are disabled outright.
+// /draft/:draftId/plan — swap a saved DraftPlan onto the board. Applying is
+// WHOLESALE: the budget is emptied and the plan's roster takes its place, and
+// the same for the backup shelves (authored on the mock draft this plan came
+// from). There is no per-slot picking — a plan is applied or it isn't.
+//
+// The table is therefore a PREVIEW: current budget beside what the plan puts
+// there, with players the field has already drafted called out so nothing lands
+// silently. Backups crossing over is the only way a shelf reaches another
+// browser; the board's own backups never leave Dexie.
 export default function DraftPlanPage() {
     const { draftId: draftIdParam } = useParams();
     const draftId = Number(draftIdParam);
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
     const data = useDraftData(draftId);
 
     const { data: plans, refetch: refetchPlans } = useQuery({
@@ -31,13 +36,13 @@ export default function DraftPlanPage() {
     });
 
     const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
-    const [checkedSlots, setCheckedSlots] = useState<Record<string, boolean>>({});
     const [applying, setApplying] = useState(false);
 
     const selectedPlan = plans?.find((plan) => plan.id === selectedPlanId) || null;
 
-    // player_id -> manager_name for every drafted player in this draft, to
-    // flag plan players who are already gone (and protect drafted budget rows).
+    // player_id -> manager_name for every drafted player in this draft, purely
+    // to LABEL the preview — who's already gone, and which budget rows mirror
+    // your own picks. Nothing here blocks an apply.
     const draftedBy = useMemo(() => {
         const map: Record<string, string> = {};
         data.managers.forEach((manager: any) => {
@@ -51,67 +56,82 @@ export default function DraftPlanPage() {
     const drafter = data.managers.find((manager: any) => manager.manager_id === data.drafterId);
     const drafterName = drafter?.manager_name;
 
-    // One row per budget slot, in board order.
+    // One row per budget slot, in board order — a preview of what applying does.
     const rows = useMemo(() => {
         return Object.entries(data.budgetedPlayers).map(([slot, slotObj]: [string, any]) => {
             const current = slotObj.pick;
             const currentIsDrafted = !!current.player_id && draftedBy[String(current.player_id)] === drafterName;
             const planPlayer: DraftPlanPlayer | null = selectedPlan?.slots?.[slot] || null;
             const planTakenBy = planPlayer ? draftedBy[String(planPlayer.player_id)] : undefined;
-            const samePlayer = planPlayer && String(planPlayer.player_id) === String(current.player_id);
-            // Nothing to merge: empty plan slot, an unavailable player, or a no-op.
-            const disabled = !planPlayer || !!planTakenBy || !!samePlayer;
-            return { slot, current, currentIsDrafted, planPlayer, planTakenBy, samePlayer, disabled };
+            const planBackups = (selectedPlan?.backups?.[slot] || []).filter(Boolean) as DraftPlanPlayer[];
+            return { slot, current, currentIsDrafted, planPlayer, planTakenBy, planBackups };
         });
     }, [data.budgetedPlayers, draftedBy, drafterName, selectedPlan]);
 
-    // Selecting a plan resets the checkboxes to their defaults: mergeable
-    // slots on, drafted-protected (and disabled) slots off.
-    useEffect(() => {
-        const defaults: Record<string, boolean> = {};
-        rows.forEach(({ slot, disabled, currentIsDrafted }) => {
-            defaults[slot] = !disabled && !currentIsDrafted;
-        });
-        setCheckedSlots(defaults);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedPlanId, plans]);
-
-    const toggleSlot = (slot: string) => {
-        setCheckedSlots((prev) => ({ ...prev, [slot]: !prev[slot] }));
-    };
-
-    // Budget preview: current total vs. total if the checked merges apply.
+    // Budget preview: what's budgeted now vs. what the plan costs.
     const startingBudget = Number(data.draftDetails?.starting_budget ?? drafter?.manager_budget) || 0;
     const currentPrice = (current: any) =>
         parseInt(current.actual_price) || parseInt(current.projected_price) || 0;
-    const mergedSpent = rows.reduce((acc, { slot, current, planPlayer }) => {
-        if (checkedSlots[slot] && planPlayer) return acc + planPrice(planPlayer);
-        return acc + currentPrice(current);
-    }, 0);
+    // The plan's total, not a blend: applying takes the whole roster.
+    const planSpent = rows.reduce((acc, { planPlayer }) => acc + (planPlayer ? planPrice(planPlayer) : 0), 0);
 
     const applyPlan = async () => {
         if (!selectedPlan) return;
-        const selections = rows
-            .filter(({ slot, planPlayer, disabled }) => checkedSlots[slot] && planPlayer && !disabled)
+        const roster = rows
+            .filter(({ planPlayer }) => !!planPlayer)
             .map(({ slot, planPlayer }) => ({
                 slot,
                 player: { player_id: planPlayer!.player_id, name: planPlayer!.name, position: planPlayer!.position },
                 projectedPrice: planPrice(planPlayer!),
             }));
-        if (selections.length === 0) return;
+        const shelves = rows.map(({ slot }) => ({
+            slot,
+            cells: (selectedPlan.backups?.[slot] || [])
+                .map((player, index) => ({ player, rank: index + 1 }))
+                .filter(({ player }) => !!player)
+                .map(({ player, rank }) => ({
+                    rank,
+                    player: { player_id: player!.player_id, name: player!.name, position: player!.position },
+                    projectedPrice: planPrice(player!),
+                })),
+        }));
         setApplying(true);
         try {
-            await applyPlanSelections(draftId, data.drafterId, selections);
+            await applyPlanToBoard(draftId, data.drafterId, roster, shelves);
+            // DROP the board's cached budget before going back. `Draft.tsx`
+            // hydrates Dexie from whatever React Query already holds, and
+            // `hydrateDraft` is a wholesale replace — so a pre-swap
+            // `budgeted_picks` in the cache would overwrite the rows just
+            // written and the plan would look like it never applied. Removing
+            // it forces a fetch, and the hydrate effect sits out until that
+            // lands. Only this one query: applying a plan moves budget rows
+            // and nothing else, so drafted picks and availability are as they
+            // were.
+            queryClient.removeQueries({ queryKey: ["budgeted_picks", draftId] });
             navigate(`/draft/${draftId}`);
         } finally {
             setApplying(false);
         }
     };
 
+    // year + name identifies a plan, so re-using a name replaces that plan —
+    // the server answers 409 until the client confirms it. (A snapshot of a
+    // draft carries no backups: the board's shelf never leaves the browser.)
     const savePlanFromDraft = () => {
         const name = window.prompt("Name for the new plan (snapshot of this draft's drafted results):");
         if (!name) return;
-        draftPlanCreate(draftId, { name }).then(() => refetchPlans());
+        const save = (overwrite: boolean): Promise<unknown> =>
+            draftPlanCreate(draftId, { name, overwrite })
+                .then(() => refetchPlans())
+                .catch((err: any) => {
+                    if (err?.response?.status === 409 && !overwrite
+                        && window.confirm(`A ${data.draftDetails?.year || ""} plan named “${name}” already exists. Replace it?`)) {
+                        return save(true);
+                    }
+                    if (err?.response?.status === 409) return undefined;
+                    throw err;
+                });
+        save(false);
     };
 
     const deletePlan = (planId: number) => {
@@ -132,7 +152,10 @@ export default function DraftPlanPage() {
         );
     }
 
-    const canApply = selectedPlan && !applying && rows.some(({ slot, disabled }) => !disabled && checkedSlots[slot]);
+    const canApply = selectedPlan && !applying && rows.some(({ planPlayer }) => !!planPlayer);
+    // Applying wipes the budget, so a drafted pick losing its budget row is the
+    // one consequence worth spelling out before the click.
+    const draftedRows = rows.filter(({ currentIsDrafted }) => currentIsDrafted);
 
     return (
         <div className="min-h-screen bg-gray-100 py-8 px-4">
@@ -184,22 +207,30 @@ export default function DraftPlanPage() {
                         <span className="font-semibold text-gray-800">Current:</span> ${data.budgetSpent} of ${startingBudget}
                     </div>
                     <div className="text-sm text-gray-600">
-                        <span className="font-semibold text-gray-800">After merge:</span>{" "}
-                        <span className={mergedSpent > startingBudget ? "text-red-600 font-bold" : ""}>${mergedSpent}</span> of ${startingBudget}
+                        <span className="font-semibold text-gray-800">This plan:</span>{" "}
+                        <span className={planSpent > startingBudget ? "text-red-600 font-bold" : ""}>${planSpent}</span> of ${startingBudget}
                     </div>
                     <span className="flex-1" />
                     <button
                         className="bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-md px-5 py-2 shadow-sm disabled:opacity-40 disabled:hover:bg-blue-500"
+                        title="Empty the budget and the backup shelves, then install this plan"
                         disabled={!canApply}
                         onClick={applyPlan}
                     >
-                        {applying ? "Applying…" : "Apply selected"}
+                        {applying ? "Applying…" : "Replace board with plan"}
                     </button>
                 </div>
 
-                {selectedPlan && mergedSpent > startingBudget && (
+                {selectedPlan && planSpent > startingBudget && (
                     <p className="px-6 py-2 bg-yellow-100 text-center text-sm font-semibold text-yellow-800">
-                        ⚠️ Merged plan totals ${mergedSpent}, over the ${startingBudget} budget — uncheck some slots or adjust after applying.
+                        ⚠️ This plan totals ${planSpent}, over the ${startingBudget} budget — adjust after applying.
+                    </p>
+                )}
+
+                {selectedPlan && draftedRows.length > 0 && (
+                    <p className="px-6 py-2 bg-orange-100 text-center text-sm text-orange-900">
+                        Applying empties the whole budget, including {draftedRows.length} row{draftedRows.length === 1 ? "" : "s"} holding a player you already drafted
+                        ({draftedRows.map(({ current }) => current.player_name).join(", ")}). The picks stand; their budget rows don't.
                     </p>
                 )}
 
@@ -209,11 +240,11 @@ export default function DraftPlanPage() {
                             <th className="text-left px-6 py-2">Slot</th>
                             <th className="text-left px-3 py-2">Current budget</th>
                             <th className="text-left px-3 py-2">Plan</th>
-                            <th className="px-6 py-2">Merge</th>
+                            <th className="text-left px-3 py-2" title="Alternates saved with the plan; applying installs them on the board's shelves">Backups</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {rows.map(({ slot, current, currentIsDrafted, planPlayer, planTakenBy, samePlayer, disabled }) => (
+                        {rows.map(({ slot, current, currentIsDrafted, planPlayer, planTakenBy, planBackups }) => (
                             <tr key={slot} className="border-b border-gray-100 hover:bg-gray-50">
                                 <td className="px-6 py-2 font-semibold text-gray-700">{slot}</td>
                                 <td className="px-3 py-2">
@@ -235,33 +266,34 @@ export default function DraftPlanPage() {
                                     {planPlayer ? (
                                         <span className="inline-flex items-center gap-1.5">
                                             <span
-                                                className={"inline-block px-2 py-0.5 rounded-full text-xs font-semibold" + (disabled ? " opacity-50" : "")}
+                                                className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold"
                                                 style={{ background: POSITION_BG_COLORS[planPlayer.position], color: POSITION_FG_COLORS[planPlayer.position] }}
                                             >
                                                 {planPlayer.name} · ${planPrice(planPlayer)}
                                             </span>
                                             {planTakenBy && <span className="text-xs text-gray-500">drafted by {planTakenBy}</span>}
-                                            {samePlayer && !planTakenBy && <span className="text-xs text-gray-500">already budgeted here</span>}
                                         </span>
                                     ) : (
                                         <span className="text-gray-300">—</span>
                                     )}
                                 </td>
-                                <td className="px-6 py-2 text-center">
-                                    <input
-                                        type="checkbox"
-                                        className="w-4 h-4 accent-blue-600 disabled:opacity-30 cursor-pointer disabled:cursor-default"
-                                        disabled={disabled}
-                                        checked={!!checkedSlots[slot]}
-                                        onChange={() => toggleSlot(slot)}
-                                        title={
-                                            disabled
-                                                ? "Nothing to merge for this slot"
-                                                : currentIsDrafted
-                                                    ? "Checking this overwrites the budget row of a player you already drafted"
-                                                    : "Take the plan's player for this slot"
-                                        }
-                                    />
+                                <td className="px-3 py-2">
+                                    {planBackups.length ? (
+                                        <span className="flex flex-wrap gap-1">
+                                            {planBackups.map((backup) => (
+                                                <span
+                                                    key={backup.player_id}
+                                                    className="inline-block px-1.5 rounded text-xs"
+                                                    style={{ background: POSITION_BG_COLORS[backup.position], color: POSITION_FG_COLORS[backup.position] }}
+                                                    title={draftedBy[String(backup.player_id)] ? `Drafted by ${draftedBy[String(backup.player_id)]}` : `Backup for ${slot}`}
+                                                >
+                                                    {backup.name}
+                                                </span>
+                                            ))}
+                                        </span>
+                                    ) : (
+                                        <span className="text-gray-300">—</span>
+                                    )}
                                 </td>
                             </tr>
                         ))}

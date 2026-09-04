@@ -46,6 +46,12 @@ POSITIONS = (
 # lowercase field per entry (qb1, rb1, ... bench7).
 DRAFT_PLAN_SLOTS = tuple(slot for slot, _ in BUDGET_POSITIONS)
 
+# How deep a slot's shelf of pre-picked alternates goes. Mirrors BACKUP_DEPTH in
+# the React app (lib/draft.schemas.ts) — the board's shelf is local-only, but a
+# MockDraft's and a DraftPlan's are persisted, and both use these same ranks
+# (1..BACKUP_DEPTH, 1 = first alternate).
+BACKUP_DEPTH = 3
+
 QB_POSITIONS = ('QB',)
 RB_POSITIONS = ('RB',)
 WR_POSITIONS = ('WR',)
@@ -561,6 +567,10 @@ class DraftPlan(models.Model):
 
     class Meta:
         ordering = ('-year', 'name')
+        # A plan is addressed by year + name everywhere it's saved ("Save as
+        # plan" from a mock or a draft), so the pair is the identity: saving the
+        # same name again OVERWRITES that plan rather than growing a duplicate.
+        unique_together = (('year', 'name'),)
 
     def __str__(self):
         return '%s - %s' % (self.year, self.name)
@@ -568,6 +578,48 @@ class DraftPlan(models.Model):
     def slot_players(self):
         """Slot name -> Player (or None), in board order."""
         return {slot: getattr(self, slot.lower()) for slot in DRAFT_PLAN_SLOTS}
+
+    def slot_backups(self):
+        """Slot name -> [DraftPlanBackup | None] * BACKUP_DEPTH, in board order."""
+        return _shelves_by_slot(self.backups.all())
+
+
+def _shelves_by_slot(rows):
+    """Group backup rows into a fixed-length shelf per slot, indexed by rank-1.
+
+    Shared by DraftPlan and MockDraft: both hold one row per (slot, rank) cell
+    and both hand the client every slot, filled or not.
+    """
+    shelves = {slot: [None] * BACKUP_DEPTH for slot in DRAFT_PLAN_SLOTS}
+    for row in rows:
+        shelf = shelves.get(row.position_slot)
+        if shelf and 1 <= row.rank <= BACKUP_DEPTH:
+            shelf[row.rank - 1] = row
+    return shelves
+
+
+class DraftPlanBackup(models.Model):
+    """One pre-picked alternate on a saved plan: the player to fall back to for
+    `position_slot` if the plan's pick there is gone, at depth `rank`.
+
+    A backup is a candidate, not a commitment, so it carries no price (applying
+    prices from override/projected like the plan's own slots do) and the same
+    player may sit on several slots' shelves (a handcuff RB backing RB1 and RB2).
+    """
+    plan = models.ForeignKey(DraftPlan, on_delete=models.CASCADE, related_name='backups')
+    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='plan_backups')
+    position_slot = models.CharField(max_length=50, choices=BUDGET_POSITIONS)
+    rank = models.IntegerField()
+
+    class Meta:
+        ordering = ('position_slot', 'rank')
+        unique_together = (
+            ('plan', 'position_slot', 'rank'),
+            ('plan', 'position_slot', 'player'),
+        )
+
+    def __str__(self):
+        return '%s B%s - %s' % (self.position_slot, self.rank, self.player.name)
 
 
 class MockDraft(models.Model):
@@ -609,6 +661,14 @@ class MockDraft(models.Model):
         picks_by_slot = {pick.position_slot: pick for pick in self.picks.all()}
         return {slot: picks_by_slot.get(slot) for slot in DRAFT_PLAN_SLOTS}
 
+    def slot_backups(self):
+        """Slot name -> [MockBackup | None] * BACKUP_DEPTH, in board order.
+
+        Deliberately absent from budget_spent: an alternate is a candidate, not
+        a commitment, same as the board's local shelf.
+        """
+        return _shelves_by_slot(self.backups.all())
+
     @property
     def budget_spent(self):
         return sum(pick.price or 0 for pick in self.picks.all())
@@ -638,6 +698,32 @@ class MockPick(models.Model):
 
     def __str__(self):
         return '%s - %s - %s' % (self.position_slot, self.player.name, self.price)
+
+
+class MockBackup(models.Model):
+    """One cell of a MockDraft's backup shelf — the alternate for
+    `position_slot` at depth `rank`.
+
+    This is where a plan's backups are AUTHORED (the draft board's own shelf
+    stays local to the browser); `create_from_mock_draft` copies these into
+    DraftPlanBackup. Like the plan's, it's priceless and per-cell: one row per
+    (slot, rank), and a player may hold cells on several slots' shelves.
+    """
+    mock_draft = models.ForeignKey(MockDraft, on_delete=models.CASCADE, related_name='backups')
+    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='mock_backups')
+    position_slot = models.CharField(max_length=50, choices=BUDGET_POSITIONS)
+    rank = models.IntegerField()
+    last_update_time = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ('position_slot', 'rank')
+        unique_together = (
+            ('mock_draft', 'position_slot', 'rank'),
+            ('mock_draft', 'position_slot', 'player'),
+        )
+
+    def __str__(self):
+        return '%s B%s - %s' % (self.position_slot, self.rank, self.player.name)
 
 
 class PlayerStats(models.Model):

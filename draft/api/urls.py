@@ -37,6 +37,8 @@ draft_urlpatterns = [
     path("mocks/<int:mock_draft_id>/available_players/", api_views.MockDraftAvailablePlayersAPI.as_view(), name="mock_draft_available_players"),
     path("mocks/<int:mock_draft_id>/pick/<int:player_id>/", api_views.MockDraftSetPickAPI.as_view(), name="mock_draft_set_pick"),
     path("mocks/<int:mock_draft_id>/clear_slot/", api_views.MockDraftClearSlotAPI.as_view(), name="mock_draft_clear_slot"),
+    path("mocks/<int:mock_draft_id>/backup/<int:player_id>/", api_views.MockDraftSetBackupAPI.as_view(), name="mock_draft_set_backup"),
+    path("mocks/<int:mock_draft_id>/clear_backup/", api_views.MockDraftClearBackupAPI.as_view(), name="mock_draft_clear_backup"),
     path("mocks/<int:mock_draft_id>/create_plan/", api_views.MockDraftCreatePlanAPI.as_view(), name="mock_draft_create_plan"),
 
     # writes

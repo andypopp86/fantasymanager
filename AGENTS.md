@@ -810,18 +810,43 @@ projected/override price. Created from a mock draft by snapshotting the **drafte
 actual drafted picks** (`DraftPlanWriteService.create_from_draft`). Endpoints under
 `/api/drafts/draft/`: `plans/` (list, `?year=` filter), `plans/<id>/`,
 `plans/<id>/delete/`, `<draft_id>/create_plan/`. Services in
-`draft/services/draft/draft_plan.py`. Purpose: mid-draft budget pivots — swap a
+`draft/services/draft/draft_plan.py`.
+
+- **`(year, name)` is the plan's identity** (`unique_together`), so "Save as
+  plan" under a name that already exists REPLACES that plan instead of adding a
+  duplicate. Both create endpoints take `overwrite` (default False) and answer
+  **409 `PlanNameConflict`** without it; the two callers
+  (`MockDraftPage.saveAsPlan`, `DraftPlanPage.savePlanFromDraft`) catch the 409,
+  `window.confirm`, and resend with `overwrite: true`. An overwrite is a full
+  replacement — every slot cleared first, backup rows deleted and rewritten —
+  because a re-save is a new roster, not a merge with the old one. Migration
+  `0093` suffixes pre-existing duplicates " (2)", " (3)" (newest keeps the bare
+  name) before the constraint lands.
+- **`DraftPlanBackup`** — the plan's shelf of alternates: `(plan,
+  position_slot, rank)` with a Player, `BACKUP_DEPTH` (3) ranks per slot, no
+  price (a candidate isn't a commitment). Authored on a **MockDraft** and copied
+  in by `create_from_mock_draft`; a plan snapshotted from a *draft* has none,
+  because the board's shelf never leaves the browser. Serialized as
+  `backups: {slot: [player|null] * 3}`, a SIBLING of `slots` so the old payload
+  shape still reads the same. Purpose: mid-draft budget pivots — swap a
 predefined plan into the budget panel instead of editing slots under time pressure
 The consuming UI is `features/DraftPlanPage.tsx` at route `/draft/:draftId/plan`
-("Plans" button on the board): select a plan, then a per-slot checkbox picker
-merges it into the budget — mergeable slots default CHECKED; slots whose budget
-row is an actually-drafted player default UNCHECKED (protected but overridable);
-plan players already drafted by anyone are disabled. Apply goes through
-`mutations.applyPlanSelections` (unbudget displaced occupant → budget plan player,
-per slot — the unbudget matters or the displaced server row reclaims the slot on
-refetch). Plan players are priced `override_price || projected_price`. The page
+("Plans" button on the board): select a plan, then **Replace board with plan**.
+Applying is WHOLESALE — there is no per-slot picking, and deliberately no merge
+checkbox: `mutations.applyPlanToBoard` empties the budget (unbudgeting everyone
+the plan doesn't also name — a plan player already budgeted is left for
+`budgetPick` to MOVE, per the `applyBudgetChanges` contract), places the plan's
+roster, then hands the plan's shelves to `seedBackupsFromPlan`, which wipes the
+draft's `backup_cells` and installs them. The table is a PREVIEW only: current
+budget beside the plan's player, "drafted by X" labels, and the plan's backups.
+Two warnings sit above it — over budget, and how many budget rows holding one of
+your OWN drafted picks the apply will clear (the picks stand; their budget rows
+don't). Plan players are priced `override_price || projected_price`. The page
 reads the draft via `useDraftData`, so the board must have been opened once to
 hydrate Dexie.
+
+> `mutations.applyPlanSelections` (the older per-slot merge) is still used by
+> `RebudgetModal`; nothing on the plan page calls it any more.
 
 **MockDraft / MockPick (`draft/models.py`)** — a plan sketchpad: ONE roster of the
 16 canonical slots, a player and a price in each, and nothing else. No managers,
@@ -832,6 +857,16 @@ into it; a MockDraft gets to the same plan directly
 `create_from_draft` via `build_plan`). Like DraftPlan it has NO FK to a draft or
 a user.
 
+- **`MockBackup`** — the persisted half of the Backups feature (see below):
+  `(mock_draft, position_slot, rank)` + Player, `BACKUP_DEPTH` ranks per slot,
+  no price and NOT in `budget_spent`. Same rules as the board's local shelf —
+  eligibility against the slot's `allowed_positions`, one row per CELL so a
+  player may back up several slots, re-parking on the same shelf MOVES them,
+  filling a taken cell drops its occupant — and backups do NOT leave
+  `available_players`. `create_plan` copies them into `DraftPlanBackup`, which
+  is the whole point: this page is where a plan's backups get authored.
+  Endpoints `mocks/<id>/backup/<player_id>/` (`{position_slot, rank}`) and
+  `mocks/<id>/clear_backup/` (`{position_slot, rank}`).
 - `MockPick` is the M2M through row of `MockDraft.players`, `unique_together`
   BOTH ways: `(mock_draft, position_slot)` and `(mock_draft, player)`. So
   `MockDraftWriteService.set_pick` resolves both collisions itself — the player
@@ -861,8 +896,11 @@ a user.
   loaded players, and Favorites-only counting `favorite === true` alone), but
   apply LIVE rather than behind a Filter button. Click
   a player, then click an eligible slot; eligible empty slots are outlined blue,
-  which is the board's tap-to-place idiom. "Save as plan" prompts for a name and
-  posts `create_plan`. It reads the server DIRECTLY through React Query — **not**
+  which is the board's tap-to-place idiom. The roster table also carries
+  **B1–B3 columns** — the slot's persisted shelf — filled the same way (click a
+  player, then a cell; ✕ clears one cell), with `stopPropagation` on every cell
+  handler because the `<tr>` itself budgets. "Save as plan" prompts for a name and
+  posts `create_plan`, backups included. It reads the server DIRECTLY through React Query — **not**
   Dexie and not the offline write queue — because mocks are prep-time work, same
   reasoning as Target Tiers.
 
@@ -1014,12 +1052,22 @@ the slot it backs up, so "someone took my WR1 target, who replaces them" has to
 be one ROW, not two components to read across. Anything added here belongs on
 the budget row.
 
-- **LOCAL ONLY.** No endpoint, no `BudgetPlayer` row, nothing in the offline
-  write queue — `backupPick` / `unbackupPick` / `moveBackup` are the only
-  mutations in `mutations.ts` that never talk to the server, and `hydrateDraft`
-  leaves `backup_cells` alone (a refetch has no opinion on them, and wiping them
-  would lose the feature on every load). They live and die on one browser; a
-  draft-day machine swap loses the shelf, which is accepted.
+- **LOCAL ONLY on the board.** No endpoint, no `BudgetPlayer` row, nothing in
+  the offline write queue — `backupPick` / `unbackupPick` / `moveBackup` /
+  `seedBackupsFromPlan` are the only mutations in `mutations.ts` that never talk
+  to the server, and `hydrateDraft` leaves `backup_cells` alone (a refetch has
+  no opinion on them, and wiping them would lose the feature on every load).
+  Board edits stay in that browser, by design: the shelf is draft-day scratch
+  work.
+- **The persisted half is the PLAN's.** A shelf that needs to survive a machine
+  is authored on a MockDraft (`MockBackup`, the B1–B3 columns on
+  `MockDraftPage`) and rides into the `DraftPlan` on "Save as plan"
+  (`DraftPlanBackup`). Applying such a plan REPLACES the board's shelf outright:
+  `seedBackupsFromPlan` deletes every `backup_cell` for the draft in one
+  transaction and writes the plan's, so afterwards the board's backups are the
+  plan's and nothing survives from before — same wholesale rule as the budget
+  half of the apply. That is the only path by which a shelf crosses browsers;
+  nothing pushes board edits back.
 - **Not the budget.** Backups are absent from `budgetSpent` — a candidate is not
   a commitment. But they ARE slot-specific, so a backup must satisfy its row's
   `allowed_positions` like any other candidate for it (guarded on every drop).

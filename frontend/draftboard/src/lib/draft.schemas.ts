@@ -245,6 +245,10 @@ export type DraftPlanOutput = {
     date_created: string,
     // Slot name -> planned player (null for slots the plan leaves open).
     slots: Record<SlotName, DraftPlanPlayer | null>,
+    // Slot name -> that slot's shelf of alternates, always BACKUP_DEPTH long
+    // (empty cells are null). Authored on a MockDraft and snapshotted with the
+    // plan; a sibling of `slots` rather than a key inside it.
+    backups: Record<SlotName, (DraftPlanPlayer | null)[]>,
 }
 
 // ---- Mock drafts (/api/drafts/draft/mocks/) --------------------------------
@@ -264,10 +268,24 @@ export type MockPick = {
     projected_price: number | string,
 }
 
+// One cell of a slot's shelf. No `price`: an alternate is a candidate, not a
+// commitment, so it never counts against the mock's budget.
+export type MockBackup = {
+    id: number,
+    player_id: number,
+    name: string,
+    position: string,
+    team: string | null,
+    rank: number,
+    projected_price: number | string,
+}
+
 export type MockDraftSlot = {
     order: number,
     allowed_positions: string[],
     pick: MockPick | null,
+    // Always BACKUP_DEPTH long, empty cells included.
+    backups: (MockBackup | null)[],
 }
 
 export type MockDraftSummary = {
@@ -353,10 +371,15 @@ export type BudgetPickRow = {
     status: string,
 }
 
-// Backups — LOCAL ONLY, no server counterpart.every budget slot gets its own
-// shelf of pre-picked alternates: when an opponent takes the WR1 target, the
-// WR1 shelf already says who replaces them, so the swap is one click instead of
-// a plan rebuilt under time pressure.
+// Backups — every budget slot gets its own shelf of pre-picked alternates: when
+// an opponent takes the WR1 target, the WR1 shelf already says who replaces
+// them, so the swap is one click instead of a plan rebuilt under time pressure.
+//
+// On the BOARD the shelf is LOCAL ONLY (`BackupPickRow` in Dexie, below): it is
+// draft-day scratch work and never reaches the server. The persisted half lives
+// on a MockDraft (`MockBackup`) and travels with the DraftPlan it is saved as
+// — that's how a shelf survives a machine, and applying such a plan seeds these
+// local rows. Same (slot, rank) addressing on both sides.
 //
 // `slot` is the BUDGET slot being backed up (QB1, WR1, BENCH3 …) and `rank` is
 // the depth position on that slot's shelf (1..BACKUP_DEPTH), so a row is

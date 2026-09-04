@@ -24,11 +24,24 @@ class DraftPlanOutputSerializer(BaseSerializer):
     year = serializers.IntegerField()
     date_created = serializers.DateTimeField()
     slots = serializers.SerializerMethodField()
+    # A sibling of `slots`, not a key inside it, so nothing reading the old
+    # shape has to change: slot -> a fixed-length shelf (BACKUP_DEPTH), each
+    # cell the alternate parked there or null.
+    backups = serializers.SerializerMethodField()
 
     def get_slots(self, instance):
         return {
             slot: DraftPlanPlayerOutputSerializer.serialize(player) if player else None
             for slot, player in instance.slot_players().items()
+        }
+
+    def get_backups(self, instance):
+        return {
+            slot: [
+                DraftPlanPlayerOutputSerializer.serialize(cell.player) if cell else None
+                for cell in shelf
+            ]
+            for slot, shelf in instance.slot_backups().items()
         }
 
 
@@ -59,6 +72,9 @@ class DraftPlanCreateFromDraftAPI(APIView):
 
     class DraftPlanCreateSerializer(BaseInputSerializer):
         name = serializers.CharField()
+        # Off by default: without it, re-using a (year, name) is a 409 so the
+        # client can ask before replacing a plan.
+        overwrite = serializers.BooleanField(default=False)
 
     @extend_schema(
         parameters=None,
@@ -72,6 +88,7 @@ class DraftPlanCreateFromDraftAPI(APIView):
         ).create_from_draft(
             draft_id=draft_id,
             name=input_data["name"],
+            overwrite=input_data["overwrite"],
         )
         output_data = DraftPlanOutputSerializer.serialize(plan)
         return Response(output_data, status=status.HTTP_201_CREATED)

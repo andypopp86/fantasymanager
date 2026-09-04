@@ -7,7 +7,7 @@ from drf_spectacular.utils import extend_schema
 from core.api.serializers.base import BaseSerializer, BaseInputSerializer
 from draft.api.permissions import IsDrafter
 from draft.api.views.draft_plan import DraftPlanOutputSerializer
-from draft.models import ALLOWED_POSITIONS, DRAFT_PLAN_SLOTS
+from draft.models import ALLOWED_POSITIONS, BACKUP_DEPTH, DRAFT_PLAN_SLOTS
 from draft.services.draft.draft_plan import DraftPlanWriteService
 from draft.services.draft.mock_draft import MockDraftReadService, MockDraftWriteService
 
@@ -22,6 +22,22 @@ class MockPickOutputSerializer(BaseSerializer):
     position = serializers.CharField(source='player.position')
     team = serializers.CharField(source='player.team.code', allow_null=True, default=None)
     price = serializers.IntegerField()
+    projected_price = serializers.SerializerMethodField()
+
+    def get_projected_price(self, instance):
+        player = instance.player
+        return player.override_price if player.override_price is not None else player.projected_price
+
+
+class MockBackupOutputSerializer(BaseSerializer):
+    """One cell of a slot's shelf. No `price`: an alternate is a candidate, not
+    a commitment, so only the market price is worth showing."""
+    id = serializers.IntegerField()
+    player_id = serializers.IntegerField(source='player.player_id')
+    name = serializers.CharField(source='player.name')
+    position = serializers.CharField(source='player.position')
+    team = serializers.CharField(source='player.team.code', allow_null=True, default=None)
+    rank = serializers.IntegerField()
     projected_price = serializers.SerializerMethodField()
 
     def get_projected_price(self, instance):
@@ -55,11 +71,18 @@ class MockDraftDetailOutputSerializer(MockDraftListOutputSerializer):
     slots = serializers.SerializerMethodField()
 
     def get_slots(self, instance):
+        backups = instance.slot_backups()
         return {
             slot: {
                 'order': order,
                 'allowed_positions': ALLOWED_POSITIONS.get(slot, []),
                 'pick': MockPickOutputSerializer.serialize(pick) if pick else None,
+                # Always BACKUP_DEPTH long, empty cells included, so the client
+                # renders a fixed set of columns without padding it itself.
+                'backups': [
+                    MockBackupOutputSerializer.serialize(cell) if cell else None
+                    for cell in backups.get(slot, [None] * BACKUP_DEPTH)
+                ],
             }
             for order, (slot, pick) in enumerate(instance.slot_picks().items())
         }
@@ -202,6 +225,61 @@ class MockDraftClearSlotAPI(APIView):
         return Response(MockDraftDetailOutputSerializer.serialize(mock), status=status.HTTP_200_OK)
 
 
+class MockDraftSetBackupAPI(APIView):
+    permission_classes = [IsDrafter]
+
+    class MockBackupCreateSerializer(BaseInputSerializer):
+        position_slot = serializers.CharField()
+        rank = serializers.IntegerField()
+
+    @extend_schema(
+        parameters=None,
+        request=MockBackupCreateSerializer,
+        responses=None
+    )
+    def post(self, request, mock_draft_id, player_id):
+        input_data = self.MockBackupCreateSerializer(data=request.data["params"]).get_input_data()
+        MockDraftWriteService(
+            user=request.user
+        ).set_backup(
+            mock_draft_id=mock_draft_id,
+            player_id=player_id,
+            position_slot=input_data["position_slot"],
+            rank=input_data["rank"],
+        )
+        mock = MockDraftReadService(
+            user=request.user
+        ).get_mock_draft(mock_draft_id=mock_draft_id)
+        return Response(MockDraftDetailOutputSerializer.serialize(mock), status=status.HTTP_200_OK)
+
+
+class MockDraftClearBackupAPI(APIView):
+    permission_classes = [IsDrafter]
+
+    class MockBackupClearSerializer(BaseInputSerializer):
+        position_slot = serializers.CharField()
+        rank = serializers.IntegerField()
+
+    @extend_schema(
+        parameters=None,
+        request=MockBackupClearSerializer,
+        responses=None
+    )
+    def post(self, request, mock_draft_id):
+        input_data = self.MockBackupClearSerializer(data=request.data["params"]).get_input_data()
+        MockDraftWriteService(
+            user=request.user
+        ).clear_backup(
+            mock_draft_id=mock_draft_id,
+            position_slot=input_data["position_slot"],
+            rank=input_data["rank"],
+        )
+        mock = MockDraftReadService(
+            user=request.user
+        ).get_mock_draft(mock_draft_id=mock_draft_id)
+        return Response(MockDraftDetailOutputSerializer.serialize(mock), status=status.HTTP_200_OK)
+
+
 class MockDraftCreatePlanAPI(APIView):
     """Turn a mock draft's slots into a standalone DraftPlan — the reason
     MockDraft exists (no empty Draft needed to get a plan)."""
@@ -210,6 +288,9 @@ class MockDraftCreatePlanAPI(APIView):
 
     class MockDraftPlanCreateSerializer(BaseInputSerializer):
         name = serializers.CharField()
+        # See DraftPlanCreateFromDraftAPI: a taken (year, name) answers 409
+        # unless the client has confirmed the overwrite.
+        overwrite = serializers.BooleanField(default=False)
 
     @extend_schema(
         parameters=None,
@@ -223,5 +304,6 @@ class MockDraftCreatePlanAPI(APIView):
         ).create_from_mock_draft(
             mock_draft_id=mock_draft_id,
             name=input_data["name"],
+            overwrite=input_data["overwrite"],
         )
         return Response(DraftPlanOutputSerializer.serialize(plan), status=status.HTTP_201_CREATED)
