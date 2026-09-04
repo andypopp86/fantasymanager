@@ -361,12 +361,15 @@ by looking at it: lightness DIPS in the middle, which is what tells 4/5/6 apart
 green-700 and red-700 made the whole low end near-black and a low score merged
 into its own green WR row. And the neutral stays DARK rather than pale: unscored
 cells are white, so a pale 5 would read as "not scored", the opposite of what it
-means. Both fields
-ride through `DraftPicksOutputSerializer`'s hand-written player serializer;
-a field missing there means the panel silently shows nothing, hence
-`draft/tests.py::RiskFieldsTests`. NOT added to
-`MockDraftPlayerOutputSerializer` — the mock page has no risk filter, and an
-unused field there would just drift.
+means. - `MockDraftPage` has the same mode+value filter and shows the score as a small
+  badge **inside the player NAME cell**, not a column of its own (the roster
+  side already spends the width on B1–B3). Unscored players get no badge at all.
+  The `risk_summary` bullets ride in the badge's tooltip.
+
+Both fields ride through `DraftPicksOutputSerializer`'s hand-written player
+serializer AND `MockDraftPlayerOutputSerializer`; a field missing from either
+means the surface silently shows nothing, hence `draft/tests.py::RiskFieldsTests`
+(one passthrough assert per serializer).
 
 **Target tiers** (`Player.target_tier`, non-negative int, default `0` = untiered;
 `1` is the TOP tier and they ascend). Prep-time tiering, not a draft-time write:
