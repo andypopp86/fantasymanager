@@ -10,13 +10,15 @@ import {
     mockDraftClearBackup,
     mockDraftCreatePlan,
 } from "../lib/data";
-import { POSITION_BG_COLORS, POSITION_FG_COLORS } from "../utils/colors";
+import { POSITION_BG_COLORS, POSITION_FG_COLORS, getRiskColors } from "../utils/colors";
 import { BACKUP_DEPTH } from "../lib/draft.schemas";
-import type { MockDraftDetail, MockDraftPlayer } from "../lib/draft.schemas";
+import type { MockDraftDetail, MockDraftPlayer, MockPick } from "../lib/draft.schemas";
 
 const POSITION_FILTERS = ["QB", "RB", "WR", "TE", "DEF"];
 
 const priceOf = (player: MockDraftPlayer) => parseInt(String(player.projected_price)) || 1;
+const riskOf = (player: MockDraftPlayer) => parseInt(String(player.risk_score ?? 0)) || 0;
+const riskOfPick = (pick: MockPick) => parseInt(String(pick.risk_score ?? 0)) || 0;
 
 // /mocks/:mockId — fill a mock draft's roster from the player list, then save it
 // as a DraftPlan.
@@ -57,6 +59,11 @@ export default function MockDraftPage() {
     // would otherwise flood a young-player search; "eq" 0 finds those on purpose.
     const [expMode, setExpMode] = useState("eq");
     const [expYears, setExpYears] = useState("");
+    // risk_score: same mode + value pair as Exp, and for the same reason — 0
+    // means NOT REVIEWED, so an empty VALUE turns the filter off and `≤ N`
+    // spans 1..N, excluding the unscored (`= 0` is how you go find those).
+    const [riskMode, setRiskMode] = useState("lte");
+    const [riskScore, setRiskScore] = useState("");
     const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
     const [savedPlan, setSavedPlan] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -118,6 +125,7 @@ export default function MockDraftPage() {
         const term = search.trim().toLowerCase();
         const ceiling = parseFloat(maxPrice);
         const years = parseInt(expYears);
+        const risk = parseInt(riskScore);
         return (players || []).filter((player) => {
             if (positionFilter && player.position !== positionFilter) return false;
             if (term && !player.name.toLowerCase().includes(term)) return false;
@@ -131,11 +139,20 @@ export default function MockDraftPage() {
                     : experience === years;
                 if (!matches) return false;
             }
+            if (!isNaN(risk)) {
+                const score = parseInt(String(player.risk_score ?? 0)) || 0;
+                const matches = riskMode === "lte"
+                    ? score >= 1 && score <= risk
+                    : riskMode === "gte"
+                        ? score >= risk
+                        : score === risk;
+                if (!matches) return false;
+            }
             return true;
         });
-    }, [players, search, positionFilter, teamFilter, maxPrice, favoriteOnly, expMode, expYears]);
+    }, [players, search, positionFilter, teamFilter, maxPrice, favoriteOnly, expMode, expYears, riskMode, riskScore]);
 
-    const filtersActive = !!(search || positionFilter || teamFilter || maxPrice || favoriteOnly || expYears);
+    const filtersActive = !!(search || positionFilter || teamFilter || maxPrice || favoriteOnly || expYears || riskScore);
 
     const clearFilters = () => {
         setSearch("");
@@ -145,6 +162,8 @@ export default function MockDraftPage() {
         setFavoriteOnly(false);
         setExpMode("eq");
         setExpYears("");
+        setRiskMode("lte");
+        setRiskScore("");
     };
 
     const placeIn = (slot: string) => {
@@ -216,7 +235,7 @@ export default function MockDraftPage() {
 
     return (
         <div className="min-h-screen bg-gray-100 py-6 px-2 sm:px-4">
-            <div className="max-w-6xl mx-auto bg-white rounded-lg shadow-md overflow-hidden">
+            <div className="w-10/12 mx-auto bg-white rounded-lg shadow-md overflow-hidden">
 
                 <div className="bg-green-200 px-4 py-3 flex items-center gap-3 flex-wrap">
                     <button
@@ -308,7 +327,19 @@ export default function MockDraftPage() {
                                         <td className="px-4 py-2 font-semibold text-gray-700 w-24">{slot}</td>
                                         <td className="px-2 py-2">
                                             {pick ? (
-                                                <span className="text-xs font-semibold text-gray-700">{pick.name}</span>
+                                                <span className="inline-flex items-center">
+                                                    {/* Same badge as the player list, in the roster's own
+                                                        name cell — NOT in the B1–B3 cells, which are too
+                                                        narrow to carry it and hold candidates anyway. */}
+                                                    {riskOfPick(pick) > 0 && (
+                                                        <span
+                                                            className="inline-block w-4 mr-1.5 rounded text-[10px] font-bold text-center"
+                                                            style={getRiskColors(riskOfPick(pick))}
+                                                            title={`Risk ${riskOfPick(pick)}/10 (higher = riskier)${pick.risk_summary ? `\n${pick.risk_summary}` : ""}`}
+                                                        >{riskOfPick(pick)}</span>
+                                                    )}
+                                                    <span className="text-xs font-semibold text-gray-700">{pick.name}</span>
+                                                </span>
                                             ) : (
                                                 <span className="text-gray-300">{eligible ? "place here" : "—"}</span>
                                             )}
@@ -455,6 +486,28 @@ export default function MockDraftPage() {
                                         onChange={(event) => setExpYears(event.target.value)}
                                     />
                                 </label>
+                                <label className="flex items-center gap-1">
+                                    Risk
+                                    <select
+                                        className="border border-gray-300 rounded-md px-1 py-1 text-xs bg-white"
+                                        value={riskMode}
+                                        onChange={(event) => setRiskMode(event.target.value)}
+                                        title="Hand-scored 1-10, higher = riskier. ≤ is 1 through this score (unscored excluded — use = 0 for those); ≥ finds the risky ones."
+                                    >
+                                        <option value="eq">=</option>
+                                        <option value="lte">≤</option>
+                                        <option value="gte">≥</option>
+                                    </select>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="10"
+                                        className="w-14 border border-gray-300 rounded-md px-1 py-1 text-xs"
+                                        placeholder="any"
+                                        value={riskScore}
+                                        onChange={(event) => setRiskScore(event.target.value)}
+                                    />
+                                </label>
                                 <label className="flex items-center gap-1 cursor-pointer">
                                     <input
                                         type="checkbox"
@@ -495,6 +548,18 @@ export default function MockDraftPage() {
                                             )}
                                         >
                                             <td className="px-4 py-1">
+                                                {/* Risk rides in the name column rather than a column of
+                                                    its own: the badge paints itself (the ramp spans light
+                                                    to dark, so a shared cell colour would swallow it) and
+                                                    an unscored player gets NOTHING — 0 means not reviewed,
+                                                    which is silence, not a clean bill of health. */}
+                                                {riskOf(player) > 0 && (
+                                                    <span
+                                                        className="inline-block w-4 mr-1.5 rounded text-[10px] font-bold text-center align-middle"
+                                                        style={getRiskColors(riskOf(player))}
+                                                        title={`Risk ${riskOf(player)}/10 (higher = riskier)${player.risk_summary ? `\n${player.risk_summary}` : ""}`}
+                                                    >{riskOf(player)}</span>
+                                                )}
                                                 {player.name}
                                                 {player.favorite === true && <span className="ml-1 text-red-500" title="Favorite">♥</span>}
                                                 {player.target_tier > 0 && (

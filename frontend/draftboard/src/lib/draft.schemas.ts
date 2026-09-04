@@ -264,6 +264,9 @@ export type MockPick = {
     team: string | null,
     // The mock's own budgeted number for this slot…
     price: number,
+    // Hand-scored 1-10, higher = riskier; 0 = not reviewed (never rendered).
+    risk_score: number,
+    risk_summary: string | null,
     // …versus the player's effective market price (override || projected).
     projected_price: number | string,
 }
@@ -318,6 +321,9 @@ export type MockDraftPlayer = {
     years_experience: number,
     my_price: number | string | null,
     projected_price: number | string,
+    // Hand-scored 1-10, higher = riskier; 0 = not reviewed (never rendered).
+    risk_score: number,
+    risk_summary: string | null,
 }
 
 // ---- Target tiers (/api/drafts/draft/<id>/target_tiers/) ------------------

@@ -23,6 +23,11 @@ class MockPickOutputSerializer(BaseSerializer):
     team = serializers.CharField(source='player.team.code', allow_null=True, default=None)
     price = serializers.IntegerField()
     projected_price = serializers.SerializerMethodField()
+    # Risk follows the player into the slot: the roster is where you weigh the
+    # shape of the plan, so the score has to be readable there and not only in
+    # the list you picked from. 0 = not reviewed, and renders as nothing.
+    risk_score = serializers.IntegerField(source='player.risk_score')
+    risk_summary = serializers.CharField(source='player.risk_summary', allow_null=True, allow_blank=True)
 
     def get_projected_price(self, instance):
         player = instance.player
@@ -101,6 +106,11 @@ class MockDraftPlayerOutputSerializer(BaseSerializer):
     my_price = serializers.DecimalField(max_digits=8, decimal_places=2, allow_null=True)
     # Annotated on the queryset: override_price when set, else projected_price.
     projected_price = serializers.DecimalField(max_digits=8, decimal_places=2, source='effective_price')
+    # Hand-scored 1-10, higher = riskier; 0 means NOT REVIEWED and renders as
+    # nothing. The summary rides along for the badge's tooltip, same as the
+    # board's — one bullet per line.
+    risk_score = serializers.IntegerField()
+    risk_summary = serializers.CharField(allow_null=True, allow_blank=True)
 
 
 class MockDraftListAPI(APIView):

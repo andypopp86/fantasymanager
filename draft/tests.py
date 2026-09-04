@@ -680,6 +680,43 @@ class RiskFieldsTests(TestCase):
         self.assertEqual(rows["Unscored WR"]["risk_score"], 0)
         self.assertIsNone(rows["Unscored WR"]["risk_summary"])
 
+    def test_mock_available_players_carry_score_and_summary(self):
+        """The mock page filters on risk and shows a badge, so the same two
+        fields have to survive ITS serializer too."""
+        from draft.api.views.mock_draft import MockDraftPlayerOutputSerializer
+
+        mock = MockDraft.objects.create(name="risk sketch", year=2026)
+        risky = make_player("Risky Mock WR", "WR")
+        Player.objects.filter(pk=risky.pk).update(
+            risk_score=7, risk_summary="- holdout\n- crowded room",
+        )
+        make_player("Unscored Mock WR", "WR")
+
+        players = MockDraftReadService(user=None).get_available_players(mock.id)
+        rows = {
+            row["name"]: row
+            for row in (MockDraftPlayerOutputSerializer.serialize(player) for player in players)
+        }
+        self.assertEqual(rows["Risky Mock WR"]["risk_score"], 7)
+        self.assertEqual(rows["Risky Mock WR"]["risk_summary"], "- holdout\n- crowded room")
+        self.assertEqual(rows["Unscored Mock WR"]["risk_score"], 0)
+        self.assertIsNone(rows["Unscored Mock WR"]["risk_summary"])
+
+    def test_mock_roster_picks_carry_score_and_summary(self):
+        """And again for a FILLED slot: the roster panel badges the risk of the
+        player sitting in it, so MockPick's serializer needs both fields too."""
+        from draft.api.views.mock_draft import MockPickOutputSerializer
+
+        mock = MockDraft.objects.create(name="risk roster", year=2026)
+        risky = make_player("Risky Slot RB", "RB")
+        Player.objects.filter(pk=risky.pk).update(risk_score=9, risk_summary="- age cliff")
+        MockDraftWriteService(user=None).set_pick(mock.id, risky.player_id, "RB1", 30)
+
+        row = MockPickOutputSerializer.serialize(mock.slot_picks()["RB1"])
+
+        self.assertEqual(row["risk_score"], 9)
+        self.assertEqual(row["risk_summary"], "- age cliff")
+
     def test_band_filter_separates_unreviewed_from_low(self):
         from django.contrib.admin.sites import AdminSite
         from django.test import RequestFactory
