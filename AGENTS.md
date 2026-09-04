@@ -831,15 +831,22 @@ actual drafted picks** (`DraftPlanWriteService.create_from_draft`). Endpoints un
   shape still reads the same. Purpose: mid-draft budget pivots — swap a
 predefined plan into the budget panel instead of editing slots under time pressure
 The consuming UI is `features/DraftPlanPage.tsx` at route `/draft/:draftId/plan`
-("Plans" button on the board): select a plan, then a per-slot checkbox picker
-merges it into the budget — mergeable slots default CHECKED; slots whose budget
-row is an actually-drafted player default UNCHECKED (protected but overridable);
-plan players already drafted by anyone are disabled. Apply goes through
-`mutations.applyPlanSelections` (unbudget displaced occupant → budget plan player,
-per slot — the unbudget matters or the displaced server row reclaims the slot on
-refetch). Plan players are priced `override_price || projected_price`. The page
+("Plans" button on the board): select a plan, then **Replace board with plan**.
+Applying is WHOLESALE — there is no per-slot picking, and deliberately no merge
+checkbox: `mutations.applyPlanToBoard` empties the budget (unbudgeting everyone
+the plan doesn't also name — a plan player already budgeted is left for
+`budgetPick` to MOVE, per the `applyBudgetChanges` contract), places the plan's
+roster, then hands the plan's shelves to `seedBackupsFromPlan`, which wipes the
+draft's `backup_cells` and installs them. The table is a PREVIEW only: current
+budget beside the plan's player, "drafted by X" labels, and the plan's backups.
+Two warnings sit above it — over budget, and how many budget rows holding one of
+your OWN drafted picks the apply will clear (the picks stand; their budget rows
+don't). Plan players are priced `override_price || projected_price`. The page
 reads the draft via `useDraftData`, so the board must have been opened once to
 hydrate Dexie.
+
+> `mutations.applyPlanSelections` (the older per-slot merge) is still used by
+> `RebudgetModal`; nothing on the plan page calls it any more.
 
 **MockDraft / MockPick (`draft/models.py`)** — a plan sketchpad: ONE roster of the
 16 canonical slots, a player and a price in each, and nothing else. No managers,
@@ -1055,12 +1062,12 @@ the budget row.
 - **The persisted half is the PLAN's.** A shelf that needs to survive a machine
   is authored on a MockDraft (`MockBackup`, the B1–B3 columns on
   `MockDraftPage`) and rides into the `DraftPlan` on "Save as plan"
-  (`DraftPlanBackup`). Applying such a plan seeds the board: `DraftPlanPage`
-  merges each checked slot and then calls `seedBackupsFromPlan`, which REPLACES
-  that slot's local cells with the plan's (a half-merged shelf would be a plan
-  nobody authored). Unchecked slots keep their own cells — their budget player
-  didn't change either. That is the only path by which a shelf crosses
-  browsers; nothing pushes board edits back.
+  (`DraftPlanBackup`). Applying such a plan REPLACES the board's shelf outright:
+  `seedBackupsFromPlan` deletes every `backup_cell` for the draft in one
+  transaction and writes the plan's, so afterwards the board's backups are the
+  plan's and nothing survives from before — same wholesale rule as the budget
+  half of the apply. That is the only path by which a shelf crosses browsers;
+  nothing pushes board edits back.
 - **Not the budget.** Backups are absent from `budgetSpent` — a candidate is not
   a commitment. But they ARE slot-specific, so a backup must satisfy its row's
   `allowed_positions` like any other candidate for it (guarded on every drop).

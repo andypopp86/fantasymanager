@@ -150,6 +150,45 @@ export const applyPlanSelections = async (
     }
 };
 
+// One slot's worth of a plan's backups, as the board stores them: rank 1..N
+// with the cells the plan actually filled (empty ones simply aren't listed).
+export type PlanShelf = {
+    slot: SlotName,
+    cells: {
+        rank: number,
+        player: { player_id: number | string, name: string, position: string },
+        projectedPrice: number | string,
+    }[],
+};
+
+// Swap a whole DraftPlan onto the board: the budget is EMPTIED and the plan's
+// roster takes its place, then the same for the backup shelves. No per-slot
+// choosing — applying a plan means the board is the plan.
+//
+// Everyone currently budgeted and NOT in the plan is unbudgeted; a plan player
+// who happens to be budgeted already is left to `budgetPick` to move (see
+// applyBudgetChanges on why unbudgeting a mover corrupts the row).
+export const applyPlanToBoard = async (
+    draftId: number,
+    drafterId: number,
+    roster: {
+        slot: SlotName,
+        player: { player_id: number | string, name: string, position: string },
+        projectedPrice: number | string,
+    }[],
+    shelves: PlanShelf[],
+) => {
+    const budgeted = await db.budget_picks.where("draftId").equals(draftId).toArray();
+    const planIds = new Set(roster.map(({ player }) => String(player.player_id)));
+    await applyBudgetChanges(draftId, drafterId, {
+        unbudget: budgeted
+            .map((row) => row.player_id)
+            .filter((playerId) => !planIds.has(String(playerId))),
+        place: roster,
+    });
+    await seedBackupsFromPlan(draftId, shelves);
+};
+
 // Apply an arbitrary rearrangement of the budget in one go: any number of
 // players leaving, moving between slots, or joining. Used by the tier → budget
 // editor, which stages a whole plan before committing it.
@@ -217,24 +256,23 @@ export const backupPick = async (
     });
 };
 
-// Seed a slot's whole shelf from a DraftPlan's saved backups — the plan half of
-// the feature landing back on the board. The plan is the authority for the slots
-// being merged, so each named slot's shelf is REPLACED (its existing cells go
-// first): a half-merged shelf would be a plan nobody authored. Slots absent from
-// `shelves` keep whatever they hold.
+// Replace the whole board's shelf with a DraftPlan's saved backups — the plan
+// half of the feature landing back on the board.
+//
+// WIPE THEN INSTALL, for the entire draft: every existing cell goes, then the
+// plan's shelves are written. The plan is the authority, so afterwards the
+// board's backups ARE the plan's backups and nothing survives from whatever was
+// parked before — a mix of the two would be a shelf nobody authored.
 //
 // Local like every other backup write: the plan's copy came from the server, the
 // board's stays in this browser.
 export const seedBackupsFromPlan = async (
     draftId: number,
-    shelves: {
-        slot: SlotName,
-        cells: { rank: number, player: { player_id: number | string, name: string, position: string }, projectedPrice: number | string }[],
-    }[],
+    shelves: PlanShelf[],
 ) => {
     await db.transaction("rw", db.backup_cells, async () => {
+        await db.backup_cells.where("draftId").equals(draftId).delete();
         for (const { slot, cells } of shelves) {
-            await db.backup_cells.where("[draftId+slot]").equals([draftId, slot]).delete();
             for (const { rank, player, projectedPrice } of cells) {
                 await db.backup_cells.put({
                     draftId,

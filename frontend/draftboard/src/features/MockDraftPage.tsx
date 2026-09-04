@@ -308,12 +308,7 @@ export default function MockDraftPage() {
                                         <td className="px-4 py-2 font-semibold text-gray-700 w-24">{slot}</td>
                                         <td className="px-2 py-2">
                                             {pick ? (
-                                                <span
-                                                    className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold"
-                                                    style={{ background: POSITION_BG_COLORS[pick.position], color: POSITION_FG_COLORS[pick.position] }}
-                                                >
-                                                    {pick.name}{pick.team ? ` · ${pick.team}` : ""}
-                                                </span>
+                                                <span className="text-xs font-semibold text-gray-700">{pick.name}</span>
                                             ) : (
                                                 <span className="text-gray-300">{eligible ? "place here" : "—"}</span>
                                             )}
