@@ -2014,3 +2014,93 @@ class AvailablePlayerOrderingTests(TestCase):
         row = DraftPicksOutputSerializer.serialize(list(picks)[0])
 
         self.assertEqual(row["player"]["adp_formatted"], 137)
+
+
+class DraftSummaryTests(TestCase):
+    """The summary dashboard's aggregation — our arithmetic, not DRF's plumbing."""
+
+    def setUp(self):
+        from draft.services.draft.draft import DraftReadService
+        self.service = DraftReadService(user=None)
+        self.draft = Draft.objects.create(year=2026, draft_name="summary draft")
+        self.drafter = Manager.objects.create(draft=self.draft, name="me", drafter=True, position=0)
+        self.opponent = Manager.objects.create(draft=self.draft, name="them", drafter=False, position=1)
+
+    def draft_player(self, player, manager, slot, price):
+        return DraftPick.objects.create(
+            draft=self.draft, player=player, manager=manager,
+            price=price, drafted=True, position_slot=slot,
+        )
+
+    def summary(self):
+        return self.service.get_draft_summary(draft_id=self.draft.id)
+
+    def manager_row(self, summary, name):
+        return next(m for m in summary["managers"] if m["manager_name"] == name)
+
+    def test_diff_is_actual_minus_projected_and_sums(self):
+        qb = make_player("Sum QB", "QB")            # projected 10
+        rb = make_player("Sum RB", "RB")            # projected 10
+        self.draft_player(qb, self.drafter, "QB1", price=25)   # +15
+        self.draft_player(rb, self.drafter, "RB1", price=4)    # -6
+
+        row = self.manager_row(self.summary(), "me")
+
+        self.assertEqual(row["total_price"], 29)
+        self.assertEqual(row["total_projected"], 20)
+        self.assertEqual(row["total_diff"], 9)
+        self.assertEqual(sorted(p["diff"] for p in row["picks"]), [-6, 15])
+
+    def test_override_price_is_the_projection(self):
+        qb = make_player("Override QB", "QB")
+        Player.objects.filter(pk=qb.pk).update(override_price=40)
+        self.draft_player(qb, self.drafter, "QB1", price=50)
+
+        row = self.manager_row(self.summary(), "me")
+
+        self.assertEqual(row["picks"][0]["projected_price"], 40)
+        self.assertEqual(row["total_diff"], 10)
+
+    def test_allocation_groups_by_player_position_not_slot(self):
+        wr = make_player("Flex WR", "WR")
+        rb = make_player("Bench RB", "RB")
+        self.draft_player(wr, self.drafter, "FLEX1", price=30)
+        self.draft_player(rb, self.drafter, "BENCH1", price=5)
+
+        row = self.manager_row(self.summary(), "me")
+
+        self.assertEqual(row["position_allocation"]["WR"], {"spend": 30, "count": 1})
+        self.assertEqual(row["position_allocation"]["RB"], {"spend": 5, "count": 1})
+        self.assertNotIn("FLEX1", row["position_allocation"])
+
+    def test_count_and_average_are_per_manager(self):
+        self.draft_player(make_player("A QB", "QB"), self.drafter, "QB1", price=30)
+        self.draft_player(make_player("A RB", "RB"), self.drafter, "RB1", price=10)
+        self.draft_player(make_player("B WR", "WR"), self.opponent, "WR1", price=7)
+
+        summary = self.summary()
+
+        self.assertEqual(self.manager_row(summary, "me")["pick_count"], 2)
+        self.assertEqual(self.manager_row(summary, "me")["average_price"], 20)
+        self.assertEqual(self.manager_row(summary, "them")["pick_count"], 1)
+        self.assertEqual(self.manager_row(summary, "them")["average_price"], 7)
+
+    def test_undrafted_picks_and_empty_managers_are_handled(self):
+        DraftPick.objects.create(
+            draft=self.draft, player=make_player("Nobody", "TE"),
+            manager=self.drafter, price=0, drafted=False, position_slot=None,
+        )
+
+        summary = self.summary()
+
+        self.assertEqual(self.manager_row(summary, "me")["pick_count"], 0)
+        self.assertEqual(self.manager_row(summary, "me")["average_price"], 0)
+        self.assertEqual(self.manager_row(summary, "them")["total_diff"], 0)
+        self.assertEqual(summary["positions"], [])
+
+    def test_positions_come_back_in_canonical_order(self):
+        self.draft_player(make_player("Ord DEF", "DEF"), self.drafter, "DEF1", price=2)
+        self.draft_player(make_player("Ord WR", "WR"), self.drafter, "WR1", price=20)
+        self.draft_player(make_player("Ord QB", "QB"), self.opponent, "QB1", price=15)
+
+        self.assertEqual(self.summary()["positions"], ["QB", "WR", "DEF"])
