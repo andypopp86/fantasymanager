@@ -907,6 +907,48 @@ a user.
   Dexie and not the offline write queue — because mocks are prep-time work, same
   reasoning as Target Tiers.
 
+## Draft summary dashboard (`/draft/:draftId/summary`)
+
+A read-only look-BACK at a draft: what every manager actually paid against what
+the players were projected at. Reached from the **Summary** button on the board.
+
+**One endpoint, one arithmetic.** `GET /api/drafts/draft/<id>/summary/`
+(`IsSpectatorVisible`, same gate as `manager_picks`) →
+`DraftReadService.get_draft_summary`, which returns per-manager pick rows plus
+every aggregate the page draws (`total_price` / `total_projected` /
+`total_diff`, `pick_count`, `average_price`, `position_allocation`). Aggregating
+server-side is deliberate: five widgets over one payload can't disagree with
+each other about what a manager spent. It reads the server DIRECTLY through
+React Query — **not** Dexie, not the write queue — like Target Tiers and the
+mock page, because nothing here writes.
+
+Three things the numbers mean, and they are easy to get wrong:
+
+- **Projected price is `override_price or projected_price`**, the same "what I
+  thought he was worth" number the rest of the app prices against. (Note
+  `get_manager_picks` sends the RAW `projected_price` — that's why this endpoint
+  exists rather than the dashboard aggregating `manager_picks` client-side.)
+  A player with neither is 0, which reads as pure overpay.
+- **`diff = price − projected_price`**, so POSITIVE is an overpay. The page's
+  colours follow that polarity everywhere: red over, green under, grey exactly on.
+- **`position_allocation` is keyed by `Player.position`, never the roster slot** —
+  a WR in FLEX2 is WR spend. Slot-level spend is the board's job, not this page's.
+
+UI is `features/DraftSummaryPage.tsx`, four widgets over a stat row: aggregate
+over/under pay (diverging bars off a shared zero line, biggest overpay first),
+roster size & average price (sorted by count desc), spend by position (stacked
+bars, dollars/share toggle, with the exact numbers repeated as a table), and one
+roster card per manager (player rows + a footer sum). Position colours are
+**Okabe-Ito steps in a fixed per-position order** (`POSITION_COLORS`), NOT the
+board's `POSITION_BG_COLORS` — those raw CSS names fail the adjacent-pair
+colour-blindness check when they abut in a stacked bar. Two of the steps sit
+under 3:1 against white, which is why every segment is directly labelled and the
+same figures appear in the table underneath; don't drop either.
+
+Tests: `draft/tests.py::DraftSummaryTests` covers the diff arithmetic, the
+override-price precedence, position-not-slot grouping, per-manager count/average,
+and that undrafted rows and empty managers don't blow it up.
+
 **Running backend tests**: `.venv/bin/python manage.py test draft --keepdb` —
 requires the `fantasymanager-db` Docker container running
 (`docker start fantasymanager-db`, Postgres on :5434). `fantasy/settings.py` sets

@@ -7,6 +7,7 @@ import DraftPage from "./DraftPage";
 import DraftPlanPage from "./DraftPlanPage";
 import MockDraftPage from "./MockDraftPage";
 import TargetTiersPage from "./TargetTiersPage";
+import DraftSummaryPage from "./DraftSummaryPage";
 import SpectatorBoard from "./SpectatorBoard";
 import { meRetrieve } from "../lib/data";
 
@@ -36,6 +37,7 @@ const RoutedApp = () => {
                         <Route path="/draft/:draftId" element={<DraftPage />} />
                         <Route path="/draft/:draftId/plan" element={<DraftPlanPage />} />
                         <Route path="/draft/:draftId/tiers" element={<TargetTiersPage />} />
+                        <Route path="/draft/:draftId/summary" element={<DraftSummaryPage />} />
                         <Route path="/mocks/:mockId" element={<MockDraftPage />} />
                     </>
                 )}

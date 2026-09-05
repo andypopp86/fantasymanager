@@ -263,6 +263,13 @@ export default function Draft({draftDetails}: DraftProps) {
         )}
         <button
             className={btnClass}
+            onClick={() => navigate(`/draft/${draftDetails.id}/summary`)}
+            title="Per-manager spend vs. projection for this draft"
+        >
+            Summary
+        </button>
+        <button
+            className={btnClass}
             onClick={() => setShowRebudget(true)}
             title="Suggest a budget from favorited players by strategy"
         >

@@ -386,6 +386,79 @@ class DraftReadService(BaseService):
             manager_list.append(manager_dict)
         return manager_list
     
+    def get_draft_summary(self, draft_id):
+        """Per-manager spend vs. projection for a completed (or in-flight) draft.
+
+        One row per drafted pick, plus the aggregates the summary dashboard draws:
+        over/under pay (`price - projected_price`), spend/count by the PLAYER's
+        position (never the roster slot — a WR in FLEX2 counts as WR), and
+        count/average price. Projected price is `override_price or projected_price`,
+        the same "what I thought he was worth" number the rest of the app prices
+        against; a player with neither is 0, which reads as pure overpay.
+        """
+        managers = d.Manager.objects.filter(draft_id=draft_id).order_by("position")
+        picks = d.DraftPick.objects.filter(
+            draft_id=draft_id, drafted=True, manager__isnull=False
+        ).select_related("player", "manager").order_by("-price")
+
+        by_manager = {}
+        for pick in picks:
+            by_manager.setdefault(pick.manager_id, []).append(pick)
+
+        positions_seen = []
+        manager_rows = []
+        for manager in managers:
+            rows = []
+            allocation = {}
+            for pick in by_manager.get(manager.id, []):
+                player = pick.player
+                price = pick.price or 0
+                projected = int(player.override_price or player.projected_price or 0)
+                position = player.position or "?"
+                if position not in positions_seen:
+                    positions_seen.append(position)
+                rows.append({
+                    "player_id": player.player_id,
+                    "name": player.name,
+                    "position": position,
+                    "position_slot": pick.position_slot or "",
+                    "price": price,
+                    "projected_price": projected,
+                    "diff": price - projected,
+                })
+                bucket = allocation.setdefault(position, {"spend": 0, "count": 0})
+                bucket["spend"] += price
+                bucket["count"] += 1
+
+            total_price = sum(row["price"] for row in rows)
+            total_projected = sum(row["projected_price"] for row in rows)
+            manager_rows.append({
+                "manager_id": manager.id,
+                "manager_name": manager.name,
+                "manager_position": manager.position,
+                "is_drafter": manager.drafter,
+                "manager_budget": manager.budget,
+                "picks": rows,
+                "pick_count": len(rows),
+                "total_price": total_price,
+                "total_projected": total_projected,
+                "total_diff": total_price - total_projected,
+                "average_price": round(total_price / len(rows), 2) if rows else 0,
+                "position_allocation": allocation,
+            })
+
+        # Canonical order first so the columns don't reshuffle between drafts;
+        # anything unexpected (a new position code) is appended rather than dropped.
+        canonical = ["QB", "RB", "WR", "TE", "DEF"]
+        positions = [p for p in canonical if p in positions_seen]
+        positions += [p for p in positions_seen if p not in canonical]
+
+        return {
+            "draft_id": draft_id,
+            "positions": positions,
+            "managers": manager_rows,
+        }
+
     def get_watched_picks(self, draft_id):
         draft = d.Draft.objects.filter(id=draft_id).first()
         watched_players = d.Player.objects.filter(year=draft.year, watched=True).order_by("-projected_price")

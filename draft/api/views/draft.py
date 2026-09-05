@@ -350,6 +350,16 @@ class ManagerDraftedPlayersAPI(APIView):
         ).get_manager_picks(draft_id=draft_id)
         return Response(manager_picks, status=status.HTTP_200_OK)
 
+class DraftSummaryAPI(APIView):
+    """Aggregated post-draft numbers for the summary dashboard (/draft/:id/summary)."""
+    permission_classes = [IsSpectatorVisible]
+
+    def get(self, request, draft_id):
+        summary = DraftReadService(
+            user=request.user
+        ).get_draft_summary(draft_id=draft_id)
+        return Response(summary, status=status.HTTP_200_OK)
+
 class DraftBudgetedPicksAPI(APIView):
     permission_classes = [IsDrafter]
 

@@ -448,3 +448,36 @@ export type DraftFlowContext = {
     draggedPlayer: { player: PlayerDetail, projected_price?: number | string } | Record<string, never>,
     budgetSlotTargeted: SlotName | Record<string, never>,
 }
+
+// ---- Draft summary dashboard (/draft/:draftId/summary) ----------------------
+// Server-aggregated, read-only: GET /api/drafts/draft/<id>/summary/.
+export type SummaryPick = {
+    player_id: number,
+    name: string,
+    position: string,
+    position_slot: string,
+    price: number,
+    projected_price: number,
+    diff: number,
+}
+
+export type SummaryManager = {
+    manager_id: number,
+    manager_name: string,
+    manager_position: number,
+    is_drafter: boolean,
+    manager_budget: number,
+    picks: SummaryPick[],
+    pick_count: number,
+    total_price: number,
+    total_projected: number,
+    total_diff: number,
+    average_price: number,
+    position_allocation: Record<string, { spend: number, count: number }>,
+}
+
+export interface DraftSummaryOutput {
+    draft_id: number,
+    positions: string[],
+    managers: SummaryManager[],
+}
