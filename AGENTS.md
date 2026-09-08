@@ -934,20 +934,39 @@ Three things the numbers mean, and they are easy to get wrong:
 - **`position_allocation` is keyed by `Player.position`, never the roster slot** —
   a WR in FLEX2 is WR spend. Slot-level spend is the board's job, not this page's.
 
-UI is `features/DraftSummaryPage.tsx`, four widgets over a stat row: aggregate
+`picks_in_order` is the whole draft in the order it happened — ordered by
+`DraftPick.created` (`id` breaks same-tick ties), which is the only record of
+when a pick landed. Each row carries `drafter_budget_remaining`: the DRAFTER's
+wallet after that pick, so it only MOVES on their own rows and reads as a flat
+line that steps down when they bought. That's deliberate — it shows how long
+their money lasted against the board. With no manager flagged `drafter` the
+field is `null` and `has_drafter` is false, and the column is dropped.
+
+UI is `features/DraftSummaryPage.tsx`, five widgets over a stat row: aggregate
 over/under pay (diverging bars off a shared zero line, biggest overpay first),
 roster size & average price (sorted by count desc), spend by position (stacked
-bars, dollars/share toggle, with the exact numbers repeated as a table), and one
-roster card per manager (player rows + a footer sum). Position colours are
+bars, dollars/share toggle, with the exact numbers repeated as a table), draft
+order (the timeline table, with a "My picks only" filter), and one roster card
+per manager (player rows + a footer sum). Position colours are
 **Okabe-Ito steps in a fixed per-position order** (`POSITION_COLORS`), NOT the
 board's `POSITION_BG_COLORS` — those raw CSS names fail the adjacent-pair
 colour-blindness check when they abut in a stacked bar. Two of the steps sit
 under 3:1 against white, which is why every segment is directly labelled and the
 same figures appear in the table underneath; don't drop either.
 
+**Sizing a stacked segment: the width goes on the `InstantTooltip` WRAPPER, not
+its child.** The wrapper is `inline-flex`, so it shrinks to fit its content, and
+a percentage width on the inner span resolves against that shrink-to-fit box and
+collapses the segment to nothing — which is exactly how the first version of
+this widget shipped unreadable. `InstantTooltip` takes a `style` prop for this.
+The label thresholds are then decided in PIXELS (`segmentWidth` against a
+measured track, via `ResizeObserver`), not in share-of-total, because share says
+nothing about whether text fits.
+
 Tests: `draft/tests.py::DraftSummaryTests` covers the diff arithmetic, the
 override-price precedence, position-not-slot grouping, per-manager count/average,
-and that undrafted rows and empty managers don't blow it up.
+the timeline's ordering and running drafter budget (including the no-drafter
+case), and that undrafted rows and empty managers don't blow it up.
 
 **Running backend tests**: `.venv/bin/python manage.py test draft --keepdb` —
 requires the `fantasymanager-db` Docker container running

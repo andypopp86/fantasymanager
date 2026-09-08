@@ -395,14 +395,24 @@ class DraftReadService(BaseService):
         count/average price. Projected price is `override_price or projected_price`,
         the same "what I thought he was worth" number the rest of the app prices
         against; a player with neither is 0, which reads as pure overpay.
+
+        Also returns `picks_in_order` — the whole draft in the order it happened,
+        carrying the DRAFTER's running budget remaining after each pick, so the
+        timeline shows how their money held up against the board.
         """
+        draft = d.Draft.objects.filter(id=draft_id).first()
+        starting_budget = draft.starting_budget if draft else 0
         managers = d.Manager.objects.filter(draft_id=draft_id).order_by("position")
-        picks = d.DraftPick.objects.filter(
+        drafter_id = next((m.id for m in managers if m.drafter), None)
+
+        # `created` is the only record of when a pick happened, and it is what the
+        # timeline orders by; `id` breaks ties for rows written in the same tick.
+        picks = list(d.DraftPick.objects.filter(
             draft_id=draft_id, drafted=True, manager__isnull=False
-        ).select_related("player", "manager").order_by("-price")
+        ).select_related("player", "manager").order_by("created", "id"))
 
         by_manager = {}
-        for pick in picks:
+        for pick in sorted(picks, key=lambda p: -(p.price or 0)):
             by_manager.setdefault(pick.manager_id, []).append(pick)
 
         positions_seen = []
@@ -453,10 +463,42 @@ class DraftReadService(BaseService):
         positions = [p for p in canonical if p in positions_seen]
         positions += [p for p in positions_seen if p not in canonical]
 
+        # The draft as it happened. `drafter_budget_remaining` only MOVES on the
+        # drafter's own picks — it is their wallet, not a per-pick number — so it
+        # rides on every row as a flat line between their buys, which is exactly
+        # the shape that shows how long their money lasted.
+        drafter_spent = 0
+        timeline = []
+        for index, pick in enumerate(picks, start=1):
+            price = pick.price or 0
+            if pick.manager_id == drafter_id:
+                drafter_spent += price
+            player = pick.player
+            projected = int(player.override_price or player.projected_price or 0)
+            timeline.append({
+                "order": index,
+                "player_id": player.player_id,
+                "name": player.name,
+                "position": player.position or "?",
+                "position_slot": pick.position_slot or "",
+                "manager_id": pick.manager_id,
+                "manager_name": pick.manager.name,
+                "is_drafter": pick.manager_id == drafter_id,
+                "price": price,
+                "projected_price": projected,
+                "diff": price - projected,
+                "drafter_budget_remaining": (
+                    starting_budget - drafter_spent if drafter_id else None
+                ),
+            })
+
         return {
             "draft_id": draft_id,
             "positions": positions,
+            "starting_budget": starting_budget,
+            "has_drafter": drafter_id is not None,
             "managers": manager_rows,
+            "picks_in_order": timeline,
         }
 
     def get_watched_picks(self, draft_id):

@@ -476,8 +476,21 @@ export type SummaryManager = {
     position_allocation: Record<string, { spend: number, count: number }>,
 }
 
+// One row per pick in the order it happened. `drafter_budget_remaining` is the
+// DRAFTER's wallet after this pick, so it only moves on their own rows.
+export type SummaryTimelinePick = SummaryPick & {
+    order: number,
+    manager_id: number,
+    manager_name: string,
+    is_drafter: boolean,
+    drafter_budget_remaining: number | null,
+}
+
 export interface DraftSummaryOutput {
     draft_id: number,
     positions: string[],
+    starting_budget: number,
+    has_drafter: boolean,
     managers: SummaryManager[],
+    picks_in_order: SummaryTimelinePick[],
 }

@@ -4,6 +4,7 @@ type InstantTooltipProps = {
     label: string,
     children: React.ReactNode,
     className?: string,
+    style?: React.CSSProperties,
 };
 
 // A tooltip that appears the moment you hover, unlike the browser's native
@@ -14,9 +15,14 @@ type InstantTooltipProps = {
 // JS timer and nothing to get stuck open. Hover-only by nature: touch devices
 // won't show it, which is fine for a marker whose meaning the drafter already
 // knows.
-export default function InstantTooltip({ label, children, className }: InstantTooltipProps) {
+//
+// `style` exists because the WRAPPER is the laid-out box: it is inline-flex, so
+// it shrinks to fit its content, and a percentage width on the child resolves
+// against that shrink-to-fit width and collapses to nothing. A sized tooltip
+// trigger (a chart segment, say) has to be sized HERE.
+export default function InstantTooltip({ label, children, className, style }: InstantTooltipProps) {
     return (
-        <span className={"relative inline-flex group " + (className || "")}>
+        <span className={"relative inline-flex group " + (className || "")} style={style}>
             {children}
             {/* Above the trigger. It overhangs the top of the nomination card,
                 which is fine — no ancestor clips it, and the dark pill reads

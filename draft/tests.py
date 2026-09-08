@@ -1,10 +1,12 @@
 import os
 import tempfile
+from datetime import timedelta
 from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import TestCase
+from django.utils import timezone
 
 from draft.models import DRAFT_PLAN_SLOTS, Draft, DraftPick, DraftPlan, Manager, MockDraft, Player
 from draft.services.draft.draft_plan import DraftPlanWriteService
@@ -2097,6 +2099,41 @@ class DraftSummaryTests(TestCase):
         self.assertEqual(self.manager_row(summary, "me")["average_price"], 0)
         self.assertEqual(self.manager_row(summary, "them")["total_diff"], 0)
         self.assertEqual(summary["positions"], [])
+
+    def test_timeline_is_in_pick_order_with_drafter_budget(self):
+        first = self.draft_player(make_player("T One", "QB"), self.drafter, "QB1", price=60)
+        second = self.draft_player(make_player("T Two", "RB"), self.opponent, "RB1", price=40)
+        third = self.draft_player(make_player("T Three", "WR"), self.drafter, "WR1", price=25)
+        # auto_now_add fires in one tick under test, so pin the order explicitly.
+        for offset, pick in enumerate([first, second, third]):
+            DraftPick.objects.filter(pk=pick.pk).update(
+                created=timezone.now() + timedelta(minutes=offset))
+
+        timeline = self.summary()["picks_in_order"]
+
+        self.assertEqual([p["name"] for p in timeline], ["T One", "T Two", "T Three"])
+        self.assertEqual([p["order"] for p in timeline], [1, 2, 3])
+        # 200 − 60, unchanged through the opponent's pick, then − 25.
+        self.assertEqual([p["drafter_budget_remaining"] for p in timeline], [140, 140, 115])
+        self.assertEqual([p["is_drafter"] for p in timeline], [True, False, True])
+
+    def test_timeline_budget_is_none_without_a_drafter(self):
+        Manager.objects.filter(pk=self.drafter.pk).update(drafter=False)
+        self.draft_player(make_player("No Drafter", "QB"), self.opponent, "QB1", price=10)
+
+        summary = self.summary()
+
+        self.assertFalse(summary["has_drafter"])
+        self.assertIsNone(summary["picks_in_order"][0]["drafter_budget_remaining"])
+
+    def test_timeline_excludes_undrafted_rows(self):
+        DraftPick.objects.create(
+            draft=self.draft, player=make_player("Unbought", "TE"),
+            manager=self.drafter, price=0, drafted=False, position_slot=None,
+        )
+        self.draft_player(make_player("Bought", "QB"), self.drafter, "QB1", price=5)
+
+        self.assertEqual([p["name"] for p in self.summary()["picks_in_order"]], ["Bought"])
 
     def test_positions_come_back_in_canonical_order(self):
         self.draft_player(make_player("Ord DEF", "DEF"), self.drafter, "DEF1", price=2)
