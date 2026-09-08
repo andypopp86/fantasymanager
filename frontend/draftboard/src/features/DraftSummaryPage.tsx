@@ -1,9 +1,9 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { draftRetrieve, draftSummaryRetrieve } from "../lib/data";
 import InstantTooltip from "./InstantTooltip";
-import type { DraftSummaryOutput, SummaryManager } from "../lib/draft.schemas";
+import type { DraftSummaryOutput, SummaryManager, SummaryTimelinePick } from "../lib/draft.schemas";
 
 // /draft/:draftId/summary — the post-draft dashboard. Read-only and server-fed
 // (React Query straight to `/summary/`, NOT Dexie): nothing here writes, and it
@@ -41,6 +41,9 @@ const diffText = (diff: number) =>
 const money = (value: number) => `$${Math.round(value)}`;
 // Signed, because the whole page is about the direction of the gap.
 const signedMoney = (value: number) => `${value > 0 ? "+" : value < 0 ? "−" : ""}$${Math.abs(Math.round(value))}`;
+// Wall-clock time of a pick, which is what makes a draft-order table legible —
+// the gaps between picks are as telling as the order.
+const pickClock = (isoTime: string) => new Date(isoTime).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
 const CARD = "bg-white rounded-lg shadow-sm border border-gray-200";
 const CARD_TITLE = "text-sm font-bold text-gray-800 uppercase tracking-wide";
@@ -133,6 +136,11 @@ function OverUnderWidget({ managers }: { managers: SummaryManager[] }) {
 // deliberately ignored: a WR in FLEX2 is WR spend). Toggles between raw dollars
 // and share of the manager's own spend, since the two answer different questions
 // ("who spent most on RBs" vs "who is an RB-heavy team").
+// How many pixels a segment actually gets, so the label decision is made in the
+// unit that decides whether text fits. `share` is of the manager's own spend and
+// `rowPx` already carries the dollars-mode scaling.
+const segmentWidth = (share: number, rowPx: number) => (share / 100) * rowPx;
+
 function PositionAllocationWidget({ managers, positions }: { managers: SummaryManager[], positions: string[] }) {
     const [asShare, setAsShare] = useState(false);
     const ordered = useMemo(() => {
@@ -140,6 +148,20 @@ function PositionAllocationWidget({ managers, positions }: { managers: SummaryMa
         return [...known, ...positions.filter((p) => !POSITION_ORDER.includes(p))];
     }, [positions]);
     const maxSpend = Math.max(1, ...managers.map((m) => m.total_price));
+
+    // The label thresholds need the track's real width, which only the DOM
+    // knows — so measure it and re-measure on resize.
+    const trackRef = useRef<HTMLDivElement>(null);
+    const [trackPx, setTrackPx] = useState(0);
+    useEffect(() => {
+        const element = trackRef.current;
+        if (!element) return;
+        const measure = () => setTrackPx(element.clientWidth);
+        measure();
+        const observer = new ResizeObserver(measure);
+        observer.observe(element);
+        return () => observer.disconnect();
+    }, []);
 
     return (
         <div className={`${CARD} p-4`}>
@@ -169,41 +191,59 @@ function PositionAllocationWidget({ managers, positions }: { managers: SummaryMa
                 ))}
             </div>
 
-            <div className="space-y-1">
+            {/* Measures the bar column without being part of any bar. */}
+            <div className="flex items-center gap-2 h-0" aria-hidden="true">
+                <div className="w-32 shrink-0" />
+                <div ref={trackRef} className="flex-1 min-w-0" />
+                <div className="w-16 shrink-0" />
+            </div>
+
+            <div className="space-y-1.5">
                 {managers.map((manager) => {
                     const total = manager.total_price || 0;
                     // In dollars every bar shares one scale (so bar length is
                     // comparable across managers); in share mode each fills its row.
                     const rowScale = asShare ? 100 : (total / maxSpend) * 100;
+                    const barPx = (trackPx * rowScale) / 100;
                     return (
                         <div key={manager.manager_id} className="flex items-center gap-2">
-                            <div className="w-28 shrink-0 truncate text-xs font-semibold text-gray-700 text-right">
+                            <div className="w-32 shrink-0 truncate text-xs font-semibold text-gray-700 text-right">
                                 {manager.manager_name}
                             </div>
-                            <div className="flex-1 h-6 flex items-center">
-                                <div className="flex h-5 rounded overflow-hidden gap-[2px]" style={{ width: `${rowScale}%` }}>
+                            <div className="flex-1 min-w-0 h-8 flex items-center">
+                                <div className="flex h-7 rounded overflow-hidden gap-[2px]" style={{ width: `${rowScale}%` }}>
                                     {ordered.map((position) => {
                                         const bucket = manager.position_allocation[position];
                                         if (!bucket || !bucket.spend) return null;
                                         const share = total ? (bucket.spend / total) * 100 : 0;
+                                        // Width belongs on the tooltip WRAPPER — it is the
+                                        // flex item, and a % width on the inner span would
+                                        // resolve against a shrink-to-fit box and collapse.
+                                        const label = asShare ? `${share.toFixed(0)}%` : money(bucket.spend);
                                         return (
                                             <InstantTooltip
                                                 key={position}
                                                 label={`${position}: ${money(bucket.spend)} · ${bucket.count} player${bucket.count === 1 ? "" : "s"} · ${share.toFixed(0)}%`}
-                                                className="h-full"
+                                                className="h-full shrink-0"
+                                                style={{ width: `${share}%`, minWidth: 3 }}
                                             >
                                                 <span
-                                                    className="h-full flex items-center justify-center text-[10px] font-bold text-white overflow-hidden"
-                                                    style={{ backgroundColor: positionColor(position), width: `${share}%`, minWidth: 2 }}
+                                                    className="h-full w-full flex items-center justify-center text-[11px] font-bold text-white leading-none whitespace-nowrap overflow-hidden"
+                                                    style={{ backgroundColor: positionColor(position) }}
                                                 >
-                                                    {share >= 12 && (asShare ? `${position} ${share.toFixed(0)}%` : `${position} ${money(bucket.spend)}`)}
+                                                    {/* Widest label that fits: position + value,
+                                                        then value alone, then nothing — the
+                                                        tooltip and the table below carry the rest. */}
+                                                    {segmentWidth(share, barPx) >= 58
+                                                        ? `${position} ${label}`
+                                                        : segmentWidth(share, barPx) >= 30 ? label : ""}
                                                 </span>
                                             </InstantTooltip>
                                         );
                                     })}
                                 </div>
                             </div>
-                            <div className="w-14 shrink-0 text-xs text-gray-500 tabular-nums">{money(total)}</div>
+                            <div className="w-16 shrink-0 text-right text-xs font-semibold text-gray-600 tabular-nums">{money(total)}</div>
                         </div>
                     );
                 })}
@@ -303,7 +343,155 @@ function RosterShapeWidget({ managers }: { managers: SummaryManager[] }) {
     );
 }
 
-// Widget 4 — the roster itself: every player a manager bought, actual vs
+type TimelineSortKey = "order" | "price" | "projected_price" | "diff";
+
+const TIMELINE_SORTS: Record<TimelineSortKey, (pick: SummaryTimelinePick) => number> = {
+    order: (pick) => pick.order,
+    price: (pick) => pick.price,
+    projected_price: (pick) => pick.projected_price,
+    diff: (pick) => pick.diff,
+};
+
+// A sortable column header. The arrow is the only affordance the table needs —
+// it marks the active column and its direction in one glyph.
+function SortHeader({ label, sortKey, sort, onSort, className, title }: {
+    label: string,
+    sortKey: TimelineSortKey,
+    sort: { key: TimelineSortKey, desc: boolean },
+    onSort: (key: TimelineSortKey) => void,
+    className?: string,
+    title?: string,
+}) {
+    const active = sort.key === sortKey;
+    return (
+        <th className={`px-2 py-1 font-semibold ${className || ""}`}>
+            <button
+                className={`inline-flex items-center gap-1 hover:text-gray-900 ${active ? "text-gray-900" : "text-gray-500"}`}
+                onClick={() => onSort(sortKey)}
+                title={title || `Sort by ${label.toLowerCase()}`}
+            >
+                {label}
+                <span className={active ? "" : "opacity-0 group-hover:opacity-40"}>
+                    {active ? (sort.desc ? "▼" : "▲") : "▲"}
+                </span>
+            </button>
+        </th>
+    );
+}
+
+// Widget 4 — the draft as it happened, in pick order, with the DRAFTER's budget
+// remaining alongside. That column only MOVES on the drafter's own picks — it is
+// their wallet, not a per-pick figure — so it reads as a flat line that steps
+// down whenever they bought, which is the point: it shows how long their money
+// lasted against the board.
+function DraftTimelineWidget({ picks, startingBudget, hasDrafter }: {
+    picks: SummaryTimelinePick[],
+    startingBudget: number,
+    hasDrafter: boolean,
+}) {
+    const [mineOnly, setMineOnly] = useState(false);
+    const [sort, setSort] = useState<{ key: TimelineSortKey, desc: boolean }>({ key: "order", desc: false });
+
+    const rows = useMemo(() => {
+        const visible = mineOnly ? picks.filter((pick) => pick.is_drafter) : picks;
+        const read = TIMELINE_SORTS[sort.key];
+        // `order` stays the tiebreak in every sort, so equal prices come back in
+        // draft order rather than an arbitrary one.
+        return [...visible].sort((a, b) => {
+            const delta = read(a) - read(b);
+            return (sort.desc ? -delta : delta) || a.order - b.order;
+        });
+    }, [picks, mineOnly, sort]);
+
+    // Clicking a column sorts by it; clicking it again flips the direction.
+    // Price and diff open DESC (the interesting end for money), the draft clock
+    // opens ASC (the draft runs forwards).
+    const toggleSort = (key: TimelineSortKey) => setSort((prev) => (
+        prev.key === key
+            ? { key, desc: !prev.desc }
+            : { key, desc: key !== "order" }
+    ));
+
+    return (
+        <div className={`${CARD} p-4`}>
+            <div className="flex items-baseline justify-between gap-2 flex-wrap mb-1">
+                <h2 className={CARD_TITLE}>Draft order</h2>
+                {hasDrafter && (
+                    <button
+                        className={`text-xs px-2 py-1 rounded border ${mineOnly ? "bg-gray-800 border-gray-800 text-white" : "bg-white border-gray-300 text-gray-600"}`}
+                        onClick={() => setMineOnly((prev) => !prev)}
+                        title="Show only my picks"
+                    >
+                        My picks only
+                    </button>
+                )}
+            </div>
+            <p className="text-xs text-gray-500 mb-3">
+                Every pick in the order it happened — click Paid, Proj or +/− to re-sort, # to go back to draft time.
+                {hasDrafter && ` My budget starts at ${money(startingBudget)}, only moves on my own picks, and always reads as of the pick's place in the real draft order.`}
+            </p>
+
+            <div className="max-h-[28rem] overflow-y-auto">
+                <table className="text-xs w-full border-collapse">
+                    <thead className="sticky top-0 bg-gray-100 text-gray-700">
+                        <tr className="group">
+                            <SortHeader
+                                label="#" sortKey="order" sort={sort} onSort={toggleSort}
+                                className="text-right" title="Sort by draft time"
+                            />
+                            <th className="text-left px-2 py-1 font-semibold">Player</th>
+                            <th className="text-left px-2 py-1 font-semibold">Manager</th>
+                            <SortHeader label="Paid" sortKey="price" sort={sort} onSort={toggleSort} className="text-right" />
+                            <SortHeader label="Proj" sortKey="projected_price" sort={sort} onSort={toggleSort} className="text-right" />
+                            <SortHeader label="+/−" sortKey="diff" sort={sort} onSort={toggleSort} className="text-right" title="Sort by over/under pay" />
+                            {hasDrafter && <th className="text-right px-2 py-1 font-semibold whitespace-nowrap">My $ left</th>}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows.map((pick) => (
+                            <tr
+                                key={`${pick.order}-${pick.player_id}`}
+                                className={`border-t border-gray-200 ${pick.is_drafter ? "bg-yellow-50" : ""}`}
+                            >
+                                <td className="px-2 py-1 text-right tabular-nums text-gray-400 whitespace-nowrap">
+                                    {pick.order}
+                                    {pick.drafted_at && (
+                                        <span className="ml-1 text-[10px] text-gray-400">{pickClock(pick.drafted_at)}</span>
+                                    )}
+                                </td>
+                                <td className="px-2 py-1 text-gray-800 whitespace-nowrap">
+                                    <PositionBadge position={pick.position} />
+                                    <span className="ml-1 align-middle">{pick.name}</span>
+                                </td>
+                                <td className={`px-2 py-1 whitespace-nowrap ${pick.is_drafter ? "font-bold text-gray-800" : "text-gray-600"}`}>
+                                    {pick.manager_name}
+                                    {pick.is_drafter && <span className="text-yellow-600"> ★</span>}
+                                </td>
+                                <td className="px-2 py-1 text-right tabular-nums font-semibold">{money(pick.price)}</td>
+                                <td className="px-2 py-1 text-right tabular-nums text-gray-500">{money(pick.projected_price)}</td>
+                                <td className={`px-2 py-1 text-right tabular-nums font-semibold ${diffText(pick.diff)}`}>
+                                    {signedMoney(pick.diff)}
+                                </td>
+                                {hasDrafter && (
+                                    <td
+                                        className={`px-2 py-1 text-right tabular-nums ${pick.is_drafter ? "font-bold text-gray-900" : "text-gray-400"}`}
+                                    >
+                                        {pick.drafter_budget_remaining === null ? "—" : money(pick.drafter_budget_remaining)}
+                                    </td>
+                                )}
+                            </tr>
+                        ))}
+                        {rows.length === 0 && (
+                            <tr><td colSpan={hasDrafter ? 7 : 6} className="px-2 py-3 text-center text-gray-400">No picks yet</td></tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+}
+
+// Widget 5 — the roster itself: every player a manager bought, actual vs
 // projected, with the per-player gap and the sum that the first widget charts.
 function ManagerRosterCard({ manager }: { manager: SummaryManager }) {
     const [sortByDiff, setSortByDiff] = useState(false);
@@ -433,6 +621,12 @@ export default function DraftSummaryPage() {
                         </div>
 
                         <PositionAllocationWidget managers={managers} positions={summary.positions} />
+
+                        <DraftTimelineWidget
+                            picks={summary.picks_in_order}
+                            startingBudget={summary.starting_budget}
+                            hasDrafter={summary.has_drafter}
+                        />
 
                         <div>
                             <h2 className={`${CARD_TITLE} mb-2`}>Rosters</h2>
