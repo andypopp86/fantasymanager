@@ -2024,6 +2024,7 @@ class DraftSummaryTests(TestCase):
     def setUp(self):
         from draft.services.draft.draft import DraftReadService
         self.service = DraftReadService(user=None)
+        self.now = timezone.now()
         self.draft = Draft.objects.create(year=2026, draft_name="summary draft")
         self.drafter = Manager.objects.create(draft=self.draft, name="me", drafter=True, position=0)
         self.opponent = Manager.objects.create(draft=self.draft, name="them", drafter=False, position=1)
@@ -2033,6 +2034,16 @@ class DraftSummaryTests(TestCase):
             draft=self.draft, player=player, manager=manager,
             price=price, drafted=True, position_slot=slot,
         )
+
+    def stamp(self, picks):
+        """Give the picks a distinct pick clock, in the order given.
+
+        `last_update_time` is `auto_now`, so every row written in one test tick
+        shares a timestamp — `queryset.update()` is how you set it deliberately.
+        """
+        for offset, pick in enumerate(picks):
+            DraftPick.objects.filter(pk=pick.pk).update(
+                last_update_time=self.now + timedelta(minutes=offset))
 
     def summary(self):
         return self.service.get_draft_summary(draft_id=self.draft.id)
@@ -2104,10 +2115,8 @@ class DraftSummaryTests(TestCase):
         first = self.draft_player(make_player("T One", "QB"), self.drafter, "QB1", price=60)
         second = self.draft_player(make_player("T Two", "RB"), self.opponent, "RB1", price=40)
         third = self.draft_player(make_player("T Three", "WR"), self.drafter, "WR1", price=25)
-        # auto_now_add fires in one tick under test, so pin the order explicitly.
-        for offset, pick in enumerate([first, second, third]):
-            DraftPick.objects.filter(pk=pick.pk).update(
-                created=timezone.now() + timedelta(minutes=offset))
+        # auto_now fires in one tick under test, so pin the pick clock explicitly.
+        self.stamp([first, second, third])
 
         timeline = self.summary()["picks_in_order"]
 
@@ -2116,6 +2125,23 @@ class DraftSummaryTests(TestCase):
         # 200 − 60, unchanged through the opponent's pick, then − 25.
         self.assertEqual([p["drafter_budget_remaining"] for p in timeline], [140, 140, 115])
         self.assertEqual([p["is_drafter"] for p in timeline], [True, False, True])
+        self.assertTrue(all(p["drafted_at"] for p in timeline))
+
+    def test_timeline_orders_by_pick_time_not_row_creation(self):
+        """`created` is the bulk_create instant for EVERY pick in a draft, so it
+        cannot order a timeline — only `last_update_time` records when a pick
+        actually landed. Rows are stamped here in the reverse of their creation
+        order; the timeline must follow the pick clock."""
+        early_row = self.draft_player(make_player("Bought Last", "QB"), self.drafter, "QB1", price=10)
+        late_row = self.draft_player(make_player("Bought First", "RB"), self.drafter, "RB1", price=20)
+        DraftPick.objects.filter(pk=early_row.pk).update(created=self.now)
+        DraftPick.objects.filter(pk=late_row.pk).update(created=self.now)
+        self.stamp([late_row, early_row])
+
+        timeline = self.summary()["picks_in_order"]
+
+        self.assertEqual([p["name"] for p in timeline], ["Bought First", "Bought Last"])
+        self.assertEqual([p["drafter_budget_remaining"] for p in timeline], [180, 170])
 
     def test_timeline_budget_is_none_without_a_drafter(self):
         Manager.objects.filter(pk=self.drafter.pk).update(drafter=False)

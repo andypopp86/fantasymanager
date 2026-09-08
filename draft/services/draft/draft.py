@@ -396,20 +396,28 @@ class DraftReadService(BaseService):
         the same "what I thought he was worth" number the rest of the app prices
         against; a player with neither is 0, which reads as pure overpay.
 
-        Also returns `picks_in_order` — the whole draft in the order it happened,
-        carrying the DRAFTER's running budget remaining after each pick, so the
-        timeline shows how their money held up against the board.
+        Also returns `picks_in_order` — the whole draft in the order it happened
+        (by `last_update_time`; see the ordering comment below), carrying the
+        DRAFTER's running budget remaining after each pick, so the timeline shows
+        how their money held up against the board.
         """
         draft = d.Draft.objects.filter(id=draft_id).first()
         starting_budget = draft.starting_budget if draft else 0
         managers = d.Manager.objects.filter(draft_id=draft_id).order_by("position")
         drafter_id = next((m.id for m in managers if m.drafter), None)
 
-        # `created` is the only record of when a pick happened, and it is what the
-        # timeline orders by; `id` breaks ties for rows written in the same tick.
+        # `last_update_time` is when the pick was DRAFTED — NOT `created`, which is
+        # the row's birthday: every DraftPick is bulk_created at draft setup (one
+        # per player in the year), so `created` is the same instant for all of them
+        # and orders by nothing. `submit_pick` stamps `last_update_time`, and it is
+        # already the repo's pick clock (`Draft.projected_draft` and
+        # `print_draft_by_order` both order by it). Caveat: it is `auto_now`, so a
+        # later price edit re-stamps a pick and moves it down the timeline —
+        # re-slotting does NOT, because `reslot_picks` saves with `update_fields`
+        # and never writes the column. `id` breaks same-instant ties.
         picks = list(d.DraftPick.objects.filter(
             draft_id=draft_id, drafted=True, manager__isnull=False
-        ).select_related("player", "manager").order_by("created", "id"))
+        ).select_related("player", "manager").order_by("last_update_time", "id"))
 
         by_manager = {}
         for pick in sorted(picks, key=lambda p: -(p.price or 0)):
@@ -487,6 +495,7 @@ class DraftReadService(BaseService):
                 "price": price,
                 "projected_price": projected,
                 "diff": price - projected,
+                "drafted_at": pick.last_update_time.isoformat() if pick.last_update_time else None,
                 "drafter_budget_remaining": (
                     starting_budget - drafter_spent if drafter_id else None
                 ),

@@ -41,6 +41,9 @@ const diffText = (diff: number) =>
 const money = (value: number) => `$${Math.round(value)}`;
 // Signed, because the whole page is about the direction of the gap.
 const signedMoney = (value: number) => `${value > 0 ? "+" : value < 0 ? "−" : ""}$${Math.abs(Math.round(value))}`;
+// Wall-clock time of a pick, which is what makes a draft-order table legible —
+// the gaps between picks are as telling as the order.
+const pickClock = (isoTime: string) => new Date(isoTime).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
 const CARD = "bg-white rounded-lg shadow-sm border border-gray-200";
 const CARD_TITLE = "text-sm font-bold text-gray-800 uppercase tracking-wide";
@@ -340,6 +343,42 @@ function RosterShapeWidget({ managers }: { managers: SummaryManager[] }) {
     );
 }
 
+type TimelineSortKey = "order" | "price" | "projected_price" | "diff";
+
+const TIMELINE_SORTS: Record<TimelineSortKey, (pick: SummaryTimelinePick) => number> = {
+    order: (pick) => pick.order,
+    price: (pick) => pick.price,
+    projected_price: (pick) => pick.projected_price,
+    diff: (pick) => pick.diff,
+};
+
+// A sortable column header. The arrow is the only affordance the table needs —
+// it marks the active column and its direction in one glyph.
+function SortHeader({ label, sortKey, sort, onSort, className, title }: {
+    label: string,
+    sortKey: TimelineSortKey,
+    sort: { key: TimelineSortKey, desc: boolean },
+    onSort: (key: TimelineSortKey) => void,
+    className?: string,
+    title?: string,
+}) {
+    const active = sort.key === sortKey;
+    return (
+        <th className={`px-2 py-1 font-semibold ${className || ""}`}>
+            <button
+                className={`inline-flex items-center gap-1 hover:text-gray-900 ${active ? "text-gray-900" : "text-gray-500"}`}
+                onClick={() => onSort(sortKey)}
+                title={title || `Sort by ${label.toLowerCase()}`}
+            >
+                {label}
+                <span className={active ? "" : "opacity-0 group-hover:opacity-40"}>
+                    {active ? (sort.desc ? "▼" : "▲") : "▲"}
+                </span>
+            </button>
+        </th>
+    );
+}
+
 // Widget 4 — the draft as it happened, in pick order, with the DRAFTER's budget
 // remaining alongside. That column only MOVES on the drafter's own picks — it is
 // their wallet, not a per-pick figure — so it reads as a flat line that steps
@@ -351,10 +390,27 @@ function DraftTimelineWidget({ picks, startingBudget, hasDrafter }: {
     hasDrafter: boolean,
 }) {
     const [mineOnly, setMineOnly] = useState(false);
-    const rows = useMemo(
-        () => (mineOnly ? picks.filter((pick) => pick.is_drafter) : picks),
-        [picks, mineOnly],
-    );
+    const [sort, setSort] = useState<{ key: TimelineSortKey, desc: boolean }>({ key: "order", desc: false });
+
+    const rows = useMemo(() => {
+        const visible = mineOnly ? picks.filter((pick) => pick.is_drafter) : picks;
+        const read = TIMELINE_SORTS[sort.key];
+        // `order` stays the tiebreak in every sort, so equal prices come back in
+        // draft order rather than an arbitrary one.
+        return [...visible].sort((a, b) => {
+            const delta = read(a) - read(b);
+            return (sort.desc ? -delta : delta) || a.order - b.order;
+        });
+    }, [picks, mineOnly, sort]);
+
+    // Clicking a column sorts by it; clicking it again flips the direction.
+    // Price and diff open DESC (the interesting end for money), the draft clock
+    // opens ASC (the draft runs forwards).
+    const toggleSort = (key: TimelineSortKey) => setSort((prev) => (
+        prev.key === key
+            ? { key, desc: !prev.desc }
+            : { key, desc: key !== "order" }
+    ));
 
     return (
         <div className={`${CARD} p-4`}>
@@ -371,20 +427,23 @@ function DraftTimelineWidget({ picks, startingBudget, hasDrafter }: {
                 )}
             </div>
             <p className="text-xs text-gray-500 mb-3">
-                Every pick in the order it happened.
-                {hasDrafter && ` My budget starts at ${money(startingBudget)} and only moves on my own picks.`}
+                Every pick in the order it happened — click Paid, Proj or +/− to re-sort, # to go back to draft time.
+                {hasDrafter && ` My budget starts at ${money(startingBudget)}, only moves on my own picks, and always reads as of the pick's place in the real draft order.`}
             </p>
 
             <div className="max-h-[28rem] overflow-y-auto">
                 <table className="text-xs w-full border-collapse">
                     <thead className="sticky top-0 bg-gray-100 text-gray-700">
-                        <tr>
-                            <th className="text-right px-2 py-1 font-semibold">#</th>
+                        <tr className="group">
+                            <SortHeader
+                                label="#" sortKey="order" sort={sort} onSort={toggleSort}
+                                className="text-right" title="Sort by draft time"
+                            />
                             <th className="text-left px-2 py-1 font-semibold">Player</th>
                             <th className="text-left px-2 py-1 font-semibold">Manager</th>
-                            <th className="text-right px-2 py-1 font-semibold">Paid</th>
-                            <th className="text-right px-2 py-1 font-semibold">Proj</th>
-                            <th className="text-right px-2 py-1 font-semibold">+/−</th>
+                            <SortHeader label="Paid" sortKey="price" sort={sort} onSort={toggleSort} className="text-right" />
+                            <SortHeader label="Proj" sortKey="projected_price" sort={sort} onSort={toggleSort} className="text-right" />
+                            <SortHeader label="+/−" sortKey="diff" sort={sort} onSort={toggleSort} className="text-right" title="Sort by over/under pay" />
                             {hasDrafter && <th className="text-right px-2 py-1 font-semibold whitespace-nowrap">My $ left</th>}
                         </tr>
                     </thead>
@@ -394,7 +453,12 @@ function DraftTimelineWidget({ picks, startingBudget, hasDrafter }: {
                                 key={`${pick.order}-${pick.player_id}`}
                                 className={`border-t border-gray-200 ${pick.is_drafter ? "bg-yellow-50" : ""}`}
                             >
-                                <td className="px-2 py-1 text-right tabular-nums text-gray-400">{pick.order}</td>
+                                <td className="px-2 py-1 text-right tabular-nums text-gray-400 whitespace-nowrap">
+                                    {pick.order}
+                                    {pick.drafted_at && (
+                                        <span className="ml-1 text-[10px] text-gray-400">{pickClock(pick.drafted_at)}</span>
+                                    )}
+                                </td>
                                 <td className="px-2 py-1 text-gray-800 whitespace-nowrap">
                                     <PositionBadge position={pick.position} />
                                     <span className="ml-1 align-middle">{pick.name}</span>

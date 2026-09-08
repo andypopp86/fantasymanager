@@ -934,9 +934,23 @@ Three things the numbers mean, and they are easy to get wrong:
 - **`position_allocation` is keyed by `Player.position`, never the roster slot** —
   a WR in FLEX2 is WR spend. Slot-level spend is the board's job, not this page's.
 
-`picks_in_order` is the whole draft in the order it happened — ordered by
-`DraftPick.created` (`id` breaks same-tick ties), which is the only record of
-when a pick landed. Each row carries `drafter_budget_remaining`: the DRAFTER's
+`picks_in_order` is the whole draft in the order it happened, and the ordering
+field is **`DraftPick.last_update_time`, NEVER `created`**. `created` is the
+ROW's birthday, not the pick's: `create_draft` bulk_creates one DraftPick per
+player in the year up front, so `created` is the same instant for every pick in
+a draft and orders by nothing. `submit_pick` stamps `last_update_time`, and it
+is already the repo's pick clock (`Draft.projected_draft` and the
+`print_draft_by_order` command both order by it). It ships to the client as
+`drafted_at` and the timeline prints it as wall-clock time beside the pick
+number — the GAPS between picks are as telling as the order.
+
+Two caveats on that field: it is `auto_now`, so a later price edit re-stamps a
+pick and moves it down the timeline (re-slotting does NOT — `reslot_picks` saves
+with `update_fields` and never writes the column). `id` breaks same-instant
+ties. `DraftSummaryTests::test_timeline_orders_by_pick_time_not_row_creation`
+is the regression guard, and it does fail if the ordering goes back to `created`.
+
+Each row carries `drafter_budget_remaining`: the DRAFTER's
 wallet after that pick, so it only MOVES on their own rows and reads as a flat
 line that steps down when they bought. That's deliberate — it shows how long
 their money lasted against the board. With no manager flagged `drafter` the
@@ -947,7 +961,12 @@ over/under pay (diverging bars off a shared zero line, biggest overpay first),
 roster size & average price (sorted by count desc), spend by position (stacked
 bars, dollars/share toggle, with the exact numbers repeated as a table), draft
 order (the timeline table, with a "My picks only" filter), and one roster card
-per manager (player rows + a footer sum). Position colours are
+per manager (player rows + a footer sum). The timeline's Paid / Proj / +/− and #
+headers are click-to-sort (`TIMELINE_SORTS`), with `order` always the tiebreak so
+equal prices stay in draft order; **`My $ left` keeps meaning "as of this pick's
+place in the REAL draft order" whatever the table is sorted by**, because it is
+computed server-side over the true sequence, not derived from the rendered rows.
+Position colours are
 **Okabe-Ito steps in a fixed per-position order** (`POSITION_COLORS`), NOT the
 board's `POSITION_BG_COLORS` — those raw CSS names fail the adjacent-pair
 colour-blindness check when they abut in a stacked bar. Two of the steps sit

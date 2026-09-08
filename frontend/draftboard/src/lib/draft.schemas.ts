@@ -483,6 +483,9 @@ export type SummaryTimelinePick = SummaryPick & {
     manager_id: number,
     manager_name: string,
     is_drafter: boolean,
+    // When the pick was DRAFTED (DraftPick.last_update_time) — not the row's
+    // `created`, which is the same bulk-create instant for every pick in a draft.
+    drafted_at: string | null,
     drafter_budget_remaining: number | null,
 }
 
