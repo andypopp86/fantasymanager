@@ -510,6 +510,112 @@ class DraftReadService(BaseService):
             "picks_in_order": timeline,
         }
 
+    def get_draft_playback(self, draft_id):
+        """Everything needed to replay a draft pick-by-pick, in ONE payload.
+
+        The question this answers is "who was still on the board when I made that
+        pick, and what did everyone have left to spend" — so the client needs the
+        state of the draft at an ARBITRARY point, not just the end. Rather than an
+        endpoint per point in time (a request per step would make scrubbing
+        unusable), the whole draft ships once and the page derives every frame:
+
+        - `picks` is the draft in the order it happened, same clock and same
+          caveats as the summary timeline (`last_update_time`, NOT `created` —
+          see `get_draft_summary`).
+        - `pool` is EVERY player in this draft's pool, drafted or not, each
+          carrying `drafted_order`: the 1-based index into `picks` where they came
+          off the board, or null if they were never taken. Available after step N
+          is then `drafted_order is null or drafted_order > N`, computed on the
+          client — no round trip per frame.
+
+        Budgets and rosters at a point in time are likewise derivable from
+        `picks` + `starting_budget`, so they are not duplicated here.
+        """
+        draft = d.Draft.objects.filter(id=draft_id).first()
+        if not draft:
+            raise Http404("Draft not found")
+        starting_budget = draft.starting_budget
+        managers = d.Manager.objects.filter(draft_id=draft_id).order_by("position")
+        drafter_id = next((m.id for m in managers if m.drafter), None)
+
+        # Every row in this draft's pool, ordered the way the board orders the
+        # available list (price desc → favorite → adp). The client re-sorts, but
+        # sending it ordered keeps the default frame right even before it does.
+        pool_picks = (
+            d.DraftPick.objects.filter(draft_id=draft_id)
+            .select_related("player", "player__team")
+            .order_by("-player__projected_price", "player__adp_formatted")
+        )
+
+        drafted = [
+            pick for pick in pool_picks
+            if pick.drafted and pick.manager_id is not None
+        ]
+        drafted.sort(key=lambda p: (p.last_update_time or timezone.now(), p.id))
+        order_by_player = {pick.player_id: index for index, pick in enumerate(drafted, start=1)}
+
+        manager_names = {m.id: m.name for m in managers}
+        pool = []
+        for pick in pool_picks:
+            player = pick.player
+            projected = int(player.override_price or player.projected_price or 0)
+            order = order_by_player.get(pick.player_id)
+            pool.append({
+                "player_id": player.player_id,
+                "name": player.name,
+                "position": player.position or "?",
+                "team": player.team.code if player.team else "",
+                "projected_price": projected,
+                "adp_formatted": player.adp_formatted,
+                "favorite": player.favorite,
+                "risk_score": player.risk_score,
+                "bye_week": player.bye_week,
+                # Null until the moment they came off the board; that is what the
+                # page filters on to build each frame.
+                "drafted_order": order,
+                "price": pick.price if order else None,
+                "manager_id": pick.manager_id if order else None,
+                "manager_name": manager_names.get(pick.manager_id) if order else None,
+            })
+
+        picks = []
+        for index, pick in enumerate(drafted, start=1):
+            player = pick.player
+            projected = int(player.override_price or player.projected_price or 0)
+            price = pick.price or 0
+            picks.append({
+                "order": index,
+                "player_id": player.player_id,
+                "name": player.name,
+                "position": player.position or "?",
+                "position_slot": pick.position_slot or "",
+                "manager_id": pick.manager_id,
+                "manager_name": pick.manager.name,
+                "is_drafter": pick.manager_id == drafter_id,
+                "price": price,
+                "projected_price": projected,
+                "diff": price - projected,
+                "drafted_at": pick.last_update_time.isoformat() if pick.last_update_time else None,
+            })
+
+        return {
+            "draft_id": draft_id,
+            "draft_name": draft.draft_name,
+            "starting_budget": starting_budget,
+            "drafter_id": drafter_id,
+            "managers": [
+                {
+                    "manager_id": m.id,
+                    "manager_name": m.name,
+                    "manager_position": m.position,
+                    "is_drafter": m.drafter,
+                }
+                for m in managers
+            ],
+            "picks": picks,
+            "pool": pool,
+        }
+
     def get_watched_picks(self, draft_id):
         draft = d.Draft.objects.filter(id=draft_id).first()
         watched_players = d.Player.objects.filter(year=draft.year, watched=True).order_by("-projected_price")

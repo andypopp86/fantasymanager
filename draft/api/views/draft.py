@@ -360,6 +360,19 @@ class DraftSummaryAPI(APIView):
         ).get_draft_summary(draft_id=draft_id)
         return Response(summary, status=status.HTTP_200_OK)
 
+class DraftPlaybackAPI(APIView):
+    """The whole draft in one payload, for the pick-by-pick playback page.
+
+    Same gate as the summary dashboard: it shows only what already happened.
+    """
+    permission_classes = [IsSpectatorVisible]
+
+    def get(self, request, draft_id):
+        playback = DraftReadService(
+            user=request.user
+        ).get_draft_playback(draft_id=draft_id)
+        return Response(playback, status=status.HTTP_200_OK)
+
 class DraftBudgetedPicksAPI(APIView):
     permission_classes = [IsDrafter]
 

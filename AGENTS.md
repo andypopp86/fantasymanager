@@ -1007,6 +1007,64 @@ testing: this repo's services (draft/budget/plan rules), custom permission
 classes (the drafter/spectator boundary), and any hand-written passthrough
 where a field could silently get dropped. When in doubt, ask "does this assert
 OUR logic, or that Django works?" — skip the latter.
+## Draft playback (`/draft/:draftId/playback`)
+
+Replay a finished draft one pick at a time. The question it exists to answer is
+**"who was still on the board when I made that pick, and what did everyone have
+left to spend"** — i.e. did a better alternative exist. Reached from the
+**Playback** button on the board and from the Summary page header.
+
+**The page is a function of ONE number, `step`** — how many picks have happened.
+`step 0` is the moment before the draft started; `step N` is just after pick N.
+Transport (⏮ ◀ ▶play ▶ ⏭), the scrubber, clicking a row in the pick log, and the
+←/→/space keys all do the same thing: set `step`. Everything else on screen —
+availability, budgets, rosters — is derived from it.
+
+**One payload, every frame client-side.** `GET /api/drafts/draft/<id>/playback/`
+(`IsSpectatorVisible`, same gate as the summary) →
+`DraftReadService.get_draft_playback`, which returns `picks` (the draft in order)
+and `pool` (EVERY `DraftPick` row in the draft, drafted or not). Each pool row
+carries **`drafted_order`**: the 1-based index into `picks` where that player came
+off the board, or `null` if nobody took them. So:
+
+```
+available after step N  ⇔  drafted_order === null || drafted_order > N
+```
+
+That single field is why the page needs no request per frame — an endpoint that
+took a step number would make scrubbing unusable. Budgets and rosters at a point
+in time are likewise `picks.slice(0, step)` reduced per manager, NOT server state:
+`Manager.budget` is the LIVE remaining budget (the end of the draft), so it says
+nothing about the middle and is deliberately not sent. `starting_budget` is.
+
+Pick ordering is the same clock and the same caveats as the summary timeline —
+`DraftPick.last_update_time`, never `created` (see that section); `id` breaks
+ties. Read-only and server-fed through React Query, not Dexie, like Summary,
+Target Tiers and the mock page.
+
+UI is `features/DraftPlaybackPage.tsx`, three panes under the transport bar: the
+pick log (click to jump; future picks dimmed rather than hidden so the list does
+not re-lay-out as you step), the pick that just happened, and **Available at this
+moment** — position chips + search, in the board's ordering (price desc →
+favorite → adp). Availability rows also print **what later happened to the
+player** ("went at #57 for $8 → Bob"), which is the actual payoff: it comes free
+from `drafted_order` + `price` on the pool row. Right-hand pane is budgets &
+rosters as of the current pick, expandable per manager.
+
+Two things it deliberately reimplements rather than imports:
+
+- The sort comparator. `byFavoriteThenAdp` (`utils/draftHelpers`) reads
+  `row.player.favorite` off a nested Dexie row; the playback pool row is flat.
+  Same ordering, same reason for the tiebreaks (dozens of players share a $1
+  projection).
+- `POSITION_COLORS` is the summary page's Okabe-Ito set, not the board's
+  `POSITION_BG_COLORS` — the two pages sit one click apart and shouldn't disagree
+  about what a WR looks like.
+
+Tests: `draft/tests.py::DraftPlaybackTests` covers the availability index
+(`drafted_order` against pick order, null for undrafted, no price/manager on
+undrafted rows) and the override-price precedence.
+
 **Rebudget** (`utils/strategyShuffle.ts` + `features/RebudgetModal.tsx`,
 "Rebudget" button on the board): proposes a revised budget from FAVORITED
 undrafted players only. Pure client-side. The modal shows the full roster —

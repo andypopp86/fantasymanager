@@ -2167,3 +2167,96 @@ class DraftSummaryTests(TestCase):
         self.draft_player(make_player("Ord QB", "QB"), self.opponent, "QB1", price=15)
 
         self.assertEqual(self.summary()["positions"], ["QB", "WR", "DEF"])
+
+
+class DraftPlaybackTests(TestCase):
+    """The playback payload's one piece of real logic: the availability index.
+
+    `drafted_order` is what lets the page rebuild any point in the draft without
+    a request per frame, so what's worth asserting is that it lines up with the
+    pick order and that undrafted players carry null (they were available the
+    whole way through).
+    """
+
+    def setUp(self):
+        from draft.services.draft.draft import DraftReadService
+        self.service = DraftReadService(user=None)
+        self.now = timezone.now()
+        self.draft = Draft.objects.create(year=2026, draft_name="playback draft", starting_budget=200)
+        self.drafter = Manager.objects.create(draft=self.draft, name="me", drafter=True, position=0)
+        self.opponent = Manager.objects.create(draft=self.draft, name="them", drafter=False, position=1)
+
+    def draft_player(self, player, manager, slot, price):
+        return DraftPick.objects.create(
+            draft=self.draft, player=player, manager=manager,
+            price=price, drafted=True, position_slot=slot,
+        )
+
+    def stamp(self, picks):
+        for offset, pick in enumerate(picks):
+            DraftPick.objects.filter(pk=pick.pk).update(
+                last_update_time=self.now + timedelta(minutes=offset))
+
+    def playback(self):
+        return self.service.get_draft_playback(draft_id=self.draft.id)
+
+    def pool_row(self, playback, name):
+        return next(row for row in playback["pool"] if row["name"] == name)
+
+    def test_drafted_order_matches_pick_order_and_undrafted_is_null(self):
+        first = make_player("PB First", "RB")
+        second = make_player("PB Second", "WR")
+        never = make_player("PB Never", "TE")
+        DraftPick.objects.create(draft=self.draft, player=never, drafted=False)
+        pick_two = self.draft_player(second, self.opponent, "WR1", price=20)
+        pick_one = self.draft_player(first, self.drafter, "RB1", price=30)
+        # Written second, drafted FIRST — the clock, not the row order, decides.
+        self.stamp([pick_one, pick_two])
+
+        playback = self.playback()
+
+        self.assertEqual([p["name"] for p in playback["picks"]], ["PB First", "PB Second"])
+        self.assertEqual(self.pool_row(playback, "PB First")["drafted_order"], 1)
+        self.assertEqual(self.pool_row(playback, "PB Second")["drafted_order"], 2)
+        self.assertIsNone(self.pool_row(playback, "PB Never")["drafted_order"])
+
+    def test_available_after_each_step_is_derivable_from_the_pool(self):
+        first = make_player("Step One", "RB")
+        second = make_player("Step Two", "WR")
+        never = make_player("Step None", "TE")
+        DraftPick.objects.create(draft=self.draft, player=never, drafted=False)
+        self.stamp([
+            self.draft_player(first, self.drafter, "RB1", price=30),
+            self.draft_player(second, self.opponent, "WR1", price=20),
+        ])
+
+        pool = self.playback()["pool"]
+        available = lambda step: sorted(
+            row["name"] for row in pool
+            if row["drafted_order"] is None or row["drafted_order"] > step
+        )
+
+        self.assertEqual(available(0), ["Step None", "Step One", "Step Two"])
+        self.assertEqual(available(1), ["Step None", "Step Two"])
+        self.assertEqual(available(2), ["Step None"])
+
+    def test_undrafted_rows_carry_no_price_or_manager(self):
+        player = make_player("Unsold Guy", "WR")
+        DraftPick.objects.create(draft=self.draft, player=player, drafted=False)
+
+        row = self.pool_row(self.playback(), "Unsold Guy")
+
+        self.assertIsNone(row["price"])
+        self.assertIsNone(row["manager_id"])
+        self.assertIsNone(row["manager_name"])
+
+    def test_override_price_is_the_projection_in_the_pool_and_picks(self):
+        player = make_player("Override Guy", "RB")
+        Player.objects.filter(pk=player.pk).update(override_price=40)
+        self.stamp([self.draft_player(player, self.drafter, "RB1", price=50)])
+
+        playback = self.playback()
+
+        self.assertEqual(self.pool_row(playback, "Override Guy")["projected_price"], 40)
+        self.assertEqual(playback["picks"][0]["projected_price"], 40)
+        self.assertEqual(playback["picks"][0]["diff"], 10)
