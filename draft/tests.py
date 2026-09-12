@@ -225,6 +225,8 @@ class ApiAuthorizationTests(TestCase):
             self.client.get(f"/api/drafts/draft/{self.draft.id}/available_players/").status_code, 403)
         self.assertEqual(
             self.client.get(f"/api/drafts/draft/{self.draft.id}/budgeted_picks/").status_code, 403)
+        self.assertEqual(
+            self.client.get(f"/api/drafts/draft/{self.draft.id}/playback/").status_code, 403)
         self.assertEqual(self.client.get("/api/drafts/draft/plans/").status_code, 403)
         self.assertEqual(
             self.client.post(f"/api/drafts/draft/delete/{self.draft.id}/").status_code, 403)

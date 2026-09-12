@@ -141,7 +141,7 @@ silently breaks login for that account).
 **Two tiers, keyed on `is_staff`** (managed in /admin): staff = drafter (full
 access), non-staff = spectator. `draft/api/permissions.py::IsDrafter` gates
 every write plus the drafter-private reads (available_players, budgeted_picks,
-watched_picks, favorite, plans, create/delete draft). Spectator-reachable
+watched_picks, favorite, plans, playback, create/delete draft). Spectator-reachable
 endpoints: draft list, detail, managers, picks, board detail, manager_picks,
 `/api/me/`.
 
@@ -1021,7 +1021,9 @@ Transport (⏮ ◀ ▶play ▶ ⏭), the scrubber, clicking a row in the pick lo
 availability, budgets, rosters — is derived from it.
 
 **One payload, every frame client-side.** `GET /api/drafts/draft/<id>/playback/`
-(`IsSpectatorVisible`, same gate as the summary) →
+(**`IsDrafter`** — NOT `IsSpectatorVisible` like the summary next to it: the
+payload is the whole player pool with prices and the drafter's alternatives at
+every moment, which is prep material, same call as target tiers) →
 `DraftReadService.get_draft_playback`, which returns `picks` (the draft in order)
 and `pool` (EVERY `DraftPick` row in the draft, drafted or not). Each pool row
 carries **`drafted_order`**: the 1-based index into `picks` where that player came
