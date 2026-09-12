@@ -595,7 +595,13 @@ export default function DraftSummaryPage() {
                         <h1 className="text-xl font-bold text-gray-800">Draft Summary</h1>
                         <p className="text-sm text-gray-600">{draftDetails?.draft_name || `Draft ${draftIdParam}`}</p>
                     </div>
-                    <span className="w-28" />
+                    <button
+                        className="bg-white border border-gray-300 rounded-md px-3 py-1.5 text-sm hover:bg-gray-50 active:bg-gray-100 shadow-sm"
+                        onClick={() => navigate(`/draft/${draftIdParam}/playback`)}
+                        title="Replay the draft pick by pick"
+                    >
+                        Playback
+                    </button>
                 </div>
 
                 {isLoading && <p className="p-4 text-sm text-gray-600">Loading summary…</p>}

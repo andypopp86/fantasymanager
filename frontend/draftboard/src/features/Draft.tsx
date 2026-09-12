@@ -270,6 +270,13 @@ export default function Draft({draftDetails}: DraftProps) {
         </button>
         <button
             className={btnClass}
+            onClick={() => navigate(`/draft/${draftDetails.id}/playback`)}
+            title="Replay the draft pick by pick and see who was still available"
+        >
+            Playback
+        </button>
+        <button
+            className={btnClass}
             onClick={() => setShowRebudget(true)}
             title="Suggest a budget from favorited players by strategy"
         >

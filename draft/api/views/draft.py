@@ -360,6 +360,22 @@ class DraftSummaryAPI(APIView):
         ).get_draft_summary(draft_id=draft_id)
         return Response(summary, status=status.HTTP_200_OK)
 
+class DraftPlaybackAPI(APIView):
+    """The whole draft in one payload, for the pick-by-pick playback page.
+
+    DRAFTER-ONLY, unlike the summary dashboard it sits next to: the payload is
+    the entire player pool with prices and the drafter's own alternatives at
+    every moment — prep material, not a scoreboard. Same reasoning as target
+    tiers.
+    """
+    permission_classes = [IsDrafter]
+
+    def get(self, request, draft_id):
+        playback = DraftReadService(
+            user=request.user
+        ).get_draft_playback(draft_id=draft_id)
+        return Response(playback, status=status.HTTP_200_OK)
+
 class DraftBudgetedPicksAPI(APIView):
     permission_classes = [IsDrafter]
 

@@ -497,3 +497,57 @@ export interface DraftSummaryOutput {
     managers: SummaryManager[],
     picks_in_order: SummaryTimelinePick[],
 }
+
+// ---- Draft playback (/draft/:draftId/playback) -------------------------------
+// GET /api/drafts/draft/<id>/playback/ ships the WHOLE draft once and the page
+// derives every frame from it, so stepping and scrubbing cost no requests.
+export type PlaybackPick = {
+    order: number,
+    player_id: number,
+    name: string,
+    position: string,
+    position_slot: string,
+    manager_id: number,
+    manager_name: string,
+    is_drafter: boolean,
+    price: number,
+    projected_price: number,
+    diff: number,
+    drafted_at: string | null,
+}
+
+// One row per player in the draft's pool. `drafted_order` is the 1-based index
+// into `picks` where they came off the board — null means never drafted, so
+// "available after step N" is `drafted_order === null || drafted_order > N`.
+export type PlaybackPoolPlayer = {
+    player_id: number,
+    name: string,
+    position: string,
+    team: string,
+    projected_price: number,
+    adp_formatted: number,
+    favorite: boolean | null,
+    risk_score: number,
+    bye_week: number | null,
+    drafted_order: number | null,
+    price: number | null,
+    manager_id: number | null,
+    manager_name: string | null,
+}
+
+export type PlaybackManager = {
+    manager_id: number,
+    manager_name: string,
+    manager_position: number,
+    is_drafter: boolean,
+}
+
+export interface DraftPlaybackOutput {
+    draft_id: number,
+    draft_name: string,
+    starting_budget: number,
+    drafter_id: number | null,
+    managers: PlaybackManager[],
+    picks: PlaybackPick[],
+    pool: PlaybackPoolPlayer[],
+}
