@@ -76,14 +76,14 @@ export interface DraftCreateParams {
     limit_te: number;
     limit_def: number;
     available_to_spectators: boolean;
-    // Planned dollars per position — the plan the allocation page measures
-    // drift against. Set here and nowhere else (see Draft.target_* on the
-    // server); all zeros means no plan was entered.
-    target_qb: number;
+    // The allocation plan (see AllocationTargets): RB/WR dollars AND bodies, one
+    // reserve for QB/TE/DEF together, and a bench dollar line.
     target_rb: number;
+    target_rb_count: number;
     target_wr: number;
-    target_te: number;
-    target_def: number;
+    target_wr_count: number;
+    target_other: number;
+    target_bench: number;
 }
 
 export type Manager = {
@@ -560,14 +560,30 @@ export interface DraftPlaybackOutput {
     pool: PlaybackPoolPlayer[],
 }
 
-// ---- Positional allocation (/draft/:draftId/allocation) ----------------------
-// GET /api/drafts/draft/<id>/allocation/ — the DRAFTER's spend by player
-// position against the per-position dollar targets fixed at draft creation.
-// `*_diff` is spend − target, so POSITIVE is over-allocated and negative is a
-// shortage (same polarity as the summary dashboard's over/under pay).
+// ---- Allocation plan (/draft/:draftId/allocation) ---------------------------
+// GET/POST /api/drafts/draft/<id>/allocation/ — the DRAFTER's draft measured
+// against a plan that is deliberately NOT one line per position: only RB and WR
+// are steerable (dollars AND bodies), QB/TE/DEF collapse into one `other`
+// reserve, and BENCH is a SLOT bucket — a WR in BENCH3 is bench money.
+// `*_diff` is spend − target, so NEGATIVE is the shortage.
+
+// The six editable plan fields; POSTing them rewrites the plan and returns the
+// recomputed payload.
+export type AllocationTargets = {
+    target_rb: number,
+    target_rb_count: number,
+    target_wr: number,
+    target_wr_count: number,
+    target_other: number,
+    target_bench: number,
+}
+
+export type AllocationBucket = "RB" | "WR" | "OTHER" | "BENCH";
+
 export type AllocationPlayer = {
     player_id: number,
     name: string,
+    position: string,
     position_slot: string,
     price: number,
     // Only on planned rows: whether this budgeted player is already off the
@@ -578,7 +594,7 @@ export type AllocationPlayer = {
 }
 
 export type AllocationRow = {
-    position: string,
+    key: AllocationBucket,
     target: number,
     actual: number,
     planned: number,
@@ -588,6 +604,37 @@ export type AllocationRow = {
     planned_count: number,
     actual_players: AllocationPlayer[],
     planned_players: AllocationPlayer[],
+    // RB and WR only — bodies are tracked apart from dollars because the two go
+    // wrong independently (one $40 RB instead of two $20s is on budget and a
+    // body light). Absent on OTHER and BENCH.
+    target_count?: number,
+    actual_count_diff?: number,
+    planned_count_diff?: number,
+}
+
+// "Will I still have bench money." headroom = wallet − what the plan still says
+// to spend on starters; on_track compares it to the unspent bench target.
+export type AllocationBenchOutlook = {
+    target: number,
+    spent: number,
+    remaining_target: number,
+    starter_need: number,
+    wallet: number,
+    headroom: number,
+    surplus: number,
+    on_track: boolean,
+}
+
+// The RB/WR split you planned against the one you are buying. `dollars` is how
+// far your RB spend sits off the planned split at the money already committed
+// to RB+WR — positive is RB-heavy, negative WR-heavy. Shares are null before
+// there is anything to divide.
+export type AllocationTilt = {
+    planned_rb_share: number | null,
+    actual_rb_share: number | null,
+    rb_actual: number,
+    wr_actual: number,
+    dollars: number,
 }
 
 export interface DraftAllocationOutput {
@@ -597,10 +644,12 @@ export interface DraftAllocationOutput {
     has_drafter: boolean,
     drafter_name: string,
     has_targets: boolean,
-    positions: string[],
+    targets: AllocationTargets,
     rows: AllocationRow[],
     target_total: number,
     actual_total: number,
     planned_total: number,
     budget_remaining: number,
+    bench_outlook: AllocationBenchOutlook,
+    tilt: AllocationTilt,
 }

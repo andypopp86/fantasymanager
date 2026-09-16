@@ -336,25 +336,26 @@ class DraftAdmin(admin.ModelAdmin):
     list_editable = ('available_to_spectators',)
     # search_fields = ('draft_name', 'drafter', )
     list_filter = ('locked', 'available_to_spectators', 'draft_name', 'drafter',)
-    # The per-position dollar plan the allocation page measures against. NOT on
-    # list_editable: these are the pre-draft intent, and quietly retuning them
-    # from a list view mid-draft erases the only thing worth comparing to — the
-    # draft form is where you set them, this is the correction path.
+    # The allocation plan (RB/WR dollars + bodies, the QB/TE/DEF reserve, bench).
+    # The allocation PAGE is where this is normally edited mid-draft; these are
+    # here for a fix-up outside a live draft.
     fields = ('draft_name', 'year', 'drafter', 'projected_draft', 'saved_slots', 'locked', 'available_to_spectators',
-              ('target_qb', 'target_rb', 'target_wr', 'target_te', 'target_def'), 'date_created' )
+              ('target_rb', 'target_rb_count', 'target_wr', 'target_wr_count'),
+              ('target_other', 'target_bench'), 'date_created' )
     # date_created is auto_now_add (non-editable); without this the edit form
     # 500s with FieldError.
     readonly_fields = ('date_created',)
     actions = ('add_missing_players',)
 
-    # One column rather than five: the plan only means anything read together,
-    # and a draft with no plan should say so rather than print five zeros.
-    @admin.display(description='Target $ (QB/RB/WR/TE/DEF)')
+    # One column rather than six: the plan only means anything read together,
+    # and a draft with no plan should say so rather than print a row of zeros.
+    @admin.display(description='Plan (RB / WR / other / bench)')
     def target_allocation(self, obj):
-        targets = (obj.target_qb, obj.target_rb, obj.target_wr, obj.target_te, obj.target_def)
-        if not any(targets):
+        dollars = (obj.target_rb, obj.target_wr, obj.target_other, obj.target_bench)
+        if not any(dollars) and not (obj.target_rb_count or obj.target_wr_count):
             return '—'
-        return f"{'/'.join(str(t) for t in targets)} = ${sum(targets)}"
+        return (f"${obj.target_rb}/{obj.target_rb_count} · ${obj.target_wr}/{obj.target_wr_count} · "
+                f"${obj.target_other} · ${obj.target_bench} = ${sum(dollars)}")
 
     # A draft's available-player pool is its own DraftPick rows, fixed at
     # creation — so players added to the DB later (an ADP refresh picking up new

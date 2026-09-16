@@ -282,7 +282,7 @@ export default function Draft({draftDetails}: DraftProps) {
         <button
             className={btnClass}
             onClick={() => window.open(`/app/draft/${draftDetails.id}/allocation`, "_blank", "noopener")}
-            title="Spend vs. your per-position dollar targets (opens a new tab)"
+            title="RB/WR/bench spend vs. your allocation plan (opens a new tab)"
         >
             Allocation ↗
         </button>

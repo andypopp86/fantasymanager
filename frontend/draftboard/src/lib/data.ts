@@ -18,7 +18,8 @@ import type { DraftRetrieveOutput,
     MockDraftPlayer,
     DraftSummaryOutput,
     DraftPlaybackOutput,
-    DraftAllocationOutput
+    DraftAllocationOutput,
+    AllocationTargets
 } from "./draft.schemas";
 
 // DRF's SessionAuthentication enforces CSRF only on authenticated requests,
@@ -180,6 +181,18 @@ export const draftRetrieve = <
     options?: AxiosRequestConfig,
   ): Promise<TData> => {
     return axios.default.get(`/api/drafts/draft/${draft_id}/allocation/`, options)
+  }
+
+  // Rewrites the plan and returns the recomputed allocation payload, so the page
+  // redraws off the response instead of a second round trip.
+  export const draftAllocationTargetsSubmit = <
+  TData = AxiosResponse<DraftAllocationOutput>,
+  >(
+    draft_id: string,
+    params: AllocationTargets,
+    options?: AxiosRequestConfig,
+  ): Promise<TData> => {
+    return axios.default.post(`/api/drafts/draft/${draft_id}/allocation/`, { params }, options)
   }
 
   export const draftBudgetedPicksRetrieve = <

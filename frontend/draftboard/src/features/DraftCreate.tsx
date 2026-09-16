@@ -3,9 +3,15 @@ import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { draftCreate } from "../lib/data";
 
-// Positions that carry a dollar target, in the order the allocation page prints
-// them. Player positions, never roster slots — a WR in FLEX2 is WR spend.
-const TARGET_POSITIONS = ["QB", "RB", "WR", "TE", "DEF"] as const;
+// The allocation plan, in the order the allocation page prints it. Only RB and
+// WR carry a body COUNT — they are the positions you buy several of; QB/TE/DEF
+// share one reserve, and the bench is a dollar line over a fixed set of slots.
+const PLAN_FIELDS = [
+    { field: "target_rb", label: "RB $", count: "target_rb_count" },
+    { field: "target_wr", label: "WR $", count: "target_wr_count" },
+    { field: "target_other", label: "QB/TE/DEF $", count: null },
+    { field: "target_bench", label: "Bench $", count: null },
+] as const;
 
 export default function DraftCreate() {
     const navigate = useNavigate();
@@ -29,14 +35,16 @@ Norton`);
     const [limitTE, setLimitTE] = useState(3);
     const [limitDEF, setLimitDEF] = useState(2);
     const [availableToSpectators, setAvailableToSpectators] = useState(false);
-    // Planned dollars per position — the intent the allocation page
-    // (/draft/:id/allocation) measures the real draft against. Fixed here and
-    // never editable afterwards, so drift is measured against what you meant
-    // BEFORE the room started bidding. Defaults spend the default $200.
+    // The opening allocation plan — the intent /draft/:id/allocation measures the
+    // real draft against. Editable there too, because a position re-prices itself
+    // the moment you buy into it. Defaults spend the default $200.
     const [targets, setTargets] = useState<Record<string, number>>({
-        QB: 20, RB: 88, WR: 76, TE: 15, DEF: 1,
+        target_rb: 88, target_rb_count: 4,
+        target_wr: 76, target_wr_count: 4,
+        target_other: 18,
+        target_bench: 18,
     });
-    const targetTotal = TARGET_POSITIONS.reduce((sum, pos) => sum + (targets[pos] || 0), 0);
+    const targetTotal = PLAN_FIELDS.reduce((sum, row) => sum + (targets[row.field] || 0), 0);
     const targetRemainder = (startingBudget || 0) - targetTotal;
 
     const handleDraftCreateSubmit = () => {
@@ -67,11 +75,12 @@ Norton`);
             limit_te: limitTE,
             limit_def: limitDEF,
             available_to_spectators: availableToSpectators,
-            target_qb: targets.QB || 0,
-            target_rb: targets.RB || 0,
-            target_wr: targets.WR || 0,
-            target_te: targets.TE || 0,
-            target_def: targets.DEF || 0,
+            target_rb: targets.target_rb || 0,
+            target_rb_count: targets.target_rb_count || 0,
+            target_wr: targets.target_wr || 0,
+            target_wr_count: targets.target_wr_count || 0,
+            target_other: targets.target_other || 0,
+            target_bench: targets.target_bench || 0,
         }
         draftCreate({ ...draftData }).then(() => {
             queryClient.invalidateQueries({ queryKey: ["draft_list"] });
@@ -140,26 +149,43 @@ Norton`);
                     <div className={"flex flex-wrap -mx-3 mb-6"}>
                         <div className={"w-full px-3"}>
                             <label className={"block uppercase tracking-wide text-gray-700 text-xs font-bold mb-2"}>
-                                Target $ per position
+                                Allocation plan
                             </label>
                             <p className={"text-xs text-gray-500 mb-2"}>
-                                What you MEAN to spend at each position. Fixed at creation — the
-                                Allocation page measures the live draft against it.
+                                What you MEAN to spend, and how many bodies at RB/WR. The Allocation
+                                page measures the live draft against this — and lets you re-plan there.
                             </p>
-                            {TARGET_POSITIONS.map((position) => (
-                                <div key={position} className={"flex items-center gap-2 mb-2"}>
-                                    <span className={"w-10 text-sm font-bold text-gray-700"}>{position}</span>
+                            {PLAN_FIELDS.map((row) => (
+                                <div key={row.field} className={"flex items-center gap-2 mb-2"}>
+                                    <span className={"w-24 text-sm font-bold text-gray-700"}>{row.label}</span>
                                     <input
                                         className={"appearance-none block w-24 bg-gray-200 text-gray-700 border rounded py-2 px-3 leading-tight focus:outline-none focus:bg-white"}
-                                        id={`target_${position.toLowerCase()}`}
+                                        id={row.field}
                                         type="number"
                                         min={0}
-                                        value={targets[position]}
+                                        value={targets[row.field]}
                                         onChange={(e) => setTargets({
                                             ...targets,
-                                            [position]: parseInt(e.target.value) || 0,
+                                            [row.field]: parseInt(e.target.value) || 0,
                                         })}
                                     />
+                                    {row.count && (
+                                        <>
+                                            <span className={"text-sm text-gray-500"}>over</span>
+                                            <input
+                                                className={"appearance-none block w-16 bg-gray-200 text-gray-700 border rounded py-2 px-3 leading-tight focus:outline-none focus:bg-white"}
+                                                id={row.count}
+                                                type="number"
+                                                min={0}
+                                                value={targets[row.count]}
+                                                onChange={(e) => setTargets({
+                                                    ...targets,
+                                                    [row.count as string]: parseInt(e.target.value) || 0,
+                                                })}
+                                            />
+                                            <span className={"text-sm text-gray-500"}>players</span>
+                                        </>
+                                    )}
                                 </div>
                             ))}
                             {/* The sum is shown, not enforced: leaving money loose (or

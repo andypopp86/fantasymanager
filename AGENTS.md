@@ -1007,68 +1007,91 @@ testing: this repo's services (draft/budget/plan rules), custom permission
 classes (the drafter/spectator boundary), and any hand-written passthrough
 where a field could silently get dropped. When in doubt, ask "does this assert
 OUR logic, or that Django works?" — skip the latter.
-## Positional allocation (`/draft/:draftId/allocation`)
+## Allocation (`/draft/:draftId/allocation`)
 
-"Am I drifting off my own plan, and where." Answers the failure this repo's owner
-actually hit: leaning RB in the planning and coming out WR-heavy in the room.
+"Am I buying the draft I meant to buy." Answers the failure this repo's owner
+actually hit: meaning to lean RB and walking out WR-heavy.
 
-**The plan is set at draft creation, and /admin is the only way back to it.**
-`Draft.target_qb/_rb/_wr/_te/_def` are dollars per PLAYER POSITION, entered on the
-create-draft form (`DraftCreate.tsx`) and written by `create_draft`. That is
-deliberate: the number worth measuring against is what you meant BEFORE the room
-started bidding, so no endpoint and no page control edits them mid-draft.
-`DraftAdmin` is the one CORRECTION path — the five fields sit on the change form
-(as one row) and the changelist prints them read-only as a single
-`target_allocation` column (`20/88/76/15/1 = $200`, or `—` for a draft with no
-plan). Deliberately NOT `list_editable`: quietly retuning the plan from a list
-view mid-draft erases the only thing worth comparing to. **All five zero = no plan was entered** (`has_targets` false) and
-the page says so rather than drawing a $0 target every position is "over".
-The create form shows the running sum against `starting_budget` but does NOT
-enforce it — leaving money loose, or knowingly planning over, is a real plan.
+**The plan is deliberately NOT one line per position.** `Draft.target_*` is six
+fields, and the asymmetry is the whole design:
 
-**One endpoint, one arithmetic**, same reasoning as the summary dashboard:
-`GET /api/drafts/draft/<id>/allocation/` (**`IsDrafter`** — it is the drafter's
-own plan and budget panel, exactly what the spectator views withhold) →
-`DraftReadService.get_position_allocation`. Server-fed through React Query with a
-15s poll, **not** Dexie and not the write queue, like Summary / Playback /
-Target Tiers.
+| bucket | fields | why |
+| --- | --- | --- |
+| RB, WR | dollars **+ a body count** | the only steerable positions — you buy several and money moves between them to the end |
+| QB/TE/DEF | one pooled `target_other` | one-and-done: fill the slot and there is nothing to pivot. It exists mostly so the bench math can be honest |
+| Bench | `target_bench`, dollars only | a fixed set of SLOTS, so a count would say nothing |
 
-Three numbers per position, and the two easy ways to get them wrong:
+**Bucketing is slot-first, then position** (`allocation_bucket`):
 
-- **actual** — what the DRAFTER has paid, grouped by `Player.position`, never the
-  roster slot (a WR in FLEX2 is WR spend), the same rule as the summary page.
-  Opponent picks are not the drafter's spend.
-- **planned** — the budget panel's own arithmetic, `actual_price or
-  (override_price or projected_price)` per budgeted player, mirroring
-  `get_budgeted_picks` EXACTLY so the page and the sidebar cannot disagree about
-  what the plan costs. That includes the sidebar's quirk that a budgeted player
-  an OPPONENT took is priced at what he actually went for; `is_drafted` /
-  `drafted_by` ride on the row so the page marks those instead of letting the
-  dollars lie.
-- **diff = spend − target**, so NEGATIVE is the shortage. Note the colour
-  polarity is NOT the summary page's: there red means overpay, here **red means
-  SHORT** (`SHORT_COLOR`), amber means over-allocated, because the shortage is
-  the thing this page was built to catch. The target is drawn as a tick ON each
-  bar's track, so the gap between bar end and tick IS the shortage.
+```
+BENCH1..7       -> BENCH      (whatever the player plays)
+any other slot  -> RB / WR by the PLAYER's position, else OTHER
+```
 
-Every target position gets a row even with no players, so the layout doesn't
-reshuffle as the draft fills; an unexpected position code is appended, never
-dropped. One shared dollar SCALE across all cards — a per-card scale would make a
-$4 DEF read like an $80 RB.
+A WR in FLEX2 is WR spend (the summary page's rule); **a WR in BENCH3 is bench
+spend** — the one place this page departs from "always the player's position",
+because the bench line is a reserve for whoever falls and what they play is
+beside the point.
+
+**The plan is EDITABLE mid-draft**, unlike target tiers or the draft's limits.
+That is the point of the page, not a convenience: spend $60 of a $70 WR plan on
+one receiver and the rest of your WRs are cheap by definition — a re-plan, not a
+shortage. `POST /api/drafts/draft/<id>/allocation/` →
+`DraftWriteService.update_allocation_targets`, which writes ONLY the six fields
+in `ALLOCATION_TARGET_FIELDS` (so it can never become a general draft-edit
+backdoor) with `update_fields`, and the response is the **recomputed GET payload**
+so the page redraws without a second round trip. `DraftAdmin` keeps the fields on
+the change form for fix-ups outside a live draft, plus a read-only
+`target_allocation` summary column; they are NOT `list_editable`.
+
+**One endpoint, one arithmetic** (`IsDrafter`, like playback and target tiers —
+it is the drafter's own plan and budget panel, exactly what the spectator views
+withhold): `DraftReadService.get_allocation`. Server-fed through React Query with
+a 15s poll, **not** Dexie and not the write queue, like Summary / Playback /
+Target Tiers. Actual spend and the budget panel's plan are BOTH measured against
+the targets; the plan number is `actual_price or (override_price or
+projected_price)` per budgeted player, mirroring `get_budgeted_picks` EXACTLY so
+the page and the sidebar can't disagree — including the sidebar's quirk that a
+budgeted player an OPPONENT took is priced at what he actually went for
+(`is_drafted` / `drafted_by` ride on the row so the page marks those).
+
+Two derived readouts the page leads with, and both are easy to get subtly wrong:
+
+- **Bench outlook** — `headroom = wallet − starter_need`, where `starter_need` is
+  `Σ max(0, target − actual)` over RB, WR and OTHER. The `max(0, …)` is
+  load-bearing: being OVER at RB doesn't hand money back, that bucket just asks
+  for nothing more. `on_track` compares headroom to the UNSPENT bench target, so
+  the question "will I still have bench money" gets answered while there is still
+  time to act, not when the bench is all that's left.
+- **RB/WR tilt** — planned split vs. actual split, **starter dollars only**
+  (bench bodies are bench money by the rule above, and the RB/WR plan is a
+  starter plan). `dollars` is measured against what is ALREADY committed to
+  RB+WR (`rb_actual − committed × planned_rb_share`), not against the plan's
+  totals, so it reads straight from the first pick instead of showing a huge
+  fake gap all draft. Positive is RB-heavy, negative WR-heavy; shares are `null`
+  before there is anything to divide.
+
+**Dollars and bodies are flagged independently**, never merged into one verdict:
+one $88 RB against an "$88 over 4 players" plan is dead on budget and three
+bodies short, and only the count says so.
 
 UI is `features/DraftAllocationPage.tsx`, reached from the board's
 **"Allocation ↗"** button, which is a `window.open(..., "_blank")` rather than a
 `navigate` like Summary/Playback: on draft day this is a second-screen readout
 you keep open BESIDE the board, and the board has no room to host it. (The SPA is
-served under the `/app` basename, so the opened URL is `/app/draft/<id>/allocation`
-— react-router has no new-tab form.) `POSITION_COLORS` is the summary/playback
-Okabe-Ito set, not the board's `POSITION_BG_COLORS`, so the pages agree on what a
-WR looks like.
+served under the `/app` basename, so the opened URL is
+`/app/draft/<id>/allocation` — react-router has no new-tab form.) The plan editor
+re-adopts the server's targets whenever the polled payload CHANGES, so a save
+made elsewhere isn't masked by the form's local state. Colour polarity is NOT the
+summary page's: there red means overpay, here **red means SHORT**, because the
+shortage is what this page was built to catch.
 
-Tests: `draft/tests.py::PositionAllocationTests` covers the diff sign, position-
-not-slot grouping, opponent picks excluded from actual, the plan's projected →
-actual price rule (including the opponent-took-him case), override-price
-precedence, the always-five rows / `has_targets` shape, and the no-drafter case.
+Tests: `draft/tests.py::AllocationTests` covers bench-slot-beats-position,
+QB/TE/DEF pooling, dollars-vs-bodies independence, opponent picks excluded, the
+bench outlook (both on-track and short, including the `max(0, …)` floor), the
+tilt against committed dollars, the plan's price rule (with the opponent-took-him
+case), override precedence, the fixed bucket order, the no-plan and no-drafter
+cases, and that the editor writes only the six plan fields.
 
 ## Draft playback (`/draft/:draftId/playback`)
 

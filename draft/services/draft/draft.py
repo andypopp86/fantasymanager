@@ -8,15 +8,33 @@ from django.utils import timezone
 
 from draft import models as d
 
-# The positions a draft carries a dollar TARGET for (Draft.target_<pos>), in the
-# order every surface prints them. Player positions, never roster slots.
-POSITION_TARGET_FIELDS = (
-    ("QB", "target_qb"),
-    ("RB", "target_rb"),
-    ("WR", "target_wr"),
-    ("TE", "target_te"),
-    ("DEF", "target_def"),
+# The allocation plan's buckets, in the order every surface prints them. RB and
+# WR are the steerable positions (dollars + bodies), OTHER is QB/TE/DEF together,
+# and BENCH is a SLOT bucket rather than a position one.
+ALLOCATION_BUCKETS = ("RB", "WR", "OTHER", "BENCH")
+STARTER_BUCKETS = ("RB", "WR", "OTHER")
+
+# The plan's six editable fields — the ONLY columns the allocation editor may
+# write, so that endpoint can never become a general draft-edit backdoor.
+ALLOCATION_TARGET_FIELDS = (
+    "target_rb", "target_rb_count",
+    "target_wr", "target_wr_count",
+    "target_other", "target_bench",
 )
+
+
+def allocation_bucket(position, position_slot):
+    """Which allocation bucket a pick belongs to.
+
+    The BENCH slot wins over the player's position — a WR in BENCH3 is bench
+    money, not WR money. That is the one place this page's grouping departs from
+    the summary dashboard's "always the player's position", and it is deliberate:
+    the bench line is a reserve for whoever falls, so what they play is beside
+    the point.
+    """
+    if (position_slot or "").upper().startswith("BENCH"):
+        return "BENCH"
+    return position if position in ("RB", "WR") else "OTHER"
 
 
 def validate_slot_eligibility(player, position_slot):
@@ -52,7 +70,7 @@ class DraftBoardReadService(BaseService):
 
 
 class DraftWriteService(BaseService):
-    def create_draft(self, draft_name, managers, starting_budget, limit_qb, limit_rb, limit_wr, limit_te, limit_def, available_to_spectators=False, target_qb=0, target_rb=0, target_wr=0, target_te=0, target_def=0):
+    def create_draft(self, draft_name, managers, starting_budget, limit_qb, limit_rb, limit_wr, limit_te, limit_def, available_to_spectators=False, targets=None):
         year = timezone.now().year
         draft = d.Draft(
             year=year,
@@ -64,15 +82,11 @@ class DraftWriteService(BaseService):
             limit_te=limit_te,
             limit_def=limit_def,
             available_to_spectators=available_to_spectators,
-            # Planned dollars per position. Deliberately NOT validated against
+            # The allocation plan. Deliberately NOT validated against
             # starting_budget: a plan that leaves money loose (or is knowingly
             # over) is a legitimate plan, and the create form already shows the
             # running sum.
-            target_qb=target_qb,
-            target_rb=target_rb,
-            target_wr=target_wr,
-            target_te=target_te,
-            target_def=target_def,
+            **{field: (targets or {}).get(field, 0) for field in ALLOCATION_TARGET_FIELDS},
         )
         draft_managers = []
         for idx, manager_name in enumerate(managers.split("\n")):
@@ -93,6 +107,32 @@ class DraftWriteService(BaseService):
         d.DraftPick.objects.bulk_create(draft_picks)
         return draft
     
+    def update_allocation_targets(self, draft_id, targets):
+        """Rewrite the draft's allocation plan (the allocation page's editor).
+
+        The plan is editable mid-draft ON PURPOSE: a position behaves differently
+        once it is bought — spend $60 of a $70 WR plan on one receiver and the
+        rest of your WRs get cheap by definition, which is a re-plan, not a
+        shortage. Only the six plan fields are touchable here, so this can never
+        become a general draft-edit endpoint.
+        """
+        draft = d.Draft.objects.filter(id=draft_id).first()
+        if not draft:
+            raise Http404
+        changed = []
+        for field in ALLOCATION_TARGET_FIELDS:
+            if field in targets:
+                value = int(targets[field] or 0)
+                if value < 0:
+                    raise ValidationError(f"{field} cannot be negative")
+                setattr(draft, field, value)
+                changed.append(field)
+        if changed:
+            # update_fields so a concurrent board write (drafter name, spectator
+            # flag) isn't clobbered by this form's stale copy of the row.
+            draft.save(update_fields=changed)
+        return draft
+
     def delete_draft(self, draft_id):
         draft = d.Draft.objects.filter(id=draft_id).first()
         if not draft:
@@ -405,45 +445,56 @@ class DraftReadService(BaseService):
             manager_list.append(manager_dict)
         return manager_list
     
-    def get_position_allocation(self, draft_id):
-        """The DRAFTER's spend by player position against the plan set at draft creation.
+    def get_allocation(self, draft_id):
+        """The DRAFTER's draft measured against their allocation plan.
 
-        Answers "am I drifting off my own plan, and where" — the plan being
-        `Draft.target_<pos>`, dollars entered on the create form (see the model).
-        Three numbers per position:
+        The plan is NOT one line per position, because not every position is
+        worth steering. RB and WR are — you buy several, and money moves between
+        them right up to the end — so they carry dollars AND a body count.
+        QB/TE/DEF are one-and-done: once the slot is filled there is nothing to
+        pivot, so they collapse into a single `target_other` reserve that exists
+        mostly so the bench math below can be honest. The bench is its own line
+        and is counted by SLOT, not by position: anyone dropped in a BENCH slot
+        is bench money, whatever they play — which is the whole point, since
+        bench-priced players come off the board at random moments.
 
-        - **target** — the planned dollars. All-zero targets mean no plan was
-          entered (`has_targets` False), and the page says so rather than drawing
-          a zero line every position is "over".
-        - **actual** — what the drafter has actually paid, grouped by the
-          PLAYER's position and never the roster slot (a WR in FLEX2 is WR
-          spend), the same rule as the summary dashboard.
-        - **planned** — the budget panel's own arithmetic, `actual_price or
-          projected_price` per budgeted player, mirroring `get_budgeted_picks`
-          (and therefore the sidebar) EXACTLY so the two can't disagree. Note
-          the actual price is whatever the player went for, even if an OPPONENT
-          took them — that is the sidebar's rule; `drafted_by` rides on the row
-          so the page can mark those.
+        So every pick lands in exactly one bucket:
 
-        `diff` is spend − target throughout, so POSITIVE is over-allocated and
-        negative is the shortage this page exists to catch — the same polarity
-        the summary dashboard uses for over/under pay.
+            BENCH1..7        -> bench
+            any other slot   -> RB / WR by the PLAYER's position, else other
+
+        A WR in FLEX2 is WR spend (the summary page's rule); a WR in BENCH3 is
+        bench spend (this page's rule, and the reason the two differ).
+
+        Two derived readouts the page leads with:
+
+        - **Bench outlook.** `headroom = wallet - remaining starter need`, where
+          the wallet is the real remaining budget and the starter need is what
+          the plan still says to spend on RB, WR and other. That is the money
+          that would survive to the bench if the rest of the draft went to plan,
+          and comparing it to the unspent bench target answers "am I going to
+          end with enough for a bench" BEFORE the bench is the only thing left.
+        - **RB/WR tilt.** The split you planned against the split you are
+          actually buying, in dollars off. This is the failure the page was
+          built for: meaning to lean RB and walking out WR-heavy.
+
+        `diff` is spend - target throughout, so NEGATIVE is the shortage.
         """
         draft = d.Draft.objects.filter(id=draft_id).first()
         if not draft:
             raise Http404
         drafter = d.Manager.objects.filter(draft_id=draft_id, drafter=True).first()
 
-        targets = {position: getattr(draft, field) or 0
-                   for position, field in POSITION_TARGET_FIELDS}
+        targets = {
+            "RB": draft.target_rb or 0,
+            "WR": draft.target_wr or 0,
+            "OTHER": draft.target_other or 0,
+            "BENCH": draft.target_bench or 0,
+        }
+        target_counts = {"RB": draft.target_rb_count or 0, "WR": draft.target_wr_count or 0}
 
-        actual_rows, planned_rows = {}, {}
-        positions_seen = []
-
-        def bucket(store, position):
-            if position not in positions_seen:
-                positions_seen.append(position)
-            return store.setdefault(position, {"spend": 0, "players": []})
+        buckets = {key: {"spend": 0, "players": []} for key in ALLOCATION_BUCKETS}
+        plan_buckets = {key: {"spend": 0, "players": []} for key in ALLOCATION_BUCKETS}
 
         if drafter:
             drafted = d.DraftPick.objects.filter(
@@ -452,11 +503,12 @@ class DraftReadService(BaseService):
             for pick in drafted:
                 player = pick.player
                 price = pick.price or 0
-                entry = bucket(actual_rows, player.position or "?")
+                entry = buckets[allocation_bucket(player.position, pick.position_slot)]
                 entry["spend"] += price
                 entry["players"].append({
                     "player_id": player.player_id,
                     "name": player.name,
+                    "position": player.position or "?",
                     "position_slot": pick.position_slot or "",
                     "price": price,
                 })
@@ -477,55 +529,105 @@ class DraftReadService(BaseService):
                 player = bpick.player
                 actual_price, drafted_by = drafted_prices.get(bpick.player_id, (0, ""))
                 price = actual_price or int(player.override_price or player.projected_price or 0)
-                entry = bucket(planned_rows, player.position or "?")
+                entry = plan_buckets[allocation_bucket(player.position, bpick.position)]
                 entry["spend"] += price
                 entry["players"].append({
                     "player_id": player.player_id,
                     "name": player.name,
+                    "position": player.position or "?",
                     "position_slot": bpick.position or "",
                     "price": price,
                     "is_drafted": bool(drafted_by),
                     "drafted_by": drafted_by,
                 })
 
-        # Canonical order first so the rows don't reshuffle between drafts; an
-        # unexpected position code is appended rather than dropped.
-        canonical = [position for position, _ in POSITION_TARGET_FIELDS]
-        positions = canonical + [p for p in positions_seen if p not in canonical]
-
-        rows = []
-        for position in positions:
-            target = targets.get(position, 0)
-            actual = actual_rows.get(position, {"spend": 0, "players": []})
-            planned = planned_rows.get(position, {"spend": 0, "players": []})
-            rows.append({
-                "position": position,
-                "target": target,
+        def row(key):
+            actual, planned = buckets[key], plan_buckets[key]
+            data = {
+                "key": key,
+                "target": targets[key],
                 "actual": actual["spend"],
                 "planned": planned["spend"],
-                "actual_diff": actual["spend"] - target,
-                "planned_diff": planned["spend"] - target,
+                "actual_diff": actual["spend"] - targets[key],
+                "planned_diff": planned["spend"] - targets[key],
                 "actual_count": len(actual["players"]),
                 "planned_count": len(planned["players"]),
                 "actual_players": actual["players"],
                 "planned_players": planned["players"],
-            })
+            }
+            if key in target_counts:
+                # Bodies are tracked separately from dollars because the two go
+                # wrong independently: one $40 RB instead of two $20s is on
+                # budget and a body light.
+                data["target_count"] = target_counts[key]
+                data["actual_count_diff"] = len(actual["players"]) - target_counts[key]
+                data["planned_count_diff"] = len(planned["players"]) - target_counts[key]
+            return data
 
-        actual_total = sum(row["actual"] for row in rows)
-        planned_total = sum(row["planned"] for row in rows)
+        rows = {key: row(key) for key in ALLOCATION_BUCKETS}
+        actual_total = sum(rows[key]["actual"] for key in ALLOCATION_BUCKETS)
+        planned_total = sum(rows[key]["planned"] for key in ALLOCATION_BUCKETS)
+
+        # Bench outlook. "Remaining starter need" is what the PLAN still says to
+        # spend, floored at 0 per bucket — being over at RB doesn't hand you
+        # money back, it just means that bucket asks for nothing more.
+        starter_need = sum(
+            max(0, rows[key]["target"] - rows[key]["actual"]) for key in STARTER_BUCKETS)
+        wallet = draft.starting_budget - actual_total
+        bench_remaining_target = max(0, rows["BENCH"]["target"] - rows["BENCH"]["actual"])
+        headroom = wallet - starter_need
+
+        # RB/WR tilt, starters only (bench bodies are bench money by this page's
+        # rule, and the plan's RB/WR dollars are a STARTER plan).
+        tilt_target = targets["RB"] + targets["WR"]
+        tilt_actual = rows["RB"]["actual"] + rows["WR"]["actual"]
+        planned_rb_share = (targets["RB"] / tilt_target) if tilt_target else None
+        actual_rb_share = (rows["RB"]["actual"] / tilt_actual) if tilt_actual else None
+        # Dollars your RB spend sits off the planned split, at the money you have
+        # ALREADY committed to RB+WR — the honest way to say "too WR-heavy"
+        # mid-draft, when the totals are nowhere near the plan yet.
+        tilt_dollars = (
+            round(rows["RB"]["actual"] - (tilt_actual * planned_rb_share))
+            if planned_rb_share is not None and tilt_actual else 0
+        )
+
         return {
             "draft_id": draft_id,
             "draft_name": draft.draft_name,
             "starting_budget": draft.starting_budget,
             "has_drafter": drafter is not None,
             "drafter_name": drafter.name if drafter else "",
-            "has_targets": any(targets.values()),
-            "positions": positions,
-            "rows": rows,
+            "has_targets": any(targets.values()) or any(target_counts.values()),
+            "targets": {
+                "target_rb": targets["RB"],
+                "target_rb_count": target_counts["RB"],
+                "target_wr": targets["WR"],
+                "target_wr_count": target_counts["WR"],
+                "target_other": targets["OTHER"],
+                "target_bench": targets["BENCH"],
+            },
+            "rows": [rows[key] for key in ALLOCATION_BUCKETS],
             "target_total": sum(targets.values()),
             "actual_total": actual_total,
             "planned_total": planned_total,
-            "budget_remaining": draft.starting_budget - actual_total,
+            "budget_remaining": wallet,
+            "bench_outlook": {
+                "target": rows["BENCH"]["target"],
+                "spent": rows["BENCH"]["actual"],
+                "remaining_target": bench_remaining_target,
+                "starter_need": starter_need,
+                "wallet": wallet,
+                "headroom": headroom,
+                "surplus": headroom - bench_remaining_target,
+                "on_track": headroom >= bench_remaining_target,
+            },
+            "tilt": {
+                "planned_rb_share": planned_rb_share,
+                "actual_rb_share": actual_rb_share,
+                "rb_actual": rows["RB"]["actual"],
+                "wr_actual": rows["WR"]["actual"],
+                "dollars": tilt_dollars,
+            },
         }
 
     def get_draft_summary(self, draft_id):
