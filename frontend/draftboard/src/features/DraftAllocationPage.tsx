@@ -321,7 +321,13 @@ function PlanEditor({
                 {/* Bench sits with the rest but is NOT in their total: it is a
                     carve-out inside those dollars (a bench RB is RB money). */}
                 <div className="flex items-center gap-2">
-                    <label className="text-xs font-bold text-gray-700" htmlFor="target_bench">Bench $</label>
+                    <label
+                        className="text-xs font-bold text-gray-700"
+                        htmlFor="target_bench"
+                        title="Held back for the 7 bench slots — part of the dollars above, not on top of them"
+                    >
+                        Bench $
+                    </label>
                     <input
                         id="target_bench"
                         type="number"
@@ -330,7 +336,6 @@ function PlanEditor({
                         value={draftTargets.target_bench}
                         onChange={(e) => set("target_bench", e.target.value)}
                     />
-                    <span className="text-xs text-gray-500">of the above, over 7 slots</span>
                 </div>
                 <div className="flex items-center gap-3 ml-auto">
                     {dirty && !saving && <span className="text-xs text-amber-700 font-semibold">unsaved changes</span>}
