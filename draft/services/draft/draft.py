@@ -12,7 +12,12 @@ from draft import models as d
 # WR are the steerable positions (dollars + bodies), OTHER is QB/TE/DEF together,
 # and BENCH is a SLOT bucket rather than a position one.
 ALLOCATION_BUCKETS = ("RB", "WR", "OTHER", "BENCH")
-STARTER_BUCKETS = ("RB", "WR", "OTHER")
+# The buckets that PARTITION the roster — every pick is in exactly one, so these
+# are the only ones whose dollars may be summed. BENCH overlaps them by slot.
+POSITION_BUCKETS = ("RB", "WR", "OTHER")
+# Bench is a fixed set of slots (BUDGET_POSITIONS), which is why it carries no
+# body target: the count is decided by the roster, not by the plan.
+BENCH_SLOTS = 7
 
 # The plan's six editable fields — the ONLY columns the allocation editor may
 # write, so that endpoint can never become a general draft-edit backdoor.
@@ -23,18 +28,21 @@ ALLOCATION_TARGET_FIELDS = (
 )
 
 
-def allocation_bucket(position, position_slot):
-    """Which allocation bucket a pick belongs to.
+def allocation_buckets(position, position_slot):
+    """Which allocation buckets a pick lands in — plural, and that is the point.
 
-    The BENCH slot wins over the player's position — a WR in BENCH3 is bench
-    money, not WR money. That is the one place this page's grouping departs from
-    the summary dashboard's "always the player's position", and it is deliberate:
-    the bench line is a reserve for whoever falls, so what they play is beside
-    the point.
+    RB / WR / OTHER PARTITION the roster by the player's position (a WR in FLEX2
+    is WR spend, the summary page's rule). BENCH cuts ACROSS that by slot: a RB
+    in BENCH2 is RB money AND bench money. The two questions are different — "how
+    much RB did I buy" counts every back on the roster, while "did I keep enough
+    back for the bench" counts every body in a BENCH slot whatever they play — so
+    the buckets deliberately overlap and their dollars must never simply be summed.
+    Totals come from the position buckets alone; BENCH is a subset view of them.
     """
+    position_bucket = position if position in ("RB", "WR") else "OTHER"
     if (position_slot or "").upper().startswith("BENCH"):
-        return "BENCH"
-    return position if position in ("RB", "WR") else "OTHER"
+        return (position_bucket, "BENCH")
+    return (position_bucket,)
 
 
 def validate_slot_eligibility(player, position_slot):
@@ -453,27 +461,27 @@ class DraftReadService(BaseService):
         them right up to the end — so they carry dollars AND a body count.
         QB/TE/DEF are one-and-done: once the slot is filled there is nothing to
         pivot, so they collapse into a single `target_other` reserve that exists
-        mostly so the bench math below can be honest. The bench is its own line
-        and is counted by SLOT, not by position: anyone dropped in a BENCH slot
-        is bench money, whatever they play — which is the whole point, since
-        bench-priced players come off the board at random moments.
+        mostly so the bench math below can be honest.
 
-        So every pick lands in exactly one bucket:
-
-            BENCH1..7        -> bench
-            any other slot   -> RB / WR by the PLAYER's position, else other
-
-        A WR in FLEX2 is WR spend (the summary page's rule); a WR in BENCH3 is
-        bench spend (this page's rule, and the reason the two differ).
+        **The bench OVERLAPS the position buckets rather than replacing them**
+        (see `allocation_buckets`): RB / WR / OTHER partition the roster by the
+        player's position, and BENCH cuts across by slot, so a RB in BENCH2 is
+        counted in both. The RB plan is total positional exposure — every back on
+        the roster, bench ones included — while the bench line asks a different
+        question, "did I keep enough money back for the last seven slots". Their
+        dollars therefore must NEVER be summed: `target_total` and `actual_total`
+        come from the position buckets alone, and the bench target is a carve-out
+        INSIDE them, not a fifth pile of money.
 
         Two derived readouts the page leads with:
 
-        - **Bench outlook.** `headroom = wallet - remaining starter need`, where
-          the wallet is the real remaining budget and the starter need is what
-          the plan still says to spend on RB, WR and other. That is the money
-          that would survive to the bench if the rest of the draft went to plan,
-          and comparing it to the unspent bench target answers "am I going to
-          end with enough for a bench" BEFORE the bench is the only thing left.
+        - **Bench outlook.** `headroom = wallet - starter_need`, where
+          `starter_need` is what the plan still wants at RB/WR/OTHER MINUS the
+          unspent bench carve-out (those remaining dollars include the bench buys
+          still to come). That is the money that would survive to the bench if
+          the rest of the draft went to plan, and comparing it to the unspent
+          bench target answers "am I going to end with enough for a bench" BEFORE
+          the bench is the only thing left.
         - **RB/WR tilt.** The split you planned against the split you are
           actually buying, in dollars off. This is the failure the page was
           built for: meaning to lean RB and walking out WR-heavy.
@@ -503,15 +511,16 @@ class DraftReadService(BaseService):
             for pick in drafted:
                 player = pick.player
                 price = pick.price or 0
-                entry = buckets[allocation_bucket(player.position, pick.position_slot)]
-                entry["spend"] += price
-                entry["players"].append({
+                row = {
                     "player_id": player.player_id,
                     "name": player.name,
                     "position": player.position or "?",
                     "position_slot": pick.position_slot or "",
                     "price": price,
-                })
+                }
+                for key in allocation_buckets(player.position, pick.position_slot):
+                    buckets[key]["spend"] += price
+                    buckets[key]["players"].append(row)
 
             budgeted = d.BudgetPlayer.objects.filter(
                 draft_id=draft_id, manager=drafter, status="budgeted"
@@ -529,9 +538,7 @@ class DraftReadService(BaseService):
                 player = bpick.player
                 actual_price, drafted_by = drafted_prices.get(bpick.player_id, (0, ""))
                 price = actual_price or int(player.override_price or player.projected_price or 0)
-                entry = plan_buckets[allocation_bucket(player.position, bpick.position)]
-                entry["spend"] += price
-                entry["players"].append({
+                row = {
                     "player_id": player.player_id,
                     "name": player.name,
                     "position": player.position or "?",
@@ -539,7 +546,10 @@ class DraftReadService(BaseService):
                     "price": price,
                     "is_drafted": bool(drafted_by),
                     "drafted_by": drafted_by,
-                })
+                }
+                for key in allocation_buckets(player.position, bpick.position):
+                    plan_buckets[key]["spend"] += price
+                    plan_buckets[key]["players"].append(row)
 
         def row(key):
             actual, planned = buckets[key], plan_buckets[key]
@@ -565,20 +575,28 @@ class DraftReadService(BaseService):
             return data
 
         rows = {key: row(key) for key in ALLOCATION_BUCKETS}
-        actual_total = sum(rows[key]["actual"] for key in ALLOCATION_BUCKETS)
-        planned_total = sum(rows[key]["planned"] for key in ALLOCATION_BUCKETS)
+        rows["BENCH"]["slot_count"] = BENCH_SLOTS
+        # ONLY the position buckets are summed — BENCH overlaps them, so adding
+        # it in would count every bench body twice.
+        actual_total = sum(rows[key]["actual"] for key in POSITION_BUCKETS)
+        planned_total = sum(rows[key]["planned"] for key in POSITION_BUCKETS)
 
-        # Bench outlook. "Remaining starter need" is what the PLAN still says to
-        # spend, floored at 0 per bucket — being over at RB doesn't hand you
-        # money back, it just means that bucket asks for nothing more.
-        starter_need = sum(
-            max(0, rows[key]["target"] - rows[key]["actual"]) for key in STARTER_BUCKETS)
+        # Bench outlook. `remaining_need` is what the PLAN still says to buy at
+        # RB/WR/OTHER, floored at 0 per bucket — being over at RB doesn't hand
+        # money back, it just means that bucket asks for nothing more. Those
+        # dollars INCLUDE the bench buys still to come (a bench RB is RB money),
+        # so the bench carve-out comes back out of them to leave what the
+        # STARTERS still need.
+        remaining_need = sum(
+            max(0, rows[key]["target"] - rows[key]["actual"]) for key in POSITION_BUCKETS)
         wallet = draft.starting_budget - actual_total
         bench_remaining_target = max(0, rows["BENCH"]["target"] - rows["BENCH"]["actual"])
+        starter_need = max(0, remaining_need - bench_remaining_target)
         headroom = wallet - starter_need
 
-        # RB/WR tilt, starters only (bench bodies are bench money by this page's
-        # rule, and the plan's RB/WR dollars are a STARTER plan).
+        # RB/WR tilt over ALL the backs and receivers on the roster, bench
+        # included — the RB/WR plan is total positional exposure, and a $4 bench
+        # back is still RB money you spent instead of on a receiver.
         tilt_target = targets["RB"] + targets["WR"]
         tilt_actual = rows["RB"]["actual"] + rows["WR"]["actual"]
         planned_rb_share = (targets["RB"] / tilt_target) if tilt_target else None
@@ -607,7 +625,10 @@ class DraftReadService(BaseService):
                 "target_bench": targets["BENCH"],
             },
             "rows": [rows[key] for key in ALLOCATION_BUCKETS],
-            "target_total": sum(targets.values()),
+            # Same reason as actual_total: the bench target is a carve-out INSIDE
+            # the position dollars, not a fifth pile of money.
+            "target_total": sum(targets[key] for key in POSITION_BUCKETS),
+            "bench_target": targets["BENCH"],
             "actual_total": actual_total,
             "planned_total": planned_total,
             "budget_remaining": wallet,
@@ -616,6 +637,9 @@ class DraftReadService(BaseService):
                 "spent": rows["BENCH"]["actual"],
                 "remaining_target": bench_remaining_target,
                 "starter_need": starter_need,
+                "remaining_need": remaining_need,
+                "slots_filled": rows["BENCH"]["actual_count"],
+                "slot_count": BENCH_SLOTS,
                 "wallet": wallet,
                 "headroom": headroom,
                 "surplus": headroom - bench_remaining_target,

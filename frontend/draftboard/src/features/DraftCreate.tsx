@@ -3,14 +3,15 @@ import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { draftCreate } from "../lib/data";
 
-// The allocation plan, in the order the allocation page prints it. Only RB and
-// WR carry a body COUNT — they are the positions you buy several of; QB/TE/DEF
-// share one reserve, and the bench is a dollar line over a fixed set of slots.
+// The allocation plan. RB/WR/QB-TE-DEF PARTITION the roster by position and are
+// what sums to the budget; only RB and WR carry a body COUNT, being the
+// positions you buy several of. The bench line is a CARVE-OUT inside those
+// dollars — a bench RB is RB money and bench money — so it is priced separately
+// below rather than added to the total.
 const PLAN_FIELDS = [
     { field: "target_rb", label: "RB $", count: "target_rb_count" },
     { field: "target_wr", label: "WR $", count: "target_wr_count" },
     { field: "target_other", label: "QB/TE/DEF $", count: null },
-    { field: "target_bench", label: "Bench $", count: null },
 ] as const;
 
 export default function DraftCreate() {
@@ -41,7 +42,7 @@ Norton`);
     const [targets, setTargets] = useState<Record<string, number>>({
         target_rb: 88, target_rb_count: 4,
         target_wr: 76, target_wr_count: 4,
-        target_other: 18,
+        target_other: 36,
         target_bench: 18,
     });
     const targetTotal = PLAN_FIELDS.reduce((sum, row) => sum + (targets[row.field] || 0), 0);
@@ -195,6 +196,23 @@ Norton`);
                                 {targetRemainder > 0 && ` — $${targetRemainder} unallocated`}
                                 {targetRemainder < 0 && ` — $${Math.abs(targetRemainder)} over budget`}
                             </p>
+                            <div className={"flex items-center gap-2 mt-3 pt-3 border-t"}>
+                                <span className={"w-24 text-sm font-bold text-gray-700"}>Bench $</span>
+                                <input
+                                    className={"appearance-none block w-24 bg-gray-200 text-gray-700 border rounded py-2 px-3 leading-tight focus:outline-none focus:bg-white"}
+                                    id="target_bench"
+                                    type="number"
+                                    min={0}
+                                    value={targets.target_bench}
+                                    onChange={(e) => setTargets({
+                                        ...targets,
+                                        target_bench: parseInt(e.target.value) || 0,
+                                    })}
+                                />
+                                <span className={"text-xs text-gray-500"}>
+                                    of the above, held back for the 7 bench slots
+                                </span>
+                            </div>
                         </div>
                     </div>
                     <div className={"flex flex-wrap -mx-3 mb-6"}>

@@ -2308,15 +2308,30 @@ class AllocationTests(TestCase):
     def row(self, allocation, key):
         return next(r for r in allocation["rows"] if r["key"] == key)
 
-    def test_flex_is_the_players_position_but_bench_is_bench(self):
+    def test_bench_overlaps_the_position_buckets_rather_than_replacing_them(self):
+        """A bench RB is RB money AND bench money — the two lines ask different
+        questions, so they deliberately double-count."""
         self.draft_player(make_player("Flex WR", "WR"), self.drafter, "FLEX1", price=30)
         self.draft_player(make_player("Bench WR", "WR"), self.drafter, "BENCH1", price=5)
 
         allocation = self.allocation()
 
-        self.assertEqual(self.row(allocation, "WR")["actual"], 30)
+        self.assertEqual(self.row(allocation, "WR")["actual"], 35)
+        self.assertEqual(self.row(allocation, "WR")["actual_count"], 2)
         self.assertEqual(self.row(allocation, "BENCH")["actual"], 5)
         self.assertEqual(self.row(allocation, "BENCH")["actual_count"], 1)
+
+    def test_totals_never_add_the_overlapping_bench_bucket(self):
+        self.draft_player(make_player("Bench RB", "RB"), self.drafter, "BENCH1", price=6)
+        self.draft_player(make_player("Start WR", "WR"), self.drafter, "WR1", price=40)
+
+        allocation = self.allocation()
+
+        self.assertEqual(allocation["actual_total"], 46)          # not 52
+        self.assertEqual(allocation["budget_remaining"], 154)
+        # The plan's total is the position lines; the bench line sits inside them.
+        self.assertEqual(allocation["target_total"], 182)
+        self.assertEqual(allocation["bench_target"], 18)
 
     def test_qb_te_def_pool_into_other(self):
         self.draft_player(make_player("A QB", "QB"), self.drafter, "QB1", price=8)
@@ -2347,37 +2362,45 @@ class AllocationTests(TestCase):
         self.assertEqual(self.row(allocation, "WR")["actual"], 0)
         self.assertEqual(allocation["budget_remaining"], 200)
 
-    def test_bench_outlook_is_wallet_minus_what_the_plan_still_wants(self):
+    def test_bench_outlook_takes_the_carve_out_out_of_the_remaining_need(self):
         # $60 of the $76 WR plan on one receiver; RB and other untouched.
         self.draft_player(make_player("Big WR", "WR"), self.drafter, "WR1", price=60)
 
         outlook = self.allocation()["bench_outlook"]
 
-        # still to spend per plan: RB 88 + WR 16 + other 18 = 122; wallet = 140
-        self.assertEqual(outlook["starter_need"], 122)
-        self.assertEqual(outlook["wallet"], 140)
-        self.assertEqual(outlook["headroom"], 18)
+        # Plan still wants RB 88 + WR 16 + other 18 = 122, which INCLUDES the $18
+        # of bench buys still to come — so starters alone need 104.
+        self.assertEqual(outlook["remaining_need"], 122)
         self.assertEqual(outlook["remaining_target"], 18)
+        self.assertEqual(outlook["starter_need"], 104)
+        self.assertEqual(outlook["wallet"], 140)
+        self.assertEqual(outlook["headroom"], 36)
         self.assertTrue(outlook["on_track"])
-        self.assertEqual(outlook["surplus"], 0)
+        self.assertEqual(outlook["surplus"], 18)
 
     def test_bench_outlook_goes_short_and_counts_bench_spend(self):
-        self.draft_player(make_player("Reach WR", "WR"), self.drafter, "WR1", price=90)
+        self.draft_player(make_player("Reach WR", "WR"), self.drafter, "WR1", price=130)
         self.draft_player(make_player("Bench RB", "RB"), self.drafter, "BENCH1", price=4)
 
         outlook = self.allocation()["bench_outlook"]
 
-        # WR is over, so it asks for nothing more: 88 RB + 0 WR + 18 other = 106.
-        self.assertEqual(outlook["starter_need"], 106)
-        self.assertEqual(outlook["wallet"], 106)
+        # WR is over, so it asks for nothing more: RB 84 (88 − the bench back) +
+        # 0 WR + 18 other = 102, less the $14 bench carve-out still unspent.
+        self.assertEqual(outlook["remaining_need"], 102)
+        self.assertEqual(outlook["starter_need"], 88)
+        self.assertEqual(outlook["wallet"], 66)
         self.assertEqual(outlook["spent"], 4)
+        self.assertEqual(outlook["slots_filled"], 1)
+        self.assertEqual(outlook["slot_count"], 7)
         self.assertEqual(outlook["remaining_target"], 14)
-        self.assertEqual(outlook["headroom"], 0)
+        self.assertEqual(outlook["headroom"], -22)
         self.assertFalse(outlook["on_track"])
-        self.assertEqual(outlook["surplus"], -14)
+        self.assertEqual(outlook["surplus"], -36)
 
     def test_tilt_measures_the_split_against_what_is_committed(self):
-        self.draft_player(make_player("Tilt RB", "RB"), self.drafter, "RB1", price=20)
+        """Bench backs and receivers count — the RB/WR plan is total exposure."""
+        self.draft_player(make_player("Tilt RB", "RB"), self.drafter, "RB1", price=16)
+        self.draft_player(make_player("Bench RB", "RB"), self.drafter, "BENCH1", price=4)
         self.draft_player(make_player("Tilt WR", "WR"), self.drafter, "WR1", price=80)
 
         tilt = self.allocation()["tilt"]
@@ -2421,7 +2444,8 @@ class AllocationTests(TestCase):
 
         self.assertEqual([r["key"] for r in allocation["rows"]], ["RB", "WR", "OTHER", "BENCH"])
         self.assertTrue(allocation["has_targets"])
-        self.assertEqual(allocation["target_total"], 200)
+        self.assertEqual(allocation["target_total"], 182)   # RB + WR + other only
+        self.assertEqual(self.row(allocation, "BENCH")["slot_count"], 7)
 
     def test_untargeted_draft_says_so(self):
         plain = Draft.objects.create(year=2026, draft_name="no plan", starting_budget=200)

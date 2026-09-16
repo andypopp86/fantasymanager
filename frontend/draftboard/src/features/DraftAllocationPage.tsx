@@ -12,10 +12,13 @@ import type {
 // positions worth steering: you buy several, and money moves between them right
 // to the end — so they carry dollars AND a body count. QB/TE/DEF are
 // one-and-done (fill the slot and there is nothing to pivot), so they share a
-// single `other` reserve that exists mostly so the bench math can be honest. The
-// bench is its own dollar line counted by SLOT, not position — anyone dropped in
-// a BENCH slot is bench money, which is the point, since bench-priced players
-// come off the board at random moments.
+// single `other` reserve that exists mostly so the bench math can be honest.
+//
+// RB / WR / OTHER PARTITION the roster by position; BENCH OVERLAPS them by slot.
+// A RB in BENCH2 is RB money and bench money both, because the two lines answer
+// different questions ("how much RB did I buy" vs "did I keep enough back for
+// the last seven slots"). So their dollars are never summed: the totals come
+// from the position buckets, and the bench target is a carve-out inside them.
 //
 // The plan is EDITABLE here, mid-draft: spend $60 of a $70 WR plan on one
 // receiver and the rest of your WRs get cheap by definition. That is a re-plan,
@@ -46,10 +49,10 @@ const BUCKET_LABELS: Record<AllocationBucket, string> = {
     BENCH: "Bench",
 };
 const BUCKET_NOTES: Record<AllocationBucket, string> = {
-    RB: "Starter slots only — a RB in a BENCH slot is bench money.",
-    WR: "Starter slots only — a WR in a BENCH slot is bench money.",
+    RB: "Every back on the roster, bench ones included.",
+    WR: "Every receiver on the roster, bench ones included.",
     OTHER: "One reserve, not three lines: these fill once and can't be pivoted.",
-    BENCH: "By SLOT, not position — whoever lands in BENCH1-7 counts here.",
+    BENCH: "By SLOT — whoever lands in BENCH1-7, and they also count at their position above.",
 };
 
 // Deviation from plan, not over/under PAY (that's the summary page, where red is
@@ -72,12 +75,12 @@ const percent = (share: number) => `${Math.round(share * 100)}%`;
 const CARD = "bg-white rounded-lg shadow-sm border border-gray-200";
 const CARD_TITLE = "text-sm font-bold text-gray-800 uppercase tracking-wide";
 
-// The plan editor's six fields, laid out the way they're read.
+// The plan editor's fields. Only these three sum to the budget — the bench line
+// is priced separately below because it is a carve-out inside them.
 const PLAN_FIELDS: { field: keyof AllocationTargets, label: string, count?: keyof AllocationTargets }[] = [
     { field: "target_rb", label: "RB $", count: "target_rb_count" },
     { field: "target_wr", label: "WR $", count: "target_wr_count" },
     { field: "target_other", label: "QB/TE/DEF $" },
-    { field: "target_bench", label: "Bench $" },
 ];
 
 function StatTile({ label, value, hint, color }: { label: string, value: string, hint?: string, color?: string }) {
@@ -121,8 +124,9 @@ function BenchOutlookWidget({ outlook }: { outlook: DraftAllocationOutput["bench
             </p>
             <div className="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-600 space-y-0.5">
                 <div className="flex justify-between"><span>Wallet</span><span className="font-semibold">{money(outlook.wallet)}</span></div>
-                <div className="flex justify-between"><span>− starters still to buy (per plan)</span><span className="font-semibold">{money(outlook.starter_need)}</span></div>
+                <div className="flex justify-between"><span>− starters still to buy (plan, less the bench carve-out)</span><span className="font-semibold">{money(outlook.starter_need)}</span></div>
                 <div className="flex justify-between"><span>Bench spent so far</span><span className="font-semibold">{money(outlook.spent)} of {money(outlook.target)}</span></div>
+                <div className="flex justify-between"><span>Bench slots filled</span><span className="font-semibold">{outlook.slots_filled} of {outlook.slot_count}</span></div>
             </div>
         </div>
     );
@@ -139,8 +143,9 @@ function TiltWidget({ tilt }: { tilt: DraftAllocationOutput["tilt"] }) {
         <div className={`${CARD} p-4`}>
             <h2 className={CARD_TITLE}>RB / WR tilt</h2>
             <p className="text-xs text-gray-500 mb-2">
-                Starter dollars only. Measured at what you have already committed to RB+WR, so it
-                reads straight rather than waiting for the plan's totals.
+                Every back and receiver on the roster, bench ones included. Measured at what you
+                have already committed to RB+WR, so it reads straight rather than waiting for the
+                plan's totals.
             </p>
 
             {plannedRb === null && <p className="text-sm text-gray-600">No RB/WR dollars planned yet.</p>}
@@ -315,9 +320,10 @@ function PlanEditor({
 
     const total = PLAN_FIELDS.reduce((sum, row) => sum + (draftTargets[row.field] || 0), 0);
     const remainder = startingBudget - total;
-    const dirty = PLAN_FIELDS.some((row) =>
-        draftTargets[row.field] !== targets[row.field]
-        || (row.count && draftTargets[row.count] !== targets[row.count]));
+    const dirty = draftTargets.target_bench !== targets.target_bench
+        || PLAN_FIELDS.some((row) =>
+            draftTargets[row.field] !== targets[row.field]
+            || (row.count && draftTargets[row.count] !== targets[row.count]));
 
     const set = (field: keyof AllocationTargets, value: string) =>
         setDraftTargets({ ...draftTargets, [field]: Math.max(0, parseInt(value) || 0) });
@@ -377,6 +383,20 @@ function PlanEditor({
                     {remainder < 0 && ` — ${money(Math.abs(remainder))} over budget`}
                 </span>
             </div>
+            {/* Separate from the three above, and NOT added to their total: the
+                bench line is a carve-out inside them (a bench RB is RB money). */}
+            <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100">
+                <label className="text-xs font-bold text-gray-700 w-24" htmlFor="target_bench">Bench $</label>
+                <input
+                    id="target_bench"
+                    type="number"
+                    min={0}
+                    className="w-20 bg-gray-100 border rounded py-1 px-2 text-sm"
+                    value={draftTargets.target_bench}
+                    onChange={(e) => set("target_bench", e.target.value)}
+                />
+                <span className="text-xs text-gray-500">of the above, held back for the 7 bench slots</span>
+            </div>
         </div>
     );
 }
@@ -413,6 +433,10 @@ export default function DraftAllocationPage() {
         () => Math.max(1, ...rows.map((row) => Math.max(row.target, row.actual, row.planned))),
         [rows],
     );
+    // RB and WR lead: they are the only two you can still steer. The other
+    // reserve and the bench are check-on lines and sit below the tilt.
+    const steerable = rows.filter((row) => row.key === "RB" || row.key === "WR");
+    const secondary = rows.filter((row) => row.key === "OTHER" || row.key === "BENCH");
 
     return (
         <div className="min-h-screen bg-gray-100 py-4 px-2 sm:px-4">
@@ -454,9 +478,23 @@ export default function DraftAllocationPage() {
                             savedAt={savedAt}
                         />
 
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        {/* Order is the order you read them in mid-draft: the two
+                            positions you can still steer, then the split between
+                            them, then the lines you only check on, then the
+                            wallet arithmetic. */}
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                            {steerable.map((row) => (
+                                <BucketCard key={row.key} row={row} scale={scale} hasTargets={allocation.has_targets} />
+                            ))}
+                        </div>
+
+                        <TiltWidget tilt={allocation.tilt} />
+
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
                             <BenchOutlookWidget outlook={allocation.bench_outlook} />
-                            <TiltWidget tilt={allocation.tilt} />
+                            {secondary.map((row) => (
+                                <BucketCard key={row.key} row={row} scale={scale} hasTargets={allocation.has_targets} />
+                            ))}
                         </div>
 
                         <div className="flex flex-wrap gap-3">
@@ -478,19 +516,10 @@ export default function DraftAllocationPage() {
                             <StatTile
                                 label="Allocated"
                                 value={allocation.has_targets ? money(allocation.target_total) : "—"}
-                                hint={allocation.has_targets ? "the plan above" : "no plan entered"}
+                                hint={allocation.has_targets
+                                    ? `RB + WR + QB/TE/DEF, ${money(allocation.bench_target)} of it bench`
+                                    : "no plan entered"}
                             />
-                        </div>
-
-                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-                            {rows.map((row) => (
-                                <BucketCard
-                                    key={row.key}
-                                    row={row}
-                                    scale={scale}
-                                    hasTargets={allocation.has_targets}
-                                />
-                            ))}
                         </div>
 
                         <div className={`${CARD} p-4`}>
@@ -511,7 +540,10 @@ export default function DraftAllocationPage() {
                                     <tbody>
                                         {rows.map((row) => (
                                             <tr key={row.key} className="border-b border-gray-100 last:border-0">
-                                                <td className="py-1 pr-2 font-semibold text-gray-800">{BUCKET_LABELS[row.key]}</td>
+                                                <td className="py-1 pr-2 font-semibold text-gray-800">
+                                                    {BUCKET_LABELS[row.key]}
+                                                    {row.key === "BENCH" && <span className="ml-1 font-normal text-gray-400">(subset)</span>}
+                                                </td>
                                                 <td className="text-right py-1 px-2">{allocation.has_targets ? money(row.target) : "—"}</td>
                                                 <td className="text-right py-1 px-2 font-semibold">{money(row.actual)}</td>
                                                 <td className={`text-right py-1 px-2 font-semibold ${allocation.has_targets ? diffText(row.actual_diff) : "text-gray-400"}`}>
@@ -541,11 +573,12 @@ export default function DraftAllocationPage() {
                                 </table>
                             </div>
                             <p className="text-xs text-gray-500 mt-2">
-                                A pick in BENCH1-7 is bench money whatever he plays; every other pick is
-                                RB / WR by the player's position (a WR in FLEX2 is WR spend), with
-                                QB/TE/DEF pooled. "Plan" is the budget panel's own arithmetic: the actual
-                                price where a budgeted player is already off the board, the projected
-                                price otherwise.
+                                RB / WR / QB-TE-DEF split the roster by the player's position (a WR in
+                                FLEX2 is WR spend) and are what the total adds up. <strong>Bench
+                                overlaps them</strong> — a RB in BENCH2 is counted in both — so it is
+                                left out of the total rather than double-counted. "Plan" is the budget
+                                panel's own arithmetic: the actual price where a budgeted player is
+                                already off the board, the projected price otherwise.
                             </p>
                         </div>
                     </div>

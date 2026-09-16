@@ -1021,17 +1021,22 @@ fields, and the asymmetry is the whole design:
 | QB/TE/DEF | one pooled `target_other` | one-and-done: fill the slot and there is nothing to pivot. It exists mostly so the bench math can be honest |
 | Bench | `target_bench`, dollars only | a fixed set of SLOTS, so a count would say nothing |
 
-**Bucketing is slot-first, then position** (`allocation_bucket`):
+**The buckets OVERLAP, and that is load-bearing** (`allocation_buckets`, plural):
 
 ```
-BENCH1..7       -> BENCH      (whatever the player plays)
-any other slot  -> RB / WR by the PLAYER's position, else OTHER
+every pick      -> RB / WR by the PLAYER's position, else OTHER   (a partition)
+picks in BENCH1..7  ALSO -> BENCH                                  (a subset)
 ```
 
-A WR in FLEX2 is WR spend (the summary page's rule); **a WR in BENCH3 is bench
-spend** — the one place this page departs from "always the player's position",
-because the bench line is a reserve for whoever falls and what they play is
-beside the point.
+A WR in FLEX2 is WR spend (the summary page's rule) and **a WR in BENCH3 is WR
+spend AND bench spend**, because the two lines answer different questions: the RB
+plan is total positional exposure (every back on the roster, bench ones included)
+while the bench line asks "did I keep enough money back for the last seven
+slots". So their dollars must NEVER be summed — `target_total` / `actual_total`
+come from the position buckets alone (`POSITION_BUCKETS`), and `target_bench` is
+a carve-out INSIDE them, not a fifth pile of money. The create form and the
+page's editor both price the bench separately from the running total for exactly
+this reason, and the numbers table marks the bench row "(subset)".
 
 **The plan is EDITABLE mid-draft**, unlike target tiers or the draft's limits.
 That is the point of the page, not a convenience: spend $60 of a $70 WR plan on
@@ -1057,15 +1062,19 @@ budgeted player an OPPONENT took is priced at what he actually went for
 
 Two derived readouts the page leads with, and both are easy to get subtly wrong:
 
-- **Bench outlook** — `headroom = wallet − starter_need`, where `starter_need` is
-  `Σ max(0, target − actual)` over RB, WR and OTHER. The `max(0, …)` is
-  load-bearing: being OVER at RB doesn't hand money back, that bucket just asks
-  for nothing more. `on_track` compares headroom to the UNSPENT bench target, so
-  the question "will I still have bench money" gets answered while there is still
-  time to act, not when the bench is all that's left.
-- **RB/WR tilt** — planned split vs. actual split, **starter dollars only**
-  (bench bodies are bench money by the rule above, and the RB/WR plan is a
-  starter plan). `dollars` is measured against what is ALREADY committed to
+- **Bench outlook** — `remaining_need = Σ max(0, target − actual)` over RB, WR
+  and OTHER; `starter_need = max(0, remaining_need − unspent bench target)`;
+  `headroom = wallet − starter_need`. Both subtractions are load-bearing: the
+  per-bucket `max(0, …)` because being OVER at RB doesn't hand money back (that
+  bucket just asks for nothing more), and the bench one because those remaining
+  position dollars INCLUDE the bench buys still to come — without it the carve-out
+  is counted twice and the page always reads short. `on_track` compares headroom
+  to the unspent bench target, so "will I still have bench money" is answered
+  while there is time to act, not when the bench is all that's left.
+- **RB/WR tilt** — planned split vs. actual split over **every back and receiver
+  on the roster, bench included** (the RB/WR plan is total exposure, and a $4
+  bench back is still RB money spent instead of on a receiver).
+  `dollars` is measured against what is ALREADY committed to
   RB+WR (`rb_actual − committed × planned_rb_share`), not against the plan's
   totals, so it reads straight from the first pick instead of showing a huge
   fake gap all draft. Positive is RB-heavy, negative WR-heavy; shares are `null`
@@ -1086,9 +1095,14 @@ made elsewhere isn't masked by the form's local state. Colour polarity is NOT th
 summary page's: there red means overpay, here **red means SHORT**, because the
 shortage is what this page was built to catch.
 
-Tests: `draft/tests.py::AllocationTests` covers bench-slot-beats-position,
-QB/TE/DEF pooling, dollars-vs-bodies independence, opponent picks excluded, the
-bench outlook (both on-track and short, including the `max(0, …)` floor), the
+**Page order is the order you read it mid-draft**: the plan editor, then the two
+steerable positions (RB, WR), then the tilt between them, then the check-on lines
+(bench outlook + QB/TE/DEF + bench), and the wallet arithmetic last.
+
+Tests: `draft/tests.py::AllocationTests` covers the bench overlap and that the
+totals don't double-count it, QB/TE/DEF pooling, dollars-vs-bodies independence,
+opponent picks excluded, the bench outlook (on-track and short, including both
+floors and the carve-out subtraction), the
 tilt against committed dollars, the plan's price rule (with the opponent-took-him
 case), override precedence, the fixed bucket order, the no-plan and no-drafter
 cases, and that the editor writes only the six plan fields.

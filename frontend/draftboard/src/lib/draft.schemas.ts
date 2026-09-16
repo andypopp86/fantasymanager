@@ -563,8 +563,10 @@ export interface DraftPlaybackOutput {
 // ---- Allocation plan (/draft/:draftId/allocation) ---------------------------
 // GET/POST /api/drafts/draft/<id>/allocation/ — the DRAFTER's draft measured
 // against a plan that is deliberately NOT one line per position: only RB and WR
-// are steerable (dollars AND bodies), QB/TE/DEF collapse into one `other`
-// reserve, and BENCH is a SLOT bucket — a WR in BENCH3 is bench money.
+// are steerable (dollars AND bodies), and QB/TE/DEF collapse into one `other`
+// reserve. RB/WR/OTHER PARTITION the roster by position; BENCH OVERLAPS them by
+// slot (a RB in BENCH2 is counted in both), so bench dollars are never added to
+// the totals — the bench target is a carve-out inside the position dollars.
 // `*_diff` is spend − target, so NEGATIVE is the shortage.
 
 // The six editable plan fields; POSTing them rewrites the plan and returns the
@@ -610,6 +612,8 @@ export type AllocationRow = {
     target_count?: number,
     actual_count_diff?: number,
     planned_count_diff?: number,
+    // BENCH only: how many bench slots the roster has at all.
+    slot_count?: number,
 }
 
 // "Will I still have bench money." headroom = wallet − what the plan still says
@@ -618,17 +622,23 @@ export type AllocationBenchOutlook = {
     target: number,
     spent: number,
     remaining_target: number,
+    // What the plan still wants at RB/WR/OTHER (remaining_need) and that figure
+    // less the unspent bench carve-out, which is what the STARTERS still need.
+    remaining_need: number,
     starter_need: number,
     wallet: number,
     headroom: number,
     surplus: number,
     on_track: boolean,
+    slots_filled: number,
+    slot_count: number,
 }
 
-// The RB/WR split you planned against the one you are buying. `dollars` is how
-// far your RB spend sits off the planned split at the money already committed
-// to RB+WR — positive is RB-heavy, negative WR-heavy. Shares are null before
-// there is anything to divide.
+// The RB/WR split you planned against the one you are buying, over every back
+// and receiver on the roster (bench included). `dollars` is how far your RB
+// spend sits off the planned split at the money already committed to RB+WR —
+// positive is RB-heavy, negative WR-heavy. Shares are null before there is
+// anything to divide.
 export type AllocationTilt = {
     planned_rb_share: number | null,
     actual_rb_share: number | null,
@@ -646,7 +656,9 @@ export interface DraftAllocationOutput {
     has_targets: boolean,
     targets: AllocationTargets,
     rows: AllocationRow[],
+    // Position buckets only — bench overlaps them and would double-count.
     target_total: number,
+    bench_target: number,
     actual_total: number,
     planned_total: number,
     budget_remaining: number,
