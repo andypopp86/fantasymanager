@@ -149,12 +149,14 @@ function TiltWidget({ tilt }: { tilt: DraftAllocationOutput["tilt"] }) {
             </p>
 
             {plannedRb === null && <p className="text-sm text-gray-600">No RB/WR dollars planned yet.</p>}
+            {/* Actual first: what you are actually buying is the reading, and the
+                plan underneath is what you check it against. */}
             {plannedRb !== null && (
                 <div className="space-y-2">
-                    <TiltBar label="Planned" rbShare={plannedRb} />
                     {actualRb === null
                         ? <p className="text-sm text-gray-600">Nothing drafted at RB or WR yet.</p>
                         : <TiltBar label="Actual" rbShare={actualRb} />}
+                    <TiltBar label="Planned" rbShare={plannedRb} />
                 </div>
             )}
 
