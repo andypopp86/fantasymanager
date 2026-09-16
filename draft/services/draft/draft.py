@@ -473,18 +473,10 @@ class DraftReadService(BaseService):
         come from the position buckets alone, and the bench target is a carve-out
         INSIDE them, not a fifth pile of money.
 
-        Two derived readouts the page leads with:
-
-        - **Bench outlook.** `headroom = wallet - starter_need`, where
-          `starter_need` is what the plan still wants at RB/WR/OTHER MINUS the
-          unspent bench carve-out (those remaining dollars include the bench buys
-          still to come). That is the money that would survive to the bench if
-          the rest of the draft went to plan, and comparing it to the unspent
-          bench target answers "am I going to end with enough for a bench" BEFORE
-          the bench is the only thing left.
-        - **RB/WR tilt.** The split you planned against the split you are
-          actually buying, in dollars off. This is the failure the page was
-          built for: meaning to lean RB and walking out WR-heavy.
+        The derived readout the page leads with is the **RB/WR tilt**: the split
+        you planned against the split you are actually buying, in dollars off.
+        This is the failure the page was built for — meaning to lean RB and
+        walking out WR-heavy.
 
         `diff` is spend - target throughout, so NEGATIVE is the shortage.
         """
@@ -581,18 +573,7 @@ class DraftReadService(BaseService):
         actual_total = sum(rows[key]["actual"] for key in POSITION_BUCKETS)
         planned_total = sum(rows[key]["planned"] for key in POSITION_BUCKETS)
 
-        # Bench outlook. `remaining_need` is what the PLAN still says to buy at
-        # RB/WR/OTHER, floored at 0 per bucket — being over at RB doesn't hand
-        # money back, it just means that bucket asks for nothing more. Those
-        # dollars INCLUDE the bench buys still to come (a bench RB is RB money),
-        # so the bench carve-out comes back out of them to leave what the
-        # STARTERS still need.
-        remaining_need = sum(
-            max(0, rows[key]["target"] - rows[key]["actual"]) for key in POSITION_BUCKETS)
         wallet = draft.starting_budget - actual_total
-        bench_remaining_target = max(0, rows["BENCH"]["target"] - rows["BENCH"]["actual"])
-        starter_need = max(0, remaining_need - bench_remaining_target)
-        headroom = wallet - starter_need
 
         # RB/WR tilt over ALL the backs and receivers on the roster, bench
         # included — the RB/WR plan is total positional exposure, and a $4 bench
@@ -632,19 +613,6 @@ class DraftReadService(BaseService):
             "actual_total": actual_total,
             "planned_total": planned_total,
             "budget_remaining": wallet,
-            "bench_outlook": {
-                "target": rows["BENCH"]["target"],
-                "spent": rows["BENCH"]["actual"],
-                "remaining_target": bench_remaining_target,
-                "starter_need": starter_need,
-                "remaining_need": remaining_need,
-                "slots_filled": rows["BENCH"]["actual_count"],
-                "slot_count": BENCH_SLOTS,
-                "wallet": wallet,
-                "headroom": headroom,
-                "surplus": headroom - bench_remaining_target,
-                "on_track": headroom >= bench_remaining_target,
-            },
             "tilt": {
                 "planned_rb_share": planned_rb_share,
                 "actual_rb_share": actual_rb_share,

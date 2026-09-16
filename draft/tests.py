@@ -2362,40 +2362,18 @@ class AllocationTests(TestCase):
         self.assertEqual(self.row(allocation, "WR")["actual"], 0)
         self.assertEqual(allocation["budget_remaining"], 200)
 
-    def test_bench_outlook_takes_the_carve_out_out_of_the_remaining_need(self):
-        # $60 of the $76 WR plan on one receiver; RB and other untouched.
-        self.draft_player(make_player("Big WR", "WR"), self.drafter, "WR1", price=60)
-
-        outlook = self.allocation()["bench_outlook"]
-
-        # Plan still wants RB 88 + WR 16 + other 18 = 122, which INCLUDES the $18
-        # of bench buys still to come — so starters alone need 104.
-        self.assertEqual(outlook["remaining_need"], 122)
-        self.assertEqual(outlook["remaining_target"], 18)
-        self.assertEqual(outlook["starter_need"], 104)
-        self.assertEqual(outlook["wallet"], 140)
-        self.assertEqual(outlook["headroom"], 36)
-        self.assertTrue(outlook["on_track"])
-        self.assertEqual(outlook["surplus"], 18)
-
-    def test_bench_outlook_goes_short_and_counts_bench_spend(self):
-        self.draft_player(make_player("Reach WR", "WR"), self.drafter, "WR1", price=130)
+    def test_bench_row_counts_slot_spend_and_knows_its_slot_count(self):
         self.draft_player(make_player("Bench RB", "RB"), self.drafter, "BENCH1", price=4)
+        self.draft_player(make_player("Bench QB", "QB"), self.drafter, "BENCH2", price=2)
 
-        outlook = self.allocation()["bench_outlook"]
+        row = self.row(self.allocation(), "BENCH")
 
-        # WR is over, so it asks for nothing more: RB 84 (88 − the bench back) +
-        # 0 WR + 18 other = 102, less the $14 bench carve-out still unspent.
-        self.assertEqual(outlook["remaining_need"], 102)
-        self.assertEqual(outlook["starter_need"], 88)
-        self.assertEqual(outlook["wallet"], 66)
-        self.assertEqual(outlook["spent"], 4)
-        self.assertEqual(outlook["slots_filled"], 1)
-        self.assertEqual(outlook["slot_count"], 7)
-        self.assertEqual(outlook["remaining_target"], 14)
-        self.assertEqual(outlook["headroom"], -22)
-        self.assertFalse(outlook["on_track"])
-        self.assertEqual(outlook["surplus"], -36)
+        self.assertEqual(row["actual"], 6)
+        self.assertEqual(row["actual_count"], 2)
+        self.assertEqual(row["actual_diff"], -12)     # $18 planned, $6 spent
+        self.assertEqual(row["slot_count"], 7)
+        # A slot bucket carries no body target — the roster decides the count.
+        self.assertNotIn("target_count", row)
 
     def test_tilt_measures_the_split_against_what_is_committed(self):
         """Bench backs and receivers count — the RB/WR plan is total exposure."""

@@ -612,26 +612,9 @@ export type AllocationRow = {
     target_count?: number,
     actual_count_diff?: number,
     planned_count_diff?: number,
-    // BENCH only: how many bench slots the roster has at all.
+    // BENCH only: how many bench slots the roster has at all — the bench line is
+    // a fixed set of slots, which is why it carries no body TARGET.
     slot_count?: number,
-}
-
-// "Will I still have bench money." headroom = wallet − what the plan still says
-// to spend on starters; on_track compares it to the unspent bench target.
-export type AllocationBenchOutlook = {
-    target: number,
-    spent: number,
-    remaining_target: number,
-    // What the plan still wants at RB/WR/OTHER (remaining_need) and that figure
-    // less the unspent bench carve-out, which is what the STARTERS still need.
-    remaining_need: number,
-    starter_need: number,
-    wallet: number,
-    headroom: number,
-    surplus: number,
-    on_track: boolean,
-    slots_filled: number,
-    slot_count: number,
 }
 
 // The RB/WR split you planned against the one you are buying, over every back
@@ -662,6 +645,5 @@ export interface DraftAllocationOutput {
     actual_total: number,
     planned_total: number,
     budget_remaining: number,
-    bench_outlook: AllocationBenchOutlook,
     tilt: AllocationTilt,
 }

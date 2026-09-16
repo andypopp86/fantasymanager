@@ -61,7 +61,6 @@ const BUCKET_NOTES: Record<AllocationBucket, string> = {
 const SHORT_COLOR = "#b91c1c";
 const OVER_COLOR = "#b45309";
 const ON_PLAN_COLOR = "#6b7280";
-const GOOD_COLOR = "#15803d";
 const diffColor = (diff: number) => (diff < 0 ? SHORT_COLOR : diff > 0 ? OVER_COLOR : ON_PLAN_COLOR);
 const diffText = (diff: number) =>
     diff < 0 ? "text-red-700" : diff > 0 ? "text-amber-700" : "text-gray-500";
@@ -93,46 +92,7 @@ function StatTile({ label, value, hint, color }: { label: string, value: string,
     );
 }
 
-// Headline 1 — will there still be bench money. headroom is the wallet minus
-// what the plan still says to spend on starters, so it answers the question
-// BEFORE the bench is the only thing left to buy.
-function BenchOutlookWidget({ outlook }: { outlook: DraftAllocationOutput["bench_outlook"] }) {
-    const ok = outlook.on_track;
-    return (
-        <div className={`${CARD} p-4`}>
-            <div className="flex items-baseline justify-between gap-2 flex-wrap">
-                <h2 className={CARD_TITLE}>Bench outlook</h2>
-                <span
-                    className="rounded px-2 py-0.5 text-xs font-bold text-white"
-                    style={{ backgroundColor: ok ? GOOD_COLOR : SHORT_COLOR }}
-                >
-                    {ok ? "ON TRACK" : "SHORT"}
-                </span>
-            </div>
-            <p className="text-3xl font-bold mt-1" style={{ color: ok ? GOOD_COLOR : SHORT_COLOR }}>
-                {money(outlook.headroom)}
-            </p>
-            <p className="text-xs text-gray-600">
-                left for the bench if the rest of the draft goes to plan
-                {outlook.remaining_target > 0 && ` — you want ${money(outlook.remaining_target)} more there`}
-                {outlook.remaining_target === 0 && " — the bench line is already covered"}
-            </p>
-            <p className={`text-sm font-semibold mt-1 ${ok ? "text-green-700" : "text-red-700"}`}>
-                {ok
-                    ? `${money(outlook.surplus)} to spare`
-                    : `${money(Math.abs(outlook.surplus))} short of the bench plan`}
-            </p>
-            <div className="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-600 space-y-0.5">
-                <div className="flex justify-between"><span>Wallet</span><span className="font-semibold">{money(outlook.wallet)}</span></div>
-                <div className="flex justify-between"><span>− starters still to buy (plan, less the bench carve-out)</span><span className="font-semibold">{money(outlook.starter_need)}</span></div>
-                <div className="flex justify-between"><span>Bench spent so far</span><span className="font-semibold">{money(outlook.spent)} of {money(outlook.target)}</span></div>
-                <div className="flex justify-between"><span>Bench slots filled</span><span className="font-semibold">{outlook.slots_filled} of {outlook.slot_count}</span></div>
-            </div>
-        </div>
-    );
-}
-
-// Headline 2 — the RB/WR tilt: the split you planned against the one you're
+// The headline widget — the RB/WR tilt: the split you planned against the one you're
 // buying. This is the failure the page exists for.
 function TiltWidget({ tilt }: { tilt: DraftAllocationOutput["tilt"] }) {
     const plannedRb = tilt.planned_rb_share;
@@ -263,6 +223,7 @@ function BucketCard({ row, scale, hasTargets }: { row: AllocationRow, scale: num
                     <span className="text-xs text-gray-500">
                         target {hasTargets ? money(row.target) : "—"}
                         {tracksBodies && hasTargets && ` over ${row.target_count} players`}
+                        {row.slot_count !== undefined && ` over ${row.slot_count} slots — ${row.actual_count} filled`}
                     </span>
                 </div>
                 <button className="text-xs text-blue-700 hover:underline" onClick={() => setExpanded(!expanded)}>
@@ -493,7 +454,6 @@ export default function DraftAllocationPage() {
                         <TiltWidget tilt={allocation.tilt} />
 
                         <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-                            <BenchOutlookWidget outlook={allocation.bench_outlook} />
                             {secondary.map((row) => (
                                 <BucketCard key={row.key} row={row} scale={scale} hasTargets={allocation.has_targets} />
                             ))}

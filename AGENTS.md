@@ -1060,25 +1060,22 @@ the page and the sidebar can't disagree — including the sidebar's quirk that a
 budgeted player an OPPONENT took is priced at what he actually went for
 (`is_drafted` / `drafted_by` ride on the row so the page marks those).
 
-Two derived readouts the page leads with, and both are easy to get subtly wrong:
+The page's one derived readout is the **RB/WR tilt** — planned split vs. actual
+split over **every back and receiver on the roster, bench included** (the RB/WR
+plan is total exposure, and a $4 bench back is still RB money spent instead of on
+a receiver). `dollars` is measured against what is ALREADY committed to RB+WR
+(`rb_actual − committed × planned_rb_share`), not against the plan's totals, so
+it reads straight from the first pick instead of showing a huge fake gap all
+draft. Positive is RB-heavy, negative WR-heavy; shares are `null` before there is
+anything to divide. The widget draws **Actual above Planned** — what you are
+buying is the reading, the plan underneath is what you check it against.
 
-- **Bench outlook** — `remaining_need = Σ max(0, target − actual)` over RB, WR
-  and OTHER; `starter_need = max(0, remaining_need − unspent bench target)`;
-  `headroom = wallet − starter_need`. Both subtractions are load-bearing: the
-  per-bucket `max(0, …)` because being OVER at RB doesn't hand money back (that
-  bucket just asks for nothing more), and the bench one because those remaining
-  position dollars INCLUDE the bench buys still to come — without it the carve-out
-  is counted twice and the page always reads short. `on_track` compares headroom
-  to the unspent bench target, so "will I still have bench money" is answered
-  while there is time to act, not when the bench is all that's left.
-- **RB/WR tilt** — planned split vs. actual split over **every back and receiver
-  on the roster, bench included** (the RB/WR plan is total exposure, and a $4
-  bench back is still RB money spent instead of on a receiver).
-  `dollars` is measured against what is ALREADY committed to
-  RB+WR (`rb_actual − committed × planned_rb_share`), not against the plan's
-  totals, so it reads straight from the first pick instead of showing a huge
-  fake gap all draft. Positive is RB-heavy, negative WR-heavy; shares are `null`
-  before there is anything to divide.
+The bench is a plain allocation row like the others (its card prints slots filled
+of `slot_count`), NOT a projection: an earlier "bench outlook" widget that
+forecast headroom from the unspent plan was removed — if it comes back, note that
+the plan's remaining position dollars already INCLUDE the bench buys still to
+come, so the unspent carve-out has to be netted out or the reserve is counted
+twice.
 
 **Dollars and bodies are flagged independently**, never merged into one verdict:
 one $88 RB against an "$88 over 4 players" plan is dead on budget and three
@@ -1097,12 +1094,11 @@ shortage is what this page was built to catch.
 
 **Page order is the order you read it mid-draft**: the plan editor, then the two
 steerable positions (RB, WR), then the tilt between them, then the check-on lines
-(bench outlook + QB/TE/DEF + bench), and the wallet arithmetic last.
+(QB/TE/DEF + bench), and the wallet arithmetic last.
 
 Tests: `draft/tests.py::AllocationTests` covers the bench overlap and that the
 totals don't double-count it, QB/TE/DEF pooling, dollars-vs-bodies independence,
-opponent picks excluded, the bench outlook (on-track and short, including both
-floors and the carve-out subtraction), the
+opponent picks excluded, the bench row's slot spend and slot count, the
 tilt against committed dollars, the plan's price rule (with the opponent-took-him
 case), override precedence, the fixed bucket order, the no-plan and no-drafter
 cases, and that the editor writes only the six plan fields.
