@@ -376,6 +376,20 @@ class DraftPlaybackAPI(APIView):
         ).get_draft_playback(draft_id=draft_id)
         return Response(playback, status=status.HTTP_200_OK)
 
+class DraftPositionAllocationAPI(APIView):
+    """The drafter's spend by position vs. the plan set at draft creation.
+
+    DRAFTER-ONLY, like playback and target tiers: it is the drafter's own plan
+    and their budget panel, which is exactly what the spectator views withhold.
+    """
+    permission_classes = [IsDrafter]
+
+    def get(self, request, draft_id):
+        allocation = DraftReadService(
+            user=request.user
+        ).get_position_allocation(draft_id=draft_id)
+        return Response(allocation, status=status.HTTP_200_OK)
+
 class DraftBudgetedPicksAPI(APIView):
     permission_classes = [IsDrafter]
 
@@ -621,6 +635,13 @@ class DraftCreateAPI(APIView):
         limit_te = serializers.IntegerField()
         limit_def = serializers.IntegerField()
         available_to_spectators = serializers.BooleanField(default=False)
+        # Planned dollars per position; optional so an older client (or a draft
+        # created without a plan) still posts successfully — 0 means "no plan".
+        target_qb = serializers.IntegerField(default=0)
+        target_rb = serializers.IntegerField(default=0)
+        target_wr = serializers.IntegerField(default=0)
+        target_te = serializers.IntegerField(default=0)
+        target_def = serializers.IntegerField(default=0)
 
     @extend_schema(
         parameters=None,
@@ -642,12 +663,19 @@ class DraftCreateAPI(APIView):
             limit_te=input_data["limit_te"],
             limit_def=input_data["limit_def"],
             available_to_spectators=input_data["available_to_spectators"],
+            target_qb=input_data["target_qb"],
+            target_rb=input_data["target_rb"],
+            target_wr=input_data["target_wr"],
+            target_te=input_data["target_te"],
+            target_def=input_data["target_def"],
         )
         response = Response(status=status.HTTP_200_OK)
         response.data = {"id": draft.id, "year": draft.year, "draft_name": draft.draft_name, "drafter": draft.drafter, "locked": False,
                          "starting_budget": draft.starting_budget, "limit_qb": draft.limit_qb, "limit_rb": draft.limit_rb, "limit_wr": draft.limit_wr,
                          "limit_te": draft.limit_te, "limit_def": draft.limit_def,
-                         "available_to_spectators": draft.available_to_spectators}
+                         "available_to_spectators": draft.available_to_spectators,
+                         "target_qb": draft.target_qb, "target_rb": draft.target_rb, "target_wr": draft.target_wr,
+                         "target_te": draft.target_te, "target_def": draft.target_def}
         return response
     
 class DraftDeleteAPI(APIView):

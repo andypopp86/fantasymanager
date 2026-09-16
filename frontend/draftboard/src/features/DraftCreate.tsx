@@ -3,6 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { draftCreate } from "../lib/data";
 
+// Positions that carry a dollar target, in the order the allocation page prints
+// them. Player positions, never roster slots — a WR in FLEX2 is WR spend.
+const TARGET_POSITIONS = ["QB", "RB", "WR", "TE", "DEF"] as const;
+
 export default function DraftCreate() {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
@@ -25,6 +29,15 @@ Norton`);
     const [limitTE, setLimitTE] = useState(3);
     const [limitDEF, setLimitDEF] = useState(2);
     const [availableToSpectators, setAvailableToSpectators] = useState(false);
+    // Planned dollars per position — the intent the allocation page
+    // (/draft/:id/allocation) measures the real draft against. Fixed here and
+    // never editable afterwards, so drift is measured against what you meant
+    // BEFORE the room started bidding. Defaults spend the default $200.
+    const [targets, setTargets] = useState<Record<string, number>>({
+        QB: 20, RB: 88, WR: 76, TE: 15, DEF: 1,
+    });
+    const targetTotal = TARGET_POSITIONS.reduce((sum, pos) => sum + (targets[pos] || 0), 0);
+    const targetRemainder = (startingBudget || 0) - targetTotal;
 
     const handleDraftCreateSubmit = () => {
         if (draftName === "") {
@@ -54,6 +67,11 @@ Norton`);
             limit_te: limitTE,
             limit_def: limitDEF,
             available_to_spectators: availableToSpectators,
+            target_qb: targets.QB || 0,
+            target_rb: targets.RB || 0,
+            target_wr: targets.WR || 0,
+            target_te: targets.TE || 0,
+            target_def: targets.DEF || 0,
         }
         draftCreate({ ...draftData }).then(() => {
             queryClient.invalidateQueries({ queryKey: ["draft_list"] });
@@ -117,6 +135,40 @@ Norton`);
                             </label>
                             <input id="available_to_spectators" type="checkbox" className={"h-5 w-5"}
                                 onChange={(e) => setAvailableToSpectators(e.target.checked)} checked={availableToSpectators}></input>
+                        </div>
+                    </div>
+                    <div className={"flex flex-wrap -mx-3 mb-6"}>
+                        <div className={"w-full px-3"}>
+                            <label className={"block uppercase tracking-wide text-gray-700 text-xs font-bold mb-2"}>
+                                Target $ per position
+                            </label>
+                            <p className={"text-xs text-gray-500 mb-2"}>
+                                What you MEAN to spend at each position. Fixed at creation — the
+                                Allocation page measures the live draft against it.
+                            </p>
+                            {TARGET_POSITIONS.map((position) => (
+                                <div key={position} className={"flex items-center gap-2 mb-2"}>
+                                    <span className={"w-10 text-sm font-bold text-gray-700"}>{position}</span>
+                                    <input
+                                        className={"appearance-none block w-24 bg-gray-200 text-gray-700 border rounded py-2 px-3 leading-tight focus:outline-none focus:bg-white"}
+                                        id={`target_${position.toLowerCase()}`}
+                                        type="number"
+                                        min={0}
+                                        value={targets[position]}
+                                        onChange={(e) => setTargets({
+                                            ...targets,
+                                            [position]: parseInt(e.target.value) || 0,
+                                        })}
+                                    />
+                                </div>
+                            ))}
+                            {/* The sum is shown, not enforced: leaving money loose (or
+                                knowingly planning over) is a legitimate plan. */}
+                            <p className={`text-sm font-semibold ${targetRemainder === 0 ? "text-gray-600" : targetRemainder > 0 ? "text-blue-700" : "text-red-700"}`}>
+                                ${targetTotal} of ${startingBudget || 0} allocated
+                                {targetRemainder > 0 && ` — $${targetRemainder} unallocated`}
+                                {targetRemainder < 0 && ` — $${Math.abs(targetRemainder)} over budget`}
+                            </p>
                         </div>
                     </div>
                     <div className={"flex flex-wrap -mx-3 mb-6"}>

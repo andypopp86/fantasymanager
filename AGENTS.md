@@ -1007,6 +1007,65 @@ testing: this repo's services (draft/budget/plan rules), custom permission
 classes (the drafter/spectator boundary), and any hand-written passthrough
 where a field could silently get dropped. When in doubt, ask "does this assert
 OUR logic, or that Django works?" — skip the latter.
+## Positional allocation (`/draft/:draftId/allocation`)
+
+"Am I drifting off my own plan, and where." Answers the failure this repo's owner
+actually hit: leaning RB in the planning and coming out WR-heavy in the room.
+
+**The plan is fixed at draft creation and never editable afterwards.**
+`Draft.target_qb/_rb/_wr/_te/_def` are dollars per PLAYER POSITION, entered on the
+create-draft form (`DraftCreate.tsx`) and written by `create_draft`. That is
+deliberate: the number worth measuring against is what you meant BEFORE the room
+started bidding, so there is no endpoint, admin field or page control that edits
+them mid-draft. **All five zero = no plan was entered** (`has_targets` false) and
+the page says so rather than drawing a $0 target every position is "over".
+The create form shows the running sum against `starting_budget` but does NOT
+enforce it — leaving money loose, or knowingly planning over, is a real plan.
+
+**One endpoint, one arithmetic**, same reasoning as the summary dashboard:
+`GET /api/drafts/draft/<id>/allocation/` (**`IsDrafter`** — it is the drafter's
+own plan and budget panel, exactly what the spectator views withhold) →
+`DraftReadService.get_position_allocation`. Server-fed through React Query with a
+15s poll, **not** Dexie and not the write queue, like Summary / Playback /
+Target Tiers.
+
+Three numbers per position, and the two easy ways to get them wrong:
+
+- **actual** — what the DRAFTER has paid, grouped by `Player.position`, never the
+  roster slot (a WR in FLEX2 is WR spend), the same rule as the summary page.
+  Opponent picks are not the drafter's spend.
+- **planned** — the budget panel's own arithmetic, `actual_price or
+  (override_price or projected_price)` per budgeted player, mirroring
+  `get_budgeted_picks` EXACTLY so the page and the sidebar cannot disagree about
+  what the plan costs. That includes the sidebar's quirk that a budgeted player
+  an OPPONENT took is priced at what he actually went for; `is_drafted` /
+  `drafted_by` ride on the row so the page marks those instead of letting the
+  dollars lie.
+- **diff = spend − target**, so NEGATIVE is the shortage. Note the colour
+  polarity is NOT the summary page's: there red means overpay, here **red means
+  SHORT** (`SHORT_COLOR`), amber means over-allocated, because the shortage is
+  the thing this page was built to catch. The target is drawn as a tick ON each
+  bar's track, so the gap between bar end and tick IS the shortage.
+
+Every target position gets a row even with no players, so the layout doesn't
+reshuffle as the draft fills; an unexpected position code is appended, never
+dropped. One shared dollar SCALE across all cards — a per-card scale would make a
+$4 DEF read like an $80 RB.
+
+UI is `features/DraftAllocationPage.tsx`, reached from the board's
+**"Allocation ↗"** button, which is a `window.open(..., "_blank")` rather than a
+`navigate` like Summary/Playback: on draft day this is a second-screen readout
+you keep open BESIDE the board, and the board has no room to host it. (The SPA is
+served under the `/app` basename, so the opened URL is `/app/draft/<id>/allocation`
+— react-router has no new-tab form.) `POSITION_COLORS` is the summary/playback
+Okabe-Ito set, not the board's `POSITION_BG_COLORS`, so the pages agree on what a
+WR looks like.
+
+Tests: `draft/tests.py::PositionAllocationTests` covers the diff sign, position-
+not-slot grouping, opponent picks excluded from actual, the plan's projected →
+actual price rule (including the opponent-took-him case), override-price
+precedence, the always-five rows / `has_targets` shape, and the no-drafter case.
+
 ## Draft playback (`/draft/:draftId/playback`)
 
 Replay a finished draft one pick at a time. The question it exists to answer is

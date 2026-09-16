@@ -17,7 +17,8 @@ import type { DraftRetrieveOutput,
     MockDraftDetail,
     MockDraftPlayer,
     DraftSummaryOutput,
-    DraftPlaybackOutput
+    DraftPlaybackOutput,
+    DraftAllocationOutput
 } from "./draft.schemas";
 
 // DRF's SessionAuthentication enforces CSRF only on authenticated requests,
@@ -170,6 +171,15 @@ export const draftRetrieve = <
     options?: AxiosRequestConfig,
   ): Promise<TData> => {
     return axios.default.get(`/api/drafts/draft/${draft_id}/playback/`, options)
+  }
+
+  export const draftAllocationRetrieve = <
+  TData = AxiosResponse<DraftAllocationOutput>,
+  >(
+    draft_id: string,
+    options?: AxiosRequestConfig,
+  ): Promise<TData> => {
+    return axios.default.get(`/api/drafts/draft/${draft_id}/allocation/`, options)
   }
 
   export const draftBudgetedPicksRetrieve = <

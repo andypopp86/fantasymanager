@@ -227,6 +227,8 @@ class ApiAuthorizationTests(TestCase):
             self.client.get(f"/api/drafts/draft/{self.draft.id}/budgeted_picks/").status_code, 403)
         self.assertEqual(
             self.client.get(f"/api/drafts/draft/{self.draft.id}/playback/").status_code, 403)
+        self.assertEqual(
+            self.client.get(f"/api/drafts/draft/{self.draft.id}/allocation/").status_code, 403)
         self.assertEqual(self.client.get("/api/drafts/draft/plans/").status_code, 403)
         self.assertEqual(
             self.client.post(f"/api/drafts/draft/delete/{self.draft.id}/").status_code, 403)
@@ -2262,3 +2264,130 @@ class DraftPlaybackTests(TestCase):
         self.assertEqual(self.pool_row(playback, "Override Guy")["projected_price"], 40)
         self.assertEqual(playback["picks"][0]["projected_price"], 40)
         self.assertEqual(playback["picks"][0]["diff"], 10)
+
+
+class PositionAllocationTests(TestCase):
+    """The allocation page's arithmetic: spend by position against the plan.
+
+    What's worth asserting is the three things the page can get wrong and that
+    no other endpoint covers — grouping by the PLAYER's position rather than the
+    roster slot, the plan's `actual_price or projected_price` rule (the same one
+    the budget sidebar uses, so they can't drift), and the sign of the gap.
+    """
+
+    def setUp(self):
+        from draft.services.draft.draft import DraftReadService
+        self.service = DraftReadService(user=None)
+        self.draft = Draft.objects.create(
+            year=2026, draft_name="allocation draft", starting_budget=200,
+            target_qb=20, target_rb=80, target_wr=70, target_te=15, target_def=1,
+        )
+        self.drafter = Manager.objects.create(draft=self.draft, name="me", drafter=True, position=0)
+        self.opponent = Manager.objects.create(draft=self.draft, name="them", drafter=False, position=1)
+
+    def draft_player(self, player, manager, slot, price):
+        return DraftPick.objects.create(
+            draft=self.draft, player=player, manager=manager,
+            price=price, drafted=True, position_slot=slot,
+        )
+
+    def budget_player(self, player, slot, price):
+        from draft.models import BudgetPlayer
+        return BudgetPlayer.objects.create(
+            draft=self.draft, player=player, manager=self.drafter,
+            position=slot, price=price, status="budgeted",
+        )
+
+    def allocation(self):
+        return self.service.get_position_allocation(draft_id=self.draft.id)
+
+    def row(self, allocation, position):
+        return next(r for r in allocation["rows"] if r["position"] == position)
+
+    def test_targets_ride_through_and_diff_is_spend_minus_target(self):
+        self.draft_player(make_player("Alloc RB", "RB"), self.drafter, "RB1", price=31)
+
+        row = self.row(self.allocation(), "RB")
+
+        self.assertEqual(row["target"], 80)
+        self.assertEqual(row["actual"], 31)
+        # Negative is the SHORTAGE this page exists to catch.
+        self.assertEqual(row["actual_diff"], -49)
+
+    def test_actual_groups_by_player_position_not_slot(self):
+        self.draft_player(make_player("Flex WR", "WR"), self.drafter, "FLEX1", price=30)
+        self.draft_player(make_player("Bench RB", "RB"), self.drafter, "BENCH1", price=5)
+
+        allocation = self.allocation()
+
+        self.assertEqual(self.row(allocation, "WR")["actual"], 30)
+        self.assertEqual(self.row(allocation, "RB")["actual"], 5)
+        self.assertNotIn("FLEX1", [r["position"] for r in allocation["rows"]])
+
+    def test_opponent_picks_are_not_the_drafters_spend(self):
+        self.draft_player(make_player("Their WR", "WR"), self.opponent, "WR1", price=60)
+
+        allocation = self.allocation()
+
+        self.assertEqual(self.row(allocation, "WR")["actual"], 0)
+        self.assertEqual(allocation["actual_total"], 0)
+        self.assertEqual(allocation["budget_remaining"], 200)
+
+    def test_plan_prices_a_budgeted_player_at_projection_until_drafted(self):
+        rb = make_player("Planned RB", "RB")     # projected 10
+        self.budget_player(rb, "RB1", price=10)
+
+        row = self.row(self.allocation(), "RB")
+
+        self.assertEqual(row["planned"], 10)
+        self.assertEqual(row["planned_diff"], -70)
+        self.assertEqual(row["planned_players"][0]["is_drafted"], False)
+
+    def test_plan_prices_a_drafted_player_at_what_he_actually_cost(self):
+        """Same rule as get_budgeted_picks, including an OPPONENT's price."""
+        mine = make_player("My RB", "RB")        # projected 10
+        theirs = make_player("Lost RB", "RB")    # projected 10
+        self.budget_player(mine, "RB1", price=10)
+        self.budget_player(theirs, "RB2", price=10)
+        self.draft_player(mine, self.drafter, "RB1", price=44)
+        self.draft_player(theirs, self.opponent, "RB1", price=33)
+
+        row = self.row(self.allocation(), "RB")
+
+        self.assertEqual(row["planned"], 77)
+        self.assertEqual(row["actual"], 44)   # only what I paid
+        lost = next(p for p in row["planned_players"] if p["name"] == "Lost RB")
+        self.assertEqual((lost["is_drafted"], lost["drafted_by"]), (True, "them"))
+
+    def test_override_price_beats_projected_price_in_the_plan(self):
+        wr = make_player("Override WR", "WR")
+        Player.objects.filter(pk=wr.pk).update(override_price=40)
+        self.budget_player(wr, "WR1", price=40)
+
+        self.assertEqual(self.row(self.allocation(), "WR")["planned"], 40)
+
+    def test_every_target_position_gets_a_row_even_with_no_players(self):
+        allocation = self.allocation()
+
+        self.assertEqual([r["position"] for r in allocation["rows"]], ["QB", "RB", "WR", "TE", "DEF"])
+        self.assertTrue(allocation["has_targets"])
+        self.assertEqual(allocation["target_total"], 186)
+        self.assertEqual(allocation["actual_total"], 0)
+
+    def test_untargeted_draft_says_so_rather_than_drawing_zero_targets(self):
+        plain = Draft.objects.create(year=2026, draft_name="no plan", starting_budget=200)
+        Manager.objects.create(draft=plain, name="me", drafter=True, position=0)
+
+        allocation = self.service.get_position_allocation(draft_id=plain.id)
+
+        self.assertFalse(allocation["has_targets"])
+        self.assertTrue(allocation["has_drafter"])
+
+    def test_no_drafter_is_flagged_not_crashed(self):
+        Manager.objects.filter(pk=self.drafter.pk).update(drafter=False)
+
+        allocation = self.allocation()
+
+        self.assertFalse(allocation["has_drafter"])
+        self.assertEqual(allocation["actual_total"], 0)
+        self.assertEqual(allocation["planned_total"], 0)

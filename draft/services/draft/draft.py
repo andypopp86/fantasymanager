@@ -8,6 +8,16 @@ from django.utils import timezone
 
 from draft import models as d
 
+# The positions a draft carries a dollar TARGET for (Draft.target_<pos>), in the
+# order every surface prints them. Player positions, never roster slots.
+POSITION_TARGET_FIELDS = (
+    ("QB", "target_qb"),
+    ("RB", "target_rb"),
+    ("WR", "target_wr"),
+    ("TE", "target_te"),
+    ("DEF", "target_def"),
+)
+
 
 def validate_slot_eligibility(player, position_slot):
     """Return an error message if `player` may not occupy `position_slot`, else None.
@@ -42,7 +52,7 @@ class DraftBoardReadService(BaseService):
 
 
 class DraftWriteService(BaseService):
-    def create_draft(self, draft_name, managers, starting_budget, limit_qb, limit_rb, limit_wr, limit_te, limit_def, available_to_spectators=False):
+    def create_draft(self, draft_name, managers, starting_budget, limit_qb, limit_rb, limit_wr, limit_te, limit_def, available_to_spectators=False, target_qb=0, target_rb=0, target_wr=0, target_te=0, target_def=0):
         year = timezone.now().year
         draft = d.Draft(
             year=year,
@@ -53,7 +63,16 @@ class DraftWriteService(BaseService):
             limit_wr=limit_wr,
             limit_te=limit_te,
             limit_def=limit_def,
-            available_to_spectators=available_to_spectators
+            available_to_spectators=available_to_spectators,
+            # Planned dollars per position. Deliberately NOT validated against
+            # starting_budget: a plan that leaves money loose (or is knowingly
+            # over) is a legitimate plan, and the create form already shows the
+            # running sum.
+            target_qb=target_qb,
+            target_rb=target_rb,
+            target_wr=target_wr,
+            target_te=target_te,
+            target_def=target_def,
         )
         draft_managers = []
         for idx, manager_name in enumerate(managers.split("\n")):
@@ -386,6 +405,129 @@ class DraftReadService(BaseService):
             manager_list.append(manager_dict)
         return manager_list
     
+    def get_position_allocation(self, draft_id):
+        """The DRAFTER's spend by player position against the plan set at draft creation.
+
+        Answers "am I drifting off my own plan, and where" — the plan being
+        `Draft.target_<pos>`, dollars entered on the create form (see the model).
+        Three numbers per position:
+
+        - **target** — the planned dollars. All-zero targets mean no plan was
+          entered (`has_targets` False), and the page says so rather than drawing
+          a zero line every position is "over".
+        - **actual** — what the drafter has actually paid, grouped by the
+          PLAYER's position and never the roster slot (a WR in FLEX2 is WR
+          spend), the same rule as the summary dashboard.
+        - **planned** — the budget panel's own arithmetic, `actual_price or
+          projected_price` per budgeted player, mirroring `get_budgeted_picks`
+          (and therefore the sidebar) EXACTLY so the two can't disagree. Note
+          the actual price is whatever the player went for, even if an OPPONENT
+          took them — that is the sidebar's rule; `drafted_by` rides on the row
+          so the page can mark those.
+
+        `diff` is spend − target throughout, so POSITIVE is over-allocated and
+        negative is the shortage this page exists to catch — the same polarity
+        the summary dashboard uses for over/under pay.
+        """
+        draft = d.Draft.objects.filter(id=draft_id).first()
+        if not draft:
+            raise Http404
+        drafter = d.Manager.objects.filter(draft_id=draft_id, drafter=True).first()
+
+        targets = {position: getattr(draft, field) or 0
+                   for position, field in POSITION_TARGET_FIELDS}
+
+        actual_rows, planned_rows = {}, {}
+        positions_seen = []
+
+        def bucket(store, position):
+            if position not in positions_seen:
+                positions_seen.append(position)
+            return store.setdefault(position, {"spend": 0, "players": []})
+
+        if drafter:
+            drafted = d.DraftPick.objects.filter(
+                draft_id=draft_id, drafted=True, manager=drafter
+            ).select_related("player").order_by("-price")
+            for pick in drafted:
+                player = pick.player
+                price = pick.price or 0
+                entry = bucket(actual_rows, player.position or "?")
+                entry["spend"] += price
+                entry["players"].append({
+                    "player_id": player.player_id,
+                    "name": player.name,
+                    "position_slot": pick.position_slot or "",
+                    "price": price,
+                })
+
+            budgeted = d.BudgetPlayer.objects.filter(
+                draft_id=draft_id, manager=drafter, status="budgeted"
+            ).select_related("player").order_by("-price")
+            # Keyed by Player PK (the FK attname), NOT player.player_id — the FFC
+            # id is a different id space and silently matches nothing.
+            drafted_prices = {
+                pick.player_id: (pick.price or 0, pick.manager.name if pick.manager else "")
+                for pick in d.DraftPick.objects.filter(
+                    draft_id=draft_id, drafted=True,
+                    player_id__in=[b.player_id for b in budgeted],
+                ).select_related("manager")
+            }
+            for bpick in budgeted:
+                player = bpick.player
+                actual_price, drafted_by = drafted_prices.get(bpick.player_id, (0, ""))
+                price = actual_price or int(player.override_price or player.projected_price or 0)
+                entry = bucket(planned_rows, player.position or "?")
+                entry["spend"] += price
+                entry["players"].append({
+                    "player_id": player.player_id,
+                    "name": player.name,
+                    "position_slot": bpick.position or "",
+                    "price": price,
+                    "is_drafted": bool(drafted_by),
+                    "drafted_by": drafted_by,
+                })
+
+        # Canonical order first so the rows don't reshuffle between drafts; an
+        # unexpected position code is appended rather than dropped.
+        canonical = [position for position, _ in POSITION_TARGET_FIELDS]
+        positions = canonical + [p for p in positions_seen if p not in canonical]
+
+        rows = []
+        for position in positions:
+            target = targets.get(position, 0)
+            actual = actual_rows.get(position, {"spend": 0, "players": []})
+            planned = planned_rows.get(position, {"spend": 0, "players": []})
+            rows.append({
+                "position": position,
+                "target": target,
+                "actual": actual["spend"],
+                "planned": planned["spend"],
+                "actual_diff": actual["spend"] - target,
+                "planned_diff": planned["spend"] - target,
+                "actual_count": len(actual["players"]),
+                "planned_count": len(planned["players"]),
+                "actual_players": actual["players"],
+                "planned_players": planned["players"],
+            })
+
+        actual_total = sum(row["actual"] for row in rows)
+        planned_total = sum(row["planned"] for row in rows)
+        return {
+            "draft_id": draft_id,
+            "draft_name": draft.draft_name,
+            "starting_budget": draft.starting_budget,
+            "has_drafter": drafter is not None,
+            "drafter_name": drafter.name if drafter else "",
+            "has_targets": any(targets.values()),
+            "positions": positions,
+            "rows": rows,
+            "target_total": sum(targets.values()),
+            "actual_total": actual_total,
+            "planned_total": planned_total,
+            "budget_remaining": draft.starting_budget - actual_total,
+        }
+
     def get_draft_summary(self, draft_id):
         """Per-manager spend vs. projection for a completed (or in-flight) draft.
 

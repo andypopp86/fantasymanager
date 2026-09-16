@@ -297,6 +297,16 @@ class Draft(models.Model):
     limit_wr = models.IntegerField(default=8)
     limit_te = models.IntegerField(default=3)
     limit_def = models.IntegerField(default=2)
+    # Planned dollars per PLAYER position (not roster slot), set once at draft
+    # creation and never edited afterwards — they are the pre-draft intent the
+    # allocation page measures drift against, so a mid-draft "fix" would erase
+    # the only thing worth comparing to. All zeros = no plan was entered, and the
+    # page says so rather than drawing a 0 target.
+    target_qb = models.IntegerField(default=0)
+    target_rb = models.IntegerField(default=0)
+    target_wr = models.IntegerField(default=0)
+    target_te = models.IntegerField(default=0)
+    target_def = models.IntegerField(default=0)
     date_created = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:

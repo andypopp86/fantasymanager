@@ -15,6 +15,7 @@ draft_urlpatterns = [
     path("<int:draft_id>/manager_picks/", api_views.ManagerDraftedPlayersAPI.as_view(), name="manager_picks"),
     path("<int:draft_id>/summary/", api_views.DraftSummaryAPI.as_view(), name="draft_summary"),
     path("<int:draft_id>/playback/", api_views.DraftPlaybackAPI.as_view(), name="draft_playback"),
+    path("<int:draft_id>/allocation/", api_views.DraftPositionAllocationAPI.as_view(), name="draft_allocation"),
     path("<int:draft_id>/budgeted_picks/", api_views.DraftBudgetedPicksAPI.as_view(), name="budgeted_picks"),
     path("<int:draft_id>/watched_picks/", api_views.DraftWatchedPicksAPI.as_view(), name="watched_picks"),
     path("<int:draft_id>/favorite_player/<int:player_id>/", api_views.DraftFavoritePickAPI.as_view(), name="favorite_player"),

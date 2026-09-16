@@ -76,6 +76,14 @@ export interface DraftCreateParams {
     limit_te: number;
     limit_def: number;
     available_to_spectators: boolean;
+    // Planned dollars per position — the plan the allocation page measures
+    // drift against. Set here and nowhere else (see Draft.target_* on the
+    // server); all zeros means no plan was entered.
+    target_qb: number;
+    target_rb: number;
+    target_wr: number;
+    target_te: number;
+    target_def: number;
 }
 
 export type Manager = {
@@ -550,4 +558,49 @@ export interface DraftPlaybackOutput {
     managers: PlaybackManager[],
     picks: PlaybackPick[],
     pool: PlaybackPoolPlayer[],
+}
+
+// ---- Positional allocation (/draft/:draftId/allocation) ----------------------
+// GET /api/drafts/draft/<id>/allocation/ — the DRAFTER's spend by player
+// position against the per-position dollar targets fixed at draft creation.
+// `*_diff` is spend − target, so POSITIVE is over-allocated and negative is a
+// shortage (same polarity as the summary dashboard's over/under pay).
+export type AllocationPlayer = {
+    player_id: number,
+    name: string,
+    position_slot: string,
+    price: number,
+    // Only on planned rows: whether this budgeted player is already off the
+    // board, and to whom (which may be an opponent — the budget panel prices
+    // them at what they actually went for either way).
+    is_drafted?: boolean,
+    drafted_by?: string,
+}
+
+export type AllocationRow = {
+    position: string,
+    target: number,
+    actual: number,
+    planned: number,
+    actual_diff: number,
+    planned_diff: number,
+    actual_count: number,
+    planned_count: number,
+    actual_players: AllocationPlayer[],
+    planned_players: AllocationPlayer[],
+}
+
+export interface DraftAllocationOutput {
+    draft_id: number,
+    draft_name: string,
+    starting_budget: number,
+    has_drafter: boolean,
+    drafter_name: string,
+    has_targets: boolean,
+    positions: string[],
+    rows: AllocationRow[],
+    target_total: number,
+    actual_total: number,
+    planned_total: number,
+    budget_remaining: number,
 }
