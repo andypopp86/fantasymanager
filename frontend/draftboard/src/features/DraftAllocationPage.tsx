@@ -295,14 +295,17 @@ function PlanEditor({
         <div className={`${CARD} p-4`}>
             <div className="flex items-baseline justify-between gap-2 flex-wrap">
                 <h2 className={CARD_TITLE}>The plan</h2>
-                <span className="text-xs text-gray-500">
-                    Re-plan freely — buying one $60 WR makes the rest of your WRs cheap by definition.
+                {/* allocated / budget (what's left over). Shown, not enforced:
+                    leaving money loose — or knowingly planning over — is a
+                    legitimate plan. */}
+                <span className={`text-sm font-semibold ${remainder === 0 ? "text-gray-600" : remainder > 0 ? "text-blue-700" : "text-red-700"}`}>
+                    {money(total)} / {money(startingBudget)} ({remainder < 0 ? "−" : ""}{money(Math.abs(remainder))})
                 </span>
             </div>
-            <div className="flex flex-wrap gap-4 mt-2">
+            <div className="flex flex-wrap items-center gap-4 mt-2">
                 {PLAN_FIELDS.map((row) => (
                     <div key={row.field} className="flex items-center gap-2">
-                        <label className="text-xs font-bold text-gray-700 w-24" htmlFor={row.field}>{row.label}</label>
+                        <label className="text-xs font-bold text-gray-700" htmlFor={row.field}>{row.label}</label>
                         <input
                             id={row.field}
                             type="number"
@@ -327,38 +330,31 @@ function PlanEditor({
                         )}
                     </div>
                 ))}
-            </div>
-            <div className="flex items-center gap-3 flex-wrap mt-3">
-                <button
-                    className="bg-green-600 text-white rounded-md px-3 py-1.5 text-sm font-semibold disabled:opacity-40"
-                    disabled={!dirty || saving}
-                    onClick={() => onSave(draftTargets)}
-                >
-                    {saving ? "Saving…" : "Save plan"}
-                </button>
-                {dirty && !saving && <span className="text-xs text-amber-700 font-semibold">unsaved changes</span>}
-                {!dirty && savedAt && <span className="text-xs text-green-700 font-semibold">saved</span>}
-                {/* Shown, not enforced: leaving money loose (or knowingly
-                    planning over) is a legitimate plan. */}
-                <span className={`text-xs font-semibold ${remainder === 0 ? "text-gray-600" : remainder > 0 ? "text-blue-700" : "text-red-700"}`}>
-                    {money(total)} of {money(startingBudget)} allocated
-                    {remainder > 0 && ` — ${money(remainder)} unallocated`}
-                    {remainder < 0 && ` — ${money(Math.abs(remainder))} over budget`}
-                </span>
-            </div>
-            {/* Separate from the three above, and NOT added to their total: the
-                bench line is a carve-out inside them (a bench RB is RB money). */}
-            <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100">
-                <label className="text-xs font-bold text-gray-700 w-24" htmlFor="target_bench">Bench $</label>
-                <input
-                    id="target_bench"
-                    type="number"
-                    min={0}
-                    className="w-20 bg-gray-100 border rounded py-1 px-2 text-sm"
-                    value={draftTargets.target_bench}
-                    onChange={(e) => set("target_bench", e.target.value)}
-                />
-                <span className="text-xs text-gray-500">of the above, held back for the 7 bench slots</span>
+                {/* Bench sits with the rest but is NOT in their total: it is a
+                    carve-out inside those dollars (a bench RB is RB money). */}
+                <div className="flex items-center gap-2">
+                    <label className="text-xs font-bold text-gray-700" htmlFor="target_bench">Bench $</label>
+                    <input
+                        id="target_bench"
+                        type="number"
+                        min={0}
+                        className="w-20 bg-gray-100 border rounded py-1 px-2 text-sm"
+                        value={draftTargets.target_bench}
+                        onChange={(e) => set("target_bench", e.target.value)}
+                    />
+                    <span className="text-xs text-gray-500">of the above, over 7 slots</span>
+                </div>
+                <div className="flex items-center gap-3 ml-auto">
+                    {dirty && !saving && <span className="text-xs text-amber-700 font-semibold">unsaved changes</span>}
+                    {!dirty && savedAt && <span className="text-xs text-green-700 font-semibold">saved</span>}
+                    <button
+                        className="bg-green-600 text-white rounded-md px-3 py-1.5 text-sm font-semibold disabled:opacity-40"
+                        disabled={!dirty || saving}
+                        onClick={() => onSave(draftTargets)}
+                    >
+                        {saving ? "Saving…" : "Save plan"}
+                    </button>
+                </div>
             </div>
         </div>
     );
