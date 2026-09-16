@@ -76,6 +76,14 @@ export interface DraftCreateParams {
     limit_te: number;
     limit_def: number;
     available_to_spectators: boolean;
+    // The allocation plan (see AllocationTargets): RB/WR dollars AND bodies, one
+    // reserve for QB/TE/DEF together, and a bench dollar line.
+    target_rb: number;
+    target_rb_count: number;
+    target_wr: number;
+    target_wr_count: number;
+    target_other: number;
+    target_bench: number;
 }
 
 export type Manager = {
@@ -550,4 +558,92 @@ export interface DraftPlaybackOutput {
     managers: PlaybackManager[],
     picks: PlaybackPick[],
     pool: PlaybackPoolPlayer[],
+}
+
+// ---- Allocation plan (/draft/:draftId/allocation) ---------------------------
+// GET/POST /api/drafts/draft/<id>/allocation/ — the DRAFTER's draft measured
+// against a plan that is deliberately NOT one line per position: only RB and WR
+// are steerable (dollars AND bodies), and QB/TE/DEF collapse into one `other`
+// reserve. RB/WR/OTHER PARTITION the roster by position; BENCH OVERLAPS them by
+// slot (a RB in BENCH2 is counted in both), so bench dollars are never added to
+// the totals — the bench target is a carve-out inside the position dollars.
+// `*_diff` is spend − target, so NEGATIVE is the shortage.
+
+// The six editable plan fields; POSTing them rewrites the plan and returns the
+// recomputed payload.
+export type AllocationTargets = {
+    target_rb: number,
+    target_rb_count: number,
+    target_wr: number,
+    target_wr_count: number,
+    target_other: number,
+    target_bench: number,
+}
+
+export type AllocationBucket = "RB" | "WR" | "OTHER" | "BENCH";
+
+export type AllocationPlayer = {
+    player_id: number,
+    name: string,
+    position: string,
+    position_slot: string,
+    price: number,
+    // Only on planned rows: whether this budgeted player is already off the
+    // board, and to whom (which may be an opponent — the budget panel prices
+    // them at what they actually went for either way).
+    is_drafted?: boolean,
+    drafted_by?: string,
+}
+
+export type AllocationRow = {
+    key: AllocationBucket,
+    target: number,
+    actual: number,
+    planned: number,
+    actual_diff: number,
+    planned_diff: number,
+    actual_count: number,
+    planned_count: number,
+    actual_players: AllocationPlayer[],
+    planned_players: AllocationPlayer[],
+    // RB and WR only — bodies are tracked apart from dollars because the two go
+    // wrong independently (one $40 RB instead of two $20s is on budget and a
+    // body light). Absent on OTHER and BENCH.
+    target_count?: number,
+    actual_count_diff?: number,
+    planned_count_diff?: number,
+    // BENCH only: how many bench slots the roster has at all — the bench line is
+    // a fixed set of slots, which is why it carries no body TARGET.
+    slot_count?: number,
+}
+
+// The RB/WR split you planned against the one you are buying, over every back
+// and receiver on the roster (bench included). `dollars` is how far your RB
+// spend sits off the planned split at the money already committed to RB+WR —
+// positive is RB-heavy, negative WR-heavy. Shares are null before there is
+// anything to divide.
+export type AllocationTilt = {
+    planned_rb_share: number | null,
+    actual_rb_share: number | null,
+    rb_actual: number,
+    wr_actual: number,
+    dollars: number,
+}
+
+export interface DraftAllocationOutput {
+    draft_id: number,
+    draft_name: string,
+    starting_budget: number,
+    has_drafter: boolean,
+    drafter_name: string,
+    has_targets: boolean,
+    targets: AllocationTargets,
+    rows: AllocationRow[],
+    // Position buckets only — bench overlaps them and would double-count.
+    target_total: number,
+    bench_target: number,
+    actual_total: number,
+    planned_total: number,
+    budget_remaining: number,
+    tilt: AllocationTilt,
 }

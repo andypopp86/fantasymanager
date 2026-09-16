@@ -332,15 +332,30 @@ class PlayerAdmin(admin.ModelAdmin):
     fields = ('name', 'position', 'team', 'year', 'notes', 'target_tier', 'years_experience', 'risk_score', 'risk_summary', 'is_projection', 'has_injury', 'defensive_impact', 'projected_price', 'adp_price', 'my_price', 'my_price_rationale', 'skepticism', 'adp_formatted', 'adp_source', 'adp_ffc', 'adp_sharks', 'adp_fpros', 'favorite', 'override_price', 'player_id', )
     
 class DraftAdmin(admin.ModelAdmin):
-    list_display = ('draft_name', 'year', 'drafter', 'projected_draft', 'available_to_spectators', 'date_created')
+    list_display = ('draft_name', 'year', 'drafter', 'projected_draft', 'available_to_spectators', 'target_allocation', 'date_created')
     list_editable = ('available_to_spectators',)
     # search_fields = ('draft_name', 'drafter', )
     list_filter = ('locked', 'available_to_spectators', 'draft_name', 'drafter',)
-    fields = ('draft_name', 'year', 'drafter', 'projected_draft', 'saved_slots', 'locked', 'available_to_spectators', 'date_created' )
+    # The allocation plan (RB/WR dollars + bodies, the QB/TE/DEF reserve, bench).
+    # The allocation PAGE is where this is normally edited mid-draft; these are
+    # here for a fix-up outside a live draft.
+    fields = ('draft_name', 'year', 'drafter', 'projected_draft', 'saved_slots', 'locked', 'available_to_spectators',
+              ('target_rb', 'target_rb_count', 'target_wr', 'target_wr_count'),
+              ('target_other', 'target_bench'), 'date_created' )
     # date_created is auto_now_add (non-editable); without this the edit form
     # 500s with FieldError.
     readonly_fields = ('date_created',)
     actions = ('add_missing_players',)
+
+    # One column rather than six: the plan only means anything read together,
+    # and a draft with no plan should say so rather than print a row of zeros.
+    @admin.display(description='Plan (RB / WR / other / bench)')
+    def target_allocation(self, obj):
+        dollars = (obj.target_rb, obj.target_wr, obj.target_other, obj.target_bench)
+        if not any(dollars) and not (obj.target_rb_count or obj.target_wr_count):
+            return '—'
+        return (f"${obj.target_rb}/{obj.target_rb_count} · ${obj.target_wr}/{obj.target_wr_count} · "
+                f"${obj.target_other} · ${obj.target_bench} = ${sum(dollars)}")
 
     # A draft's available-player pool is its own DraftPick rows, fixed at
     # creation — so players added to the DB later (an ADP refresh picking up new

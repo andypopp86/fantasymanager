@@ -8,6 +8,42 @@ from django.utils import timezone
 
 from draft import models as d
 
+# The allocation plan's buckets, in the order every surface prints them. RB and
+# WR are the steerable positions (dollars + bodies), OTHER is QB/TE/DEF together,
+# and BENCH is a SLOT bucket rather than a position one.
+ALLOCATION_BUCKETS = ("RB", "WR", "OTHER", "BENCH")
+# The buckets that PARTITION the roster — every pick is in exactly one, so these
+# are the only ones whose dollars may be summed. BENCH overlaps them by slot.
+POSITION_BUCKETS = ("RB", "WR", "OTHER")
+# Bench is a fixed set of slots (BUDGET_POSITIONS), which is why it carries no
+# body target: the count is decided by the roster, not by the plan.
+BENCH_SLOTS = 7
+
+# The plan's six editable fields — the ONLY columns the allocation editor may
+# write, so that endpoint can never become a general draft-edit backdoor.
+ALLOCATION_TARGET_FIELDS = (
+    "target_rb", "target_rb_count",
+    "target_wr", "target_wr_count",
+    "target_other", "target_bench",
+)
+
+
+def allocation_buckets(position, position_slot):
+    """Which allocation buckets a pick lands in — plural, and that is the point.
+
+    RB / WR / OTHER PARTITION the roster by the player's position (a WR in FLEX2
+    is WR spend, the summary page's rule). BENCH cuts ACROSS that by slot: a RB
+    in BENCH2 is RB money AND bench money. The two questions are different — "how
+    much RB did I buy" counts every back on the roster, while "did I keep enough
+    back for the bench" counts every body in a BENCH slot whatever they play — so
+    the buckets deliberately overlap and their dollars must never simply be summed.
+    Totals come from the position buckets alone; BENCH is a subset view of them.
+    """
+    position_bucket = position if position in ("RB", "WR") else "OTHER"
+    if (position_slot or "").upper().startswith("BENCH"):
+        return (position_bucket, "BENCH")
+    return (position_bucket,)
+
 
 def validate_slot_eligibility(player, position_slot):
     """Return an error message if `player` may not occupy `position_slot`, else None.
@@ -42,7 +78,7 @@ class DraftBoardReadService(BaseService):
 
 
 class DraftWriteService(BaseService):
-    def create_draft(self, draft_name, managers, starting_budget, limit_qb, limit_rb, limit_wr, limit_te, limit_def, available_to_spectators=False):
+    def create_draft(self, draft_name, managers, starting_budget, limit_qb, limit_rb, limit_wr, limit_te, limit_def, available_to_spectators=False, targets=None):
         year = timezone.now().year
         draft = d.Draft(
             year=year,
@@ -53,7 +89,12 @@ class DraftWriteService(BaseService):
             limit_wr=limit_wr,
             limit_te=limit_te,
             limit_def=limit_def,
-            available_to_spectators=available_to_spectators
+            available_to_spectators=available_to_spectators,
+            # The allocation plan. Deliberately NOT validated against
+            # starting_budget: a plan that leaves money loose (or is knowingly
+            # over) is a legitimate plan, and the create form already shows the
+            # running sum.
+            **{field: (targets or {}).get(field, 0) for field in ALLOCATION_TARGET_FIELDS},
         )
         draft_managers = []
         for idx, manager_name in enumerate(managers.split("\n")):
@@ -74,6 +115,32 @@ class DraftWriteService(BaseService):
         d.DraftPick.objects.bulk_create(draft_picks)
         return draft
     
+    def update_allocation_targets(self, draft_id, targets):
+        """Rewrite the draft's allocation plan (the allocation page's editor).
+
+        The plan is editable mid-draft ON PURPOSE: a position behaves differently
+        once it is bought — spend $60 of a $70 WR plan on one receiver and the
+        rest of your WRs get cheap by definition, which is a re-plan, not a
+        shortage. Only the six plan fields are touchable here, so this can never
+        become a general draft-edit endpoint.
+        """
+        draft = d.Draft.objects.filter(id=draft_id).first()
+        if not draft:
+            raise Http404
+        changed = []
+        for field in ALLOCATION_TARGET_FIELDS:
+            if field in targets:
+                value = int(targets[field] or 0)
+                if value < 0:
+                    raise ValidationError(f"{field} cannot be negative")
+                setattr(draft, field, value)
+                changed.append(field)
+        if changed:
+            # update_fields so a concurrent board write (drafter name, spectator
+            # flag) isn't clobbered by this form's stale copy of the row.
+            draft.save(update_fields=changed)
+        return draft
+
     def delete_draft(self, draft_id):
         draft = d.Draft.objects.filter(id=draft_id).first()
         if not draft:
@@ -386,6 +453,175 @@ class DraftReadService(BaseService):
             manager_list.append(manager_dict)
         return manager_list
     
+    def get_allocation(self, draft_id):
+        """The DRAFTER's draft measured against their allocation plan.
+
+        The plan is NOT one line per position, because not every position is
+        worth steering. RB and WR are — you buy several, and money moves between
+        them right up to the end — so they carry dollars AND a body count.
+        QB/TE/DEF are one-and-done: once the slot is filled there is nothing to
+        pivot, so they collapse into a single `target_other` reserve that exists
+        mostly so the bench math below can be honest.
+
+        **The bench OVERLAPS the position buckets rather than replacing them**
+        (see `allocation_buckets`): RB / WR / OTHER partition the roster by the
+        player's position, and BENCH cuts across by slot, so a RB in BENCH2 is
+        counted in both. The RB plan is total positional exposure — every back on
+        the roster, bench ones included — while the bench line asks a different
+        question, "did I keep enough money back for the last seven slots". Their
+        dollars therefore must NEVER be summed: `target_total` and `actual_total`
+        come from the position buckets alone, and the bench target is a carve-out
+        INSIDE them, not a fifth pile of money.
+
+        The derived readout the page leads with is the **RB/WR tilt**: the split
+        you planned against the split you are actually buying, in dollars off.
+        This is the failure the page was built for — meaning to lean RB and
+        walking out WR-heavy.
+
+        `diff` is spend - target throughout, so NEGATIVE is the shortage.
+        """
+        draft = d.Draft.objects.filter(id=draft_id).first()
+        if not draft:
+            raise Http404
+        drafter = d.Manager.objects.filter(draft_id=draft_id, drafter=True).first()
+
+        targets = {
+            "RB": draft.target_rb or 0,
+            "WR": draft.target_wr or 0,
+            "OTHER": draft.target_other or 0,
+            "BENCH": draft.target_bench or 0,
+        }
+        target_counts = {"RB": draft.target_rb_count or 0, "WR": draft.target_wr_count or 0}
+
+        buckets = {key: {"spend": 0, "players": []} for key in ALLOCATION_BUCKETS}
+        plan_buckets = {key: {"spend": 0, "players": []} for key in ALLOCATION_BUCKETS}
+
+        if drafter:
+            drafted = d.DraftPick.objects.filter(
+                draft_id=draft_id, drafted=True, manager=drafter
+            ).select_related("player").order_by("-price")
+            for pick in drafted:
+                player = pick.player
+                price = pick.price or 0
+                row = {
+                    "player_id": player.player_id,
+                    "name": player.name,
+                    "position": player.position or "?",
+                    "position_slot": pick.position_slot or "",
+                    "price": price,
+                }
+                for key in allocation_buckets(player.position, pick.position_slot):
+                    buckets[key]["spend"] += price
+                    buckets[key]["players"].append(row)
+
+            budgeted = d.BudgetPlayer.objects.filter(
+                draft_id=draft_id, manager=drafter, status="budgeted"
+            ).select_related("player").order_by("-price")
+            # Keyed by Player PK (the FK attname), NOT player.player_id — the FFC
+            # id is a different id space and silently matches nothing.
+            drafted_prices = {
+                pick.player_id: (pick.price or 0, pick.manager.name if pick.manager else "")
+                for pick in d.DraftPick.objects.filter(
+                    draft_id=draft_id, drafted=True,
+                    player_id__in=[b.player_id for b in budgeted],
+                ).select_related("manager")
+            }
+            for bpick in budgeted:
+                player = bpick.player
+                actual_price, drafted_by = drafted_prices.get(bpick.player_id, (0, ""))
+                price = actual_price or int(player.override_price or player.projected_price or 0)
+                row = {
+                    "player_id": player.player_id,
+                    "name": player.name,
+                    "position": player.position or "?",
+                    "position_slot": bpick.position or "",
+                    "price": price,
+                    "is_drafted": bool(drafted_by),
+                    "drafted_by": drafted_by,
+                }
+                for key in allocation_buckets(player.position, bpick.position):
+                    plan_buckets[key]["spend"] += price
+                    plan_buckets[key]["players"].append(row)
+
+        def row(key):
+            actual, planned = buckets[key], plan_buckets[key]
+            data = {
+                "key": key,
+                "target": targets[key],
+                "actual": actual["spend"],
+                "planned": planned["spend"],
+                "actual_diff": actual["spend"] - targets[key],
+                "planned_diff": planned["spend"] - targets[key],
+                "actual_count": len(actual["players"]),
+                "planned_count": len(planned["players"]),
+                "actual_players": actual["players"],
+                "planned_players": planned["players"],
+            }
+            if key in target_counts:
+                # Bodies are tracked separately from dollars because the two go
+                # wrong independently: one $40 RB instead of two $20s is on
+                # budget and a body light.
+                data["target_count"] = target_counts[key]
+                data["actual_count_diff"] = len(actual["players"]) - target_counts[key]
+                data["planned_count_diff"] = len(planned["players"]) - target_counts[key]
+            return data
+
+        rows = {key: row(key) for key in ALLOCATION_BUCKETS}
+        rows["BENCH"]["slot_count"] = BENCH_SLOTS
+        # ONLY the position buckets are summed — BENCH overlaps them, so adding
+        # it in would count every bench body twice.
+        actual_total = sum(rows[key]["actual"] for key in POSITION_BUCKETS)
+        planned_total = sum(rows[key]["planned"] for key in POSITION_BUCKETS)
+
+        wallet = draft.starting_budget - actual_total
+
+        # RB/WR tilt over ALL the backs and receivers on the roster, bench
+        # included — the RB/WR plan is total positional exposure, and a $4 bench
+        # back is still RB money you spent instead of on a receiver.
+        tilt_target = targets["RB"] + targets["WR"]
+        tilt_actual = rows["RB"]["actual"] + rows["WR"]["actual"]
+        planned_rb_share = (targets["RB"] / tilt_target) if tilt_target else None
+        actual_rb_share = (rows["RB"]["actual"] / tilt_actual) if tilt_actual else None
+        # Dollars your RB spend sits off the planned split, at the money you have
+        # ALREADY committed to RB+WR — the honest way to say "too WR-heavy"
+        # mid-draft, when the totals are nowhere near the plan yet.
+        tilt_dollars = (
+            round(rows["RB"]["actual"] - (tilt_actual * planned_rb_share))
+            if planned_rb_share is not None and tilt_actual else 0
+        )
+
+        return {
+            "draft_id": draft_id,
+            "draft_name": draft.draft_name,
+            "starting_budget": draft.starting_budget,
+            "has_drafter": drafter is not None,
+            "drafter_name": drafter.name if drafter else "",
+            "has_targets": any(targets.values()) or any(target_counts.values()),
+            "targets": {
+                "target_rb": targets["RB"],
+                "target_rb_count": target_counts["RB"],
+                "target_wr": targets["WR"],
+                "target_wr_count": target_counts["WR"],
+                "target_other": targets["OTHER"],
+                "target_bench": targets["BENCH"],
+            },
+            "rows": [rows[key] for key in ALLOCATION_BUCKETS],
+            # Same reason as actual_total: the bench target is a carve-out INSIDE
+            # the position dollars, not a fifth pile of money.
+            "target_total": sum(targets[key] for key in POSITION_BUCKETS),
+            "bench_target": targets["BENCH"],
+            "actual_total": actual_total,
+            "planned_total": planned_total,
+            "budget_remaining": wallet,
+            "tilt": {
+                "planned_rb_share": planned_rb_share,
+                "actual_rb_share": actual_rb_share,
+                "rb_actual": rows["RB"]["actual"],
+                "wr_actual": rows["WR"]["actual"],
+                "dollars": tilt_dollars,
+            },
+        }
+
     def get_draft_summary(self, draft_id):
         """Per-manager spend vs. projection for a completed (or in-flight) draft.
 

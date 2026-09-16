@@ -275,6 +275,17 @@ export default function Draft({draftDetails}: DraftProps) {
         >
             Playback
         </button>
+        {/* Own tab, not an in-app navigate like Summary/Playback: on draft day
+            this is a second-screen readout you keep OPEN beside the board, and
+            the board has no room to host it. window.open, because the SPA is
+            served under /app (basename) and react-router has no new-tab form. */}
+        <button
+            className={btnClass}
+            onClick={() => window.open(`/app/draft/${draftDetails.id}/allocation`, "_blank", "noopener")}
+            title="RB/WR/bench spend vs. your allocation plan (opens a new tab)"
+        >
+            Allocation ↗
+        </button>
         <button
             className={btnClass}
             onClick={() => setShowRebudget(true)}

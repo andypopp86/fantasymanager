@@ -3,6 +3,17 @@ import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { draftCreate } from "../lib/data";
 
+// The allocation plan. RB/WR/QB-TE-DEF PARTITION the roster by position and are
+// what sums to the budget; only RB and WR carry a body COUNT, being the
+// positions you buy several of. The bench line is a CARVE-OUT inside those
+// dollars — a bench RB is RB money and bench money — so it is priced separately
+// below rather than added to the total.
+const PLAN_FIELDS = [
+    { field: "target_rb", label: "RB $", count: "target_rb_count" },
+    { field: "target_wr", label: "WR $", count: "target_wr_count" },
+    { field: "target_other", label: "QB/TE/DEF $", count: null },
+] as const;
+
 export default function DraftCreate() {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
@@ -25,6 +36,17 @@ Norton`);
     const [limitTE, setLimitTE] = useState(3);
     const [limitDEF, setLimitDEF] = useState(2);
     const [availableToSpectators, setAvailableToSpectators] = useState(false);
+    // The opening allocation plan — the intent /draft/:id/allocation measures the
+    // real draft against. Editable there too, because a position re-prices itself
+    // the moment you buy into it. Defaults spend the default $200.
+    const [targets, setTargets] = useState<Record<string, number>>({
+        target_rb: 88, target_rb_count: 4,
+        target_wr: 76, target_wr_count: 4,
+        target_other: 36,
+        target_bench: 18,
+    });
+    const targetTotal = PLAN_FIELDS.reduce((sum, row) => sum + (targets[row.field] || 0), 0);
+    const targetRemainder = (startingBudget || 0) - targetTotal;
 
     const handleDraftCreateSubmit = () => {
         if (draftName === "") {
@@ -54,6 +76,12 @@ Norton`);
             limit_te: limitTE,
             limit_def: limitDEF,
             available_to_spectators: availableToSpectators,
+            target_rb: targets.target_rb || 0,
+            target_rb_count: targets.target_rb_count || 0,
+            target_wr: targets.target_wr || 0,
+            target_wr_count: targets.target_wr_count || 0,
+            target_other: targets.target_other || 0,
+            target_bench: targets.target_bench || 0,
         }
         draftCreate({ ...draftData }).then(() => {
             queryClient.invalidateQueries({ queryKey: ["draft_list"] });
@@ -117,6 +145,74 @@ Norton`);
                             </label>
                             <input id="available_to_spectators" type="checkbox" className={"h-5 w-5"}
                                 onChange={(e) => setAvailableToSpectators(e.target.checked)} checked={availableToSpectators}></input>
+                        </div>
+                    </div>
+                    <div className={"flex flex-wrap -mx-3 mb-6"}>
+                        <div className={"w-full px-3"}>
+                            <label className={"block uppercase tracking-wide text-gray-700 text-xs font-bold mb-2"}>
+                                Allocation plan
+                            </label>
+                            <p className={"text-xs text-gray-500 mb-2"}>
+                                What you MEAN to spend, and how many bodies at RB/WR. The Allocation
+                                page measures the live draft against this — and lets you re-plan there.
+                            </p>
+                            {PLAN_FIELDS.map((row) => (
+                                <div key={row.field} className={"flex items-center gap-2 mb-2"}>
+                                    <span className={"w-24 text-sm font-bold text-gray-700"}>{row.label}</span>
+                                    <input
+                                        className={"appearance-none block w-24 bg-gray-200 text-gray-700 border rounded py-2 px-3 leading-tight focus:outline-none focus:bg-white"}
+                                        id={row.field}
+                                        type="number"
+                                        min={0}
+                                        value={targets[row.field]}
+                                        onChange={(e) => setTargets({
+                                            ...targets,
+                                            [row.field]: parseInt(e.target.value) || 0,
+                                        })}
+                                    />
+                                    {row.count && (
+                                        <>
+                                            <span className={"text-sm text-gray-500"}>over</span>
+                                            <input
+                                                className={"appearance-none block w-16 bg-gray-200 text-gray-700 border rounded py-2 px-3 leading-tight focus:outline-none focus:bg-white"}
+                                                id={row.count}
+                                                type="number"
+                                                min={0}
+                                                value={targets[row.count]}
+                                                onChange={(e) => setTargets({
+                                                    ...targets,
+                                                    [row.count as string]: parseInt(e.target.value) || 0,
+                                                })}
+                                            />
+                                            <span className={"text-sm text-gray-500"}>players</span>
+                                        </>
+                                    )}
+                                </div>
+                            ))}
+                            {/* The sum is shown, not enforced: leaving money loose (or
+                                knowingly planning over) is a legitimate plan. */}
+                            <p className={`text-sm font-semibold ${targetRemainder === 0 ? "text-gray-600" : targetRemainder > 0 ? "text-blue-700" : "text-red-700"}`}>
+                                ${targetTotal} of ${startingBudget || 0} allocated
+                                {targetRemainder > 0 && ` — $${targetRemainder} unallocated`}
+                                {targetRemainder < 0 && ` — $${Math.abs(targetRemainder)} over budget`}
+                            </p>
+                            <div className={"flex items-center gap-2 mt-3 pt-3 border-t"}>
+                                <span className={"w-24 text-sm font-bold text-gray-700"}>Bench $</span>
+                                <input
+                                    className={"appearance-none block w-24 bg-gray-200 text-gray-700 border rounded py-2 px-3 leading-tight focus:outline-none focus:bg-white"}
+                                    id="target_bench"
+                                    type="number"
+                                    min={0}
+                                    value={targets.target_bench}
+                                    onChange={(e) => setTargets({
+                                        ...targets,
+                                        target_bench: parseInt(e.target.value) || 0,
+                                    })}
+                                />
+                                <span className={"text-xs text-gray-500"}>
+                                    of the above, held back for the 7 bench slots
+                                </span>
+                            </div>
                         </div>
                     </div>
                     <div className={"flex flex-wrap -mx-3 mb-6"}>

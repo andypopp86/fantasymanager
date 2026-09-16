@@ -227,6 +227,8 @@ class ApiAuthorizationTests(TestCase):
             self.client.get(f"/api/drafts/draft/{self.draft.id}/budgeted_picks/").status_code, 403)
         self.assertEqual(
             self.client.get(f"/api/drafts/draft/{self.draft.id}/playback/").status_code, 403)
+        self.assertEqual(
+            self.client.get(f"/api/drafts/draft/{self.draft.id}/allocation/").status_code, 403)
         self.assertEqual(self.client.get("/api/drafts/draft/plans/").status_code, 403)
         self.assertEqual(
             self.client.post(f"/api/drafts/draft/delete/{self.draft.id}/").status_code, 403)
@@ -2262,3 +2264,201 @@ class DraftPlaybackTests(TestCase):
         self.assertEqual(self.pool_row(playback, "Override Guy")["projected_price"], 40)
         self.assertEqual(playback["picks"][0]["projected_price"], 40)
         self.assertEqual(playback["picks"][0]["diff"], 10)
+
+
+
+
+class AllocationTests(TestCase):
+    """The allocation plan's arithmetic — the bucketing and the two readouts.
+
+    Worth asserting: that a BENCH slot beats the player's position (the one place
+    this page departs from "always the player's position"), that QB/TE/DEF pool,
+    that bodies are counted apart from dollars, and that the bench outlook and
+    RB/WR tilt say what they claim to.
+    """
+
+    def setUp(self):
+        from draft.services.draft.draft import DraftReadService, DraftWriteService
+        self.service = DraftReadService(user=None)
+        self.write_service = DraftWriteService(user=None)
+        self.draft = Draft.objects.create(
+            year=2026, draft_name="allocation draft", starting_budget=200,
+            target_rb=88, target_rb_count=4, target_wr=76, target_wr_count=4,
+            target_other=18, target_bench=18,
+        )
+        self.drafter = Manager.objects.create(draft=self.draft, name="me", drafter=True, position=0)
+        self.opponent = Manager.objects.create(draft=self.draft, name="them", drafter=False, position=1)
+
+    def draft_player(self, player, manager, slot, price):
+        return DraftPick.objects.create(
+            draft=self.draft, player=player, manager=manager,
+            price=price, drafted=True, position_slot=slot,
+        )
+
+    def budget_player(self, player, slot, price):
+        from draft.models import BudgetPlayer
+        return BudgetPlayer.objects.create(
+            draft=self.draft, player=player, manager=self.drafter,
+            position=slot, price=price, status="budgeted",
+        )
+
+    def allocation(self):
+        return self.service.get_allocation(draft_id=self.draft.id)
+
+    def row(self, allocation, key):
+        return next(r for r in allocation["rows"] if r["key"] == key)
+
+    def test_bench_overlaps_the_position_buckets_rather_than_replacing_them(self):
+        """A bench RB is RB money AND bench money — the two lines ask different
+        questions, so they deliberately double-count."""
+        self.draft_player(make_player("Flex WR", "WR"), self.drafter, "FLEX1", price=30)
+        self.draft_player(make_player("Bench WR", "WR"), self.drafter, "BENCH1", price=5)
+
+        allocation = self.allocation()
+
+        self.assertEqual(self.row(allocation, "WR")["actual"], 35)
+        self.assertEqual(self.row(allocation, "WR")["actual_count"], 2)
+        self.assertEqual(self.row(allocation, "BENCH")["actual"], 5)
+        self.assertEqual(self.row(allocation, "BENCH")["actual_count"], 1)
+
+    def test_totals_never_add_the_overlapping_bench_bucket(self):
+        self.draft_player(make_player("Bench RB", "RB"), self.drafter, "BENCH1", price=6)
+        self.draft_player(make_player("Start WR", "WR"), self.drafter, "WR1", price=40)
+
+        allocation = self.allocation()
+
+        self.assertEqual(allocation["actual_total"], 46)          # not 52
+        self.assertEqual(allocation["budget_remaining"], 154)
+        # The plan's total is the position lines; the bench line sits inside them.
+        self.assertEqual(allocation["target_total"], 182)
+        self.assertEqual(allocation["bench_target"], 18)
+
+    def test_qb_te_def_pool_into_other(self):
+        self.draft_player(make_player("A QB", "QB"), self.drafter, "QB1", price=8)
+        self.draft_player(make_player("A TE", "TE"), self.drafter, "TE1", price=6)
+        self.draft_player(make_player("A DEF", "DEF"), self.drafter, "DEF1", price=1)
+
+        row = self.row(self.allocation(), "OTHER")
+
+        self.assertEqual(row["actual"], 15)
+        self.assertEqual(row["actual_count"], 3)
+        # Pooled buckets carry no body target — there is nothing to steer.
+        self.assertNotIn("target_count", row)
+
+    def test_dollars_and_bodies_are_flagged_independently(self):
+        """One expensive RB can be on budget and still leave you bodies light."""
+        self.draft_player(make_player("Stud RB", "RB"), self.drafter, "RB1", price=88)
+
+        row = self.row(self.allocation(), "RB")
+
+        self.assertEqual(row["actual_diff"], 0)            # dollars: dead on plan
+        self.assertEqual(row["actual_count_diff"], -3)     # bodies: three short
+
+    def test_opponent_picks_are_not_the_drafters_spend(self):
+        self.draft_player(make_player("Their WR", "WR"), self.opponent, "WR1", price=60)
+
+        allocation = self.allocation()
+
+        self.assertEqual(self.row(allocation, "WR")["actual"], 0)
+        self.assertEqual(allocation["budget_remaining"], 200)
+
+    def test_bench_row_counts_slot_spend_and_knows_its_slot_count(self):
+        self.draft_player(make_player("Bench RB", "RB"), self.drafter, "BENCH1", price=4)
+        self.draft_player(make_player("Bench QB", "QB"), self.drafter, "BENCH2", price=2)
+
+        row = self.row(self.allocation(), "BENCH")
+
+        self.assertEqual(row["actual"], 6)
+        self.assertEqual(row["actual_count"], 2)
+        self.assertEqual(row["actual_diff"], -12)     # $18 planned, $6 spent
+        self.assertEqual(row["slot_count"], 7)
+        # A slot bucket carries no body target — the roster decides the count.
+        self.assertNotIn("target_count", row)
+
+    def test_tilt_measures_the_split_against_what_is_committed(self):
+        """Bench backs and receivers count — the RB/WR plan is total exposure."""
+        self.draft_player(make_player("Tilt RB", "RB"), self.drafter, "RB1", price=16)
+        self.draft_player(make_player("Bench RB", "RB"), self.drafter, "BENCH1", price=4)
+        self.draft_player(make_player("Tilt WR", "WR"), self.drafter, "WR1", price=80)
+
+        tilt = self.allocation()["tilt"]
+
+        self.assertAlmostEqual(tilt["planned_rb_share"], 88 / 164)
+        self.assertAlmostEqual(tilt["actual_rb_share"], 0.2)
+        # Planned split says $54 of the $100 committed should have been RB.
+        self.assertEqual(tilt["dollars"], -34)
+
+    def test_tilt_is_null_before_anything_is_committed(self):
+        tilt = self.allocation()["tilt"]
+
+        self.assertIsNone(tilt["actual_rb_share"])
+        self.assertEqual(tilt["dollars"], 0)
+
+    def test_plan_prices_a_drafted_player_at_what_he_actually_cost(self):
+        """Same rule as get_budgeted_picks, including an OPPONENT's price."""
+        mine = make_player("My RB", "RB")        # projected 10
+        theirs = make_player("Lost RB", "RB")    # projected 10
+        self.budget_player(mine, "RB1", price=10)
+        self.budget_player(theirs, "RB2", price=10)
+        self.draft_player(mine, self.drafter, "RB1", price=44)
+        self.draft_player(theirs, self.opponent, "RB1", price=33)
+
+        row = self.row(self.allocation(), "RB")
+
+        self.assertEqual(row["planned"], 77)
+        self.assertEqual(row["actual"], 44)   # only what I paid
+        lost = next(p for p in row["planned_players"] if p["name"] == "Lost RB")
+        self.assertEqual((lost["is_drafted"], lost["drafted_by"]), (True, "them"))
+
+    def test_override_price_beats_projected_price_in_the_plan(self):
+        wr = make_player("Override WR", "WR")
+        Player.objects.filter(pk=wr.pk).update(override_price=40)
+        self.budget_player(wr, "WR1", price=40)
+
+        self.assertEqual(self.row(self.allocation(), "WR")["planned"], 40)
+
+    def test_every_bucket_gets_a_row_in_a_fixed_order(self):
+        allocation = self.allocation()
+
+        self.assertEqual([r["key"] for r in allocation["rows"]], ["RB", "WR", "OTHER", "BENCH"])
+        self.assertTrue(allocation["has_targets"])
+        self.assertEqual(allocation["target_total"], 182)   # RB + WR + other only
+        self.assertEqual(self.row(allocation, "BENCH")["slot_count"], 7)
+
+    def test_untargeted_draft_says_so(self):
+        plain = Draft.objects.create(year=2026, draft_name="no plan", starting_budget=200)
+        Manager.objects.create(draft=plain, name="me", drafter=True, position=0)
+
+        allocation = self.service.get_allocation(draft_id=plain.id)
+
+        self.assertFalse(allocation["has_targets"])
+        self.assertTrue(allocation["has_drafter"])
+        self.assertIsNone(allocation["tilt"]["planned_rb_share"])
+
+    def test_no_drafter_is_flagged_not_crashed(self):
+        Manager.objects.filter(pk=self.drafter.pk).update(drafter=False)
+
+        allocation = self.allocation()
+
+        self.assertFalse(allocation["has_drafter"])
+        self.assertEqual(allocation["actual_total"], 0)
+        self.assertEqual(allocation["planned_total"], 0)
+
+    def test_targets_are_editable_and_only_the_plan_fields_move(self):
+        self.write_service.update_allocation_targets(
+            draft_id=self.draft.id,
+            targets={"target_rb": 100, "target_rb_count": 5, "draft_name": "hacked"},
+        )
+
+        self.draft.refresh_from_db()
+
+        self.assertEqual((self.draft.target_rb, self.draft.target_rb_count), (100, 5))
+        self.assertEqual(self.draft.target_wr, 76)        # untouched fields stay
+        self.assertEqual(self.draft.draft_name, "allocation draft")
+
+    def test_negative_target_is_rejected(self):
+        from rest_framework.exceptions import ValidationError
+
+        with self.assertRaises(ValidationError):
+            self.write_service.update_allocation_targets(
+                draft_id=self.draft.id, targets={"target_bench": -5})

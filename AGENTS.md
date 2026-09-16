@@ -1007,6 +1007,105 @@ testing: this repo's services (draft/budget/plan rules), custom permission
 classes (the drafter/spectator boundary), and any hand-written passthrough
 where a field could silently get dropped. When in doubt, ask "does this assert
 OUR logic, or that Django works?" — skip the latter.
+## Allocation (`/draft/:draftId/allocation`)
+
+"Am I buying the draft I meant to buy." Answers the failure this repo's owner
+actually hit: meaning to lean RB and walking out WR-heavy.
+
+**The plan is deliberately NOT one line per position.** `Draft.target_*` is six
+fields, and the asymmetry is the whole design:
+
+| bucket | fields | why |
+| --- | --- | --- |
+| RB, WR | dollars **+ a body count** | the only steerable positions — you buy several and money moves between them to the end |
+| QB/TE/DEF | one pooled `target_other` | one-and-done: fill the slot and there is nothing to pivot. It exists mostly so the bench math can be honest |
+| Bench | `target_bench`, dollars only | a fixed set of SLOTS, so a count would say nothing |
+
+**The buckets OVERLAP, and that is load-bearing** (`allocation_buckets`, plural):
+
+```
+every pick      -> RB / WR by the PLAYER's position, else OTHER   (a partition)
+picks in BENCH1..7  ALSO -> BENCH                                  (a subset)
+```
+
+A WR in FLEX2 is WR spend (the summary page's rule) and **a WR in BENCH3 is WR
+spend AND bench spend**, because the two lines answer different questions: the RB
+plan is total positional exposure (every back on the roster, bench ones included)
+while the bench line asks "did I keep enough money back for the last seven
+slots". So their dollars must NEVER be summed — `target_total` / `actual_total`
+come from the position buckets alone (`POSITION_BUCKETS`), and `target_bench` is
+a carve-out INSIDE them, not a fifth pile of money. The create form and the
+page's editor both price the bench separately from the running total for exactly
+this reason, and the numbers table marks the bench row "(subset)". The page
+carries **no explanatory prose** — no per-widget subtitles, no footnote under the
+table: the rules live in the file header comment and here, not in screen space
+that the draft needs.
+
+**The plan is EDITABLE mid-draft**, unlike target tiers or the draft's limits.
+That is the point of the page, not a convenience: spend $60 of a $70 WR plan on
+one receiver and the rest of your WRs are cheap by definition — a re-plan, not a
+shortage. `POST /api/drafts/draft/<id>/allocation/` →
+`DraftWriteService.update_allocation_targets`, which writes ONLY the six fields
+in `ALLOCATION_TARGET_FIELDS` (so it can never become a general draft-edit
+backdoor) with `update_fields`, and the response is the **recomputed GET payload**
+so the page redraws without a second round trip. `DraftAdmin` keeps the fields on
+the change form for fix-ups outside a live draft, plus a read-only
+`target_allocation` summary column; they are NOT `list_editable`.
+
+**One endpoint, one arithmetic** (`IsDrafter`, like playback and target tiers —
+it is the drafter's own plan and budget panel, exactly what the spectator views
+withhold): `DraftReadService.get_allocation`. Server-fed through React Query with
+a 15s poll, **not** Dexie and not the write queue, like Summary / Playback /
+Target Tiers. Actual spend and the budget panel's plan are BOTH measured against
+the targets; the plan number is `actual_price or (override_price or
+projected_price)` per budgeted player, mirroring `get_budgeted_picks` EXACTLY so
+the page and the sidebar can't disagree — including the sidebar's quirk that a
+budgeted player an OPPONENT took is priced at what he actually went for
+(`is_drafted` / `drafted_by` ride on the row so the page marks those).
+
+The page's one derived readout is the **RB/WR tilt** — planned split vs. actual
+split over **every back and receiver on the roster, bench included** (the RB/WR
+plan is total exposure, and a $4 bench back is still RB money spent instead of on
+a receiver). `dollars` is measured against what is ALREADY committed to RB+WR
+(`rb_actual − committed × planned_rb_share`), not against the plan's totals, so
+it reads straight from the first pick instead of showing a huge fake gap all
+draft. Positive is RB-heavy, negative WR-heavy; shares are `null` before there is
+anything to divide. The widget draws **Actual above Planned** — what you are
+buying is the reading, the plan underneath is what you check it against.
+
+The bench is a plain allocation row like the others (its card prints slots filled
+of `slot_count`), NOT a projection: an earlier "bench outlook" widget that
+forecast headroom from the unspent plan was removed — if it comes back, note that
+the plan's remaining position dollars already INCLUDE the bench buys still to
+come, so the unspent carve-out has to be netted out or the reserve is counted
+twice.
+
+**Dollars and bodies are flagged independently**, never merged into one verdict:
+one $88 RB against an "$88 over 4 players" plan is dead on budget and three
+bodies short, and only the count says so.
+
+UI is `features/DraftAllocationPage.tsx`, reached from the board's
+**"Allocation ↗"** button, which is a `window.open(..., "_blank")` rather than a
+`navigate` like Summary/Playback: on draft day this is a second-screen readout
+you keep open BESIDE the board, and the board has no room to host it. (The SPA is
+served under the `/app` basename, so the opened URL is
+`/app/draft/<id>/allocation` — react-router has no new-tab form.) The plan editor
+re-adopts the server's targets whenever the polled payload CHANGES, so a save
+made elsewhere isn't masked by the form's local state. Colour polarity is NOT the
+summary page's: there red means overpay, here **red means SHORT**, because the
+shortage is what this page was built to catch.
+
+**Page order is the order you read it mid-draft**: the plan editor, then the two
+steerable positions (RB, WR), then the tilt between them, then the check-on lines
+(QB/TE/DEF + bench), and the wallet arithmetic last.
+
+Tests: `draft/tests.py::AllocationTests` covers the bench overlap and that the
+totals don't double-count it, QB/TE/DEF pooling, dollars-vs-bodies independence,
+opponent picks excluded, the bench row's slot spend and slot count, the
+tilt against committed dollars, the plan's price rule (with the opponent-took-him
+case), override precedence, the fixed bucket order, the no-plan and no-drafter
+cases, and that the editor writes only the six plan fields.
+
 ## Draft playback (`/draft/:draftId/playback`)
 
 Replay a finished draft one pick at a time. The question it exists to answer is
