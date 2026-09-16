@@ -1012,12 +1012,16 @@ OUR logic, or that Django works?" — skip the latter.
 "Am I drifting off my own plan, and where." Answers the failure this repo's owner
 actually hit: leaning RB in the planning and coming out WR-heavy in the room.
 
-**The plan is fixed at draft creation and never editable afterwards.**
+**The plan is set at draft creation, and /admin is the only way back to it.**
 `Draft.target_qb/_rb/_wr/_te/_def` are dollars per PLAYER POSITION, entered on the
 create-draft form (`DraftCreate.tsx`) and written by `create_draft`. That is
 deliberate: the number worth measuring against is what you meant BEFORE the room
-started bidding, so there is no endpoint, admin field or page control that edits
-them mid-draft. **All five zero = no plan was entered** (`has_targets` false) and
+started bidding, so no endpoint and no page control edits them mid-draft.
+`DraftAdmin` is the one CORRECTION path — the five fields sit on the change form
+(as one row) and the changelist prints them read-only as a single
+`target_allocation` column (`20/88/76/15/1 = $200`, or `—` for a draft with no
+plan). Deliberately NOT `list_editable`: quietly retuning the plan from a list
+view mid-draft erases the only thing worth comparing to. **All five zero = no plan was entered** (`has_targets` false) and
 the page says so rather than drawing a $0 target every position is "over".
 The create form shows the running sum against `starting_budget` but does NOT
 enforce it — leaving money loose, or knowingly planning over, is a real plan.
