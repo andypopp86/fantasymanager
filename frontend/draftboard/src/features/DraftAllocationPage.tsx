@@ -48,12 +48,6 @@ const BUCKET_LABELS: Record<AllocationBucket, string> = {
     OTHER: "QB / TE / DEF",
     BENCH: "Bench",
 };
-const BUCKET_NOTES: Record<AllocationBucket, string> = {
-    RB: "Every back on the roster, bench ones included.",
-    WR: "Every receiver on the roster, bench ones included.",
-    OTHER: "One reserve, not three lines: these fill once and can't be pivoted.",
-    BENCH: "By SLOT — whoever lands in BENCH1-7, and they also count at their position above.",
-};
 
 // Deviation from plan, not over/under PAY (that's the summary page, where red is
 // overpay). Here red is SHORT, because the shortage is the thing this page was
@@ -101,12 +95,7 @@ function TiltWidget({ tilt }: { tilt: DraftAllocationOutput["tilt"] }) {
     const heavy = off < 0 ? "WR" : "RB";
     return (
         <div className={`${CARD} p-4`}>
-            <h2 className={CARD_TITLE}>RB / WR tilt</h2>
-            <p className="text-xs text-gray-500 mb-2">
-                Every back and receiver on the roster, bench ones included. Measured at what you
-                have already committed to RB+WR, so it reads straight rather than waiting for the
-                plan's totals.
-            </p>
+            <h2 className={`${CARD_TITLE} mb-2`}>RB / WR tilt</h2>
 
             {plannedRb === null && <p className="text-sm text-gray-600">No RB/WR dollars planned yet.</p>}
             {/* Actual first: what you are actually buying is the reading, and the
@@ -230,9 +219,8 @@ function BucketCard({ row, scale, hasTargets }: { row: AllocationRow, scale: num
                     {expanded ? "Hide players" : `${row.actual_count} drafted · ${row.planned_count} planned`}
                 </button>
             </div>
-            <p className="text-[11px] text-gray-400 mb-2">{BUCKET_NOTES[row.key]}</p>
 
-            <div className="space-y-1">
+            <div className="space-y-1 mt-2">
                 <MeasuredBar
                     label="Actual" value={row.actual} target={row.target} diff={row.actual_diff}
                     scale={scale} color={BUCKET_COLORS[row.key]} showTarget={hasTargets}
@@ -530,14 +518,6 @@ export default function DraftAllocationPage() {
                                     </tbody>
                                 </table>
                             </div>
-                            <p className="text-xs text-gray-500 mt-2">
-                                RB / WR / QB-TE-DEF split the roster by the player's position (a WR in
-                                FLEX2 is WR spend) and are what the total adds up. <strong>Bench
-                                overlaps them</strong> — a RB in BENCH2 is counted in both — so it is
-                                left out of the total rather than double-counted. "Plan" is the budget
-                                panel's own arithmetic: the actual price where a budgeted player is
-                                already off the board, the projected price otherwise.
-                            </p>
                         </div>
                     </div>
                 )}

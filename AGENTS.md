@@ -1036,7 +1036,10 @@ slots". So their dollars must NEVER be summed — `target_total` / `actual_total
 come from the position buckets alone (`POSITION_BUCKETS`), and `target_bench` is
 a carve-out INSIDE them, not a fifth pile of money. The create form and the
 page's editor both price the bench separately from the running total for exactly
-this reason, and the numbers table marks the bench row "(subset)".
+this reason, and the numbers table marks the bench row "(subset)". The page
+carries **no explanatory prose** — no per-widget subtitles, no footnote under the
+table: the rules live in the file header comment and here, not in screen space
+that the draft needs.
 
 **The plan is EDITABLE mid-draft**, unlike target tiers or the draft's limits.
 That is the point of the page, not a convenience: spend $60 of a $70 WR plan on
