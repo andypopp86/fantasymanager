@@ -2462,3 +2462,123 @@ class AllocationTests(TestCase):
         with self.assertRaises(ValidationError):
             self.write_service.update_allocation_targets(
                 draft_id=self.draft.id, targets={"target_bench": -5})
+
+
+class LockedAndProtectedTests(TestCase):
+    """The two independent draft flags.
+
+    `protected` blocks DELETION (what `locked` used to mean); `locked` blocks
+    WRITES. What's worth asserting is that they don't bleed into each other, that
+    the write gate is a permission rather than a per-view `if`, and that the
+    player-level flags (favorite, watchlist) survive a lock — they are keyed on
+    (player, year) and shared by every draft that season.
+    """
+
+    def setUp(self):
+        self.drafter = make_drafter_user()
+        self.client.force_login(self.drafter)
+        self.draft = Draft.objects.create(year=2026, draft_name="live")
+        self.locked_draft = Draft.objects.create(year=2026, draft_name="frozen", locked=True)
+        self.manager = Manager.objects.create(draft=self.locked_draft, name="me", drafter=True, position=0)
+        self.player = make_player("Locked RB", "RB")
+        DraftPick.objects.create(draft=self.locked_draft, player=self.player)
+
+    def post(self, path, params=None):
+        return self.client.post(path, {"params": params or {}}, content_type="application/json")
+
+    # --- protected: deletion ------------------------------------------------
+
+    def test_protected_draft_cannot_be_deleted(self):
+        protected = Draft.objects.create(year=2026, draft_name="keep", protected=True)
+
+        protected.delete()
+
+        self.assertTrue(Draft.objects.filter(pk=protected.pk).exists())
+
+    def test_locked_alone_does_not_protect_from_deletion(self):
+        """The flags are independent — a frozen mockup is still disposable."""
+        self.locked_draft.delete()
+
+        self.assertFalse(Draft.objects.filter(pk=self.locked_draft.pk).exists())
+
+    def test_delete_endpoint_refuses_a_protected_draft(self):
+        protected = Draft.objects.create(year=2026, draft_name="keep", protected=True)
+
+        from draft.services.draft.draft import DraftWriteService
+
+        with self.assertRaises(Exception):
+            DraftWriteService(user=self.drafter).delete_draft(draft_id=protected.id)
+
+        self.assertTrue(Draft.objects.filter(pk=protected.pk).exists())
+
+    # --- locked: writes -----------------------------------------------------
+
+    def test_locked_draft_bounces_every_pick_and_budget_write(self):
+        paths = [
+            f"/api/drafts/draft/{self.locked_draft.id}/submit_pick/{self.manager.id}/{self.player.player_id}/",
+            f"/api/drafts/draft/{self.locked_draft.id}/unsubmit_pick/{self.manager.id}/{self.player.player_id}/",
+            f"/api/drafts/draft/{self.locked_draft.id}/budget_pick/{self.manager.id}/{self.player.player_id}/",
+            f"/api/drafts/draft/{self.locked_draft.id}/unbudget_pick/{self.manager.id}/{self.player.player_id}/",
+            f"/api/drafts/draft/{self.locked_draft.id}/reslot_picks/{self.manager.id}/",
+            f"/api/drafts/draft/{self.locked_draft.id}/reslot_budget/{self.manager.id}/",
+            f"/api/drafts/draft/{self.locked_draft.id}/allocation/",
+        ]
+        for path in paths:
+            with self.subTest(path=path):
+                self.assertEqual(self.post(path).status_code, 403)
+
+    def test_an_unlocked_draft_is_untouched_by_the_gate(self):
+        manager = Manager.objects.create(draft=self.draft, name="me", drafter=True, position=0)
+        DraftPick.objects.create(draft=self.draft, player=self.player)
+
+        response = self.post(
+            f"/api/drafts/draft/{self.draft.id}/budget_pick/{manager.id}/{self.player.player_id}/",
+            {"budget_position": "RB1", "projected_price": 10},
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_locked_draft_stays_fully_readable(self):
+        for path in [
+            f"/api/drafts/draft/{self.locked_draft.id}/detail/",
+            f"/api/drafts/draft/{self.locked_draft.id}/manager_picks/",
+            f"/api/drafts/draft/{self.locked_draft.id}/allocation/",
+            f"/api/drafts/draft/{self.locked_draft.id}/playback/",
+        ]:
+            with self.subTest(path=path):
+                self.assertEqual(self.client.get(path).status_code, 200)
+
+    def test_player_level_flags_survive_a_lock(self):
+        """favorite and watch write Player rows shared by every draft that year,
+        so one locked draft must not freeze them."""
+        favorite = self.post(
+            f"/api/drafts/draft/{self.locked_draft.id}/favorite_player/{self.player.player_id}/")
+        watch = self.post(
+            f"/api/drafts/draft/{self.locked_draft.id}/watch/{self.manager.id}/{self.player.player_id}/",
+            {"watch": True})
+
+        self.assertEqual(favorite.status_code, 200)
+        self.assertEqual(watch.status_code, 200)
+        self.player.refresh_from_db()
+        self.assertTrue(self.player.favorite)
+        self.assertTrue(self.player.watched)
+
+    def test_position_adp_prices_off_protected_drafts(self):
+        """The ADP command wants the REAL drafts, which is `protected` now."""
+        from draft.management.commands.update_position_adp import update_adp
+
+        protected = Draft.objects.create(year=2025, draft_name="last year", protected=True)
+        manager = Manager.objects.create(draft=protected, name="me", drafter=True, position=0)
+        old_rb = make_player("Old RB", "RB", year=2025)
+        DraftPick.objects.create(draft=protected, player=old_rb, manager=manager,
+                                 price=40, drafted=True, position_slot="RB1")
+        # Locked but NOT protected: a frozen scratch draft is not real history.
+        loose_manager = Manager.objects.create(draft=self.locked_draft, name="them", drafter=False, position=1)
+        DraftPick.objects.create(draft=self.locked_draft, player=make_player("Scratch RB", "RB"),
+                                 manager=loose_manager, price=99, drafted=True, position_slot="RB1")
+
+        update_adp()
+
+        from draft.models import PositionADP
+        rb_prices = list(PositionADP.objects.filter(position="RB").values_list("average_price", flat=True))
+        self.assertEqual(rb_prices, [40])

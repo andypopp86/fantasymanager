@@ -6,7 +6,10 @@ export type Draft = {
     drafter: string,
     projected_draft: any,
     saved_slots: any,
+    // Two independent flags: `locked` takes no writes (DraftIsUnlocked on every
+    // write endpoint), `protected` cannot be deleted (Draft.delete).
     locked: boolean,
+    protected: boolean,
     starting_budget: number,
     limit_qb: number,
     limit_rb: number,

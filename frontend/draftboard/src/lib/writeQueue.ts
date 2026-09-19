@@ -1,4 +1,4 @@
-import { db } from "./db";
+import { db, isDraftLocked } from "./db";
 import {
     draftPickSubmit,
     draftPickUnsubmit,
@@ -32,6 +32,19 @@ const OP_SENDERS: Record<string, (args: any) => Promise<any>> = {
     favorite: (a) => favoritePlayer(a.draftId, a.playerId),
 };
 
+// Ops that are NOT draft state and so survive a lock: both write
+// `Player.favorite` / `Player.watched`, which are keyed on (player, year) and
+// shared by every draft that season — freezing one draft must not freeze a flag
+// its neighbours read. Mirrors the server's DraftIsUnlocked, which leaves the
+// favorite and watch endpoints ungated for the same reason.
+const LOCK_EXEMPT_OPS = new Set(["favorite", "watch"]);
+
+// A locked draft sends nothing. This is the LAST line of the client gate —
+// mutations.ts already refuses the local write (see lockGuarded there), so an op
+// only reaches here if it slipped past that, or came off the replay queue.
+const isLocked = async (draftId: number, op: string) =>
+    !LOCK_EXEMPT_OPS.has(op) && await isDraftLocked(draftId);
+
 // Request never reached the server (offline, refused, timed out) — as opposed
 // to the server answering with an error status.
 export const isNetworkError = (err: any) =>
@@ -46,6 +59,10 @@ const hasPending = async (draftId: number) =>
 // Fire-and-forget path for the optimistic mutations: direct call when the
 // coast is clear, queued when offline or behind other queued writes.
 export const sendOrQueue = async (draftId: number, op: string, args: Record<string, any>) => {
+    if (await isLocked(draftId, op)) {
+        console.warn(`${op} skipped — draft ${draftId} is locked`);
+        return;
+    }
     if (await hasPending(draftId)) {
         await enqueue(draftId, op, args);
         return;
@@ -68,7 +85,10 @@ export const sendOrQueueWithResponse = async (
     draftId: number,
     op: string,
     args: Record<string, any>,
-): Promise<{ response: any } | { queued: true }> => {
+): Promise<{ response: any } | { queued: true } | { locked: true }> => {
+    if (await isLocked(draftId, op)) {
+        return { locked: true };
+    }
     if (await hasPending(draftId)) {
         await enqueue(draftId, op, args);
         return { queued: true };

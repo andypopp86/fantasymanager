@@ -88,6 +88,15 @@ export const db = new DraftboardDB();
 
 // Replace one draft's rows with fresh server data, atomically. Payloads are
 // the four load-query responses (see Draft.tsx) passed through verbatim.
+// A locked draft takes no writes — the client half of the server's
+// DraftIsUnlocked permission. Read from the hydrated draftDetails, so it costs
+// one indexed Dexie get and works offline like everything else here. Absent
+// meta (nothing hydrated yet) reads as unlocked: the server still refuses.
+export const isDraftLocked = async (draftId: number) => {
+    const meta = await db.draft_meta.get(draftId);
+    return Boolean(meta?.draftDetails?.locked);
+};
+
 export const hydrateDraft = async (
     draftId: number,
     // The four load-query responses; typed loose because the data.ts wrapper

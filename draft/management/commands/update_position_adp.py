@@ -13,7 +13,10 @@ from django.db.models.functions import RowNumber
 
 def update_adp():
     adp_dict = {}
-    picks = d.DraftPick.objects.filter(draft__locked=True, drafted=True, price__gt=0)
+    # `protected`, not `locked`: this wants the REAL drafts worth pricing off —
+    # the ones flagged keep-forever — and that meaning moved to `protected` when
+    # `locked` became "frozen to writes" (see Draft).
+    picks = d.DraftPick.objects.filter(draft__protected=True, drafted=True, price__gt=0)
     picks = picks.annotate(draft_order=Window(
         expression=RowNumber(),
         partition_by=('draft__year', 'player__position'),

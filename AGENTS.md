@@ -178,6 +178,56 @@ redirects to `/login/?next=…` when a session expires mid-use.
 **Draft day:** the spectator laptop must log in once (any non-staff account)
 before opening the board URL; sessions last two weeks by default.
 
+## Locked vs. protected (two independent draft flags)
+
+`Draft.locked` and `Draft.protected` guard different things, and the names are
+the wrong way round from this repo's history — `locked` used to mean "can't be
+deleted", and that meaning moved to `protected` (migration `0095` copies the
+flag across; the old rows keep `locked` too, which is right for finished drafts).
+
+| flag | blocks | enforced in |
+| --- | --- | --- |
+| `protected` | DELETION | `Draft.delete` + `delete_draft` |
+| `locked` | every WRITE to the draft's own rows | `DraftIsUnlocked` (a DRF permission) |
+
+They are independent: a live draft can be protected and unlocked, a scratch
+mockup locked and disposable.
+
+**`locked` is a permission, not a pile of `if`s.**
+`draft/api/permissions.py::DraftIsUnlocked` sits beside `IsDrafter` on every
+write view that carries a `draft_id` — submit/unsubmit, budget/unbudget, both
+reslots, and the allocation POST. A new write endpoint is frozen by adding the
+class, not by remembering a guard in the service. Two deliberate holes:
+
+- **Safe methods pass**, so a locked draft stays fully readable — board,
+  summary, playback, allocation GET.
+- **Favorites and the watchlist are NOT draft state.** Both write
+  `Player.favorite` / `Player.watched`, keyed on (player, year) and shared by
+  every draft that season, so locking one draft must not freeze a flag its
+  neighbours read. Those two endpoints stay ungated.
+
+The client refuses the same writes, and it has to do so at the MUTATION, not
+just at the send: the mutations are optimistic, so a gate that only blocked the
+request still moved the local Dexie rows — the player left the board, the budget
+row reset, and a refresh silently put it all back. So `lib/mutations.ts` exports
+its draft-state writers through **`lockGuarded`** (one wrapper, applied at the
+export, because every one of them takes `draftId` first), and the click is a
+true no-op. `draftPlayer` is the only guarded mutation whose result is read, so
+it refuses with `LOCKED_MESSAGE` and the board alerts; the rest refuse with
+`undefined`. `lib/writeQueue.ts` keeps its own check (`LOCK_EXEMPT_OPS`) as the
+last line — it also covers ops replayed off the pending queue. Left unguarded on
+purpose: `watchPick` / `unwatchPick` / `setFavorite` (player-level, as above)
+and the `*Backup*` family, a local-only shelf the server never sees.
+`isDraftLocked` in `lib/db.ts` is the single reader of the flag (off the
+hydrated `draft_meta` row). UI: the draft list shows a 🔒 Locked badge and hides the delete X for
+protected drafts (independently), and the board turns its title bar amber with a
+LOCKED prefix and drops the Rebudget and Plans buttons.
+
+**`update_position_adp` prices off `protected` drafts**, not locked ones — it
+wants the real historical drafts, which is what that flag now marks.
+
+Tests: `draft/tests.py::LockedAndProtectedTests`.
+
 ## Hosted deploy (Railway)
 
 `Dockerfile` builds the React bundle and serves via gunicorn + WhiteNoise
