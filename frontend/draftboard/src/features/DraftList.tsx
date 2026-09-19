@@ -35,12 +35,18 @@ export default function DraftList({ draftList, readOnly = false }) {
                                     <Link to={readOnly ? `/board/${draft.id}` : `/draft/${draft.id}`}>{draft.draft_name}</Link>
                                 </td>
                                 <td>
-                                    {
-                                    draft.locked ?
-                                        <span>Locked</span>
-                                        :
-                                        !readOnly && <button className="bg-red-400 text-white" onClick={() => deleteDraft(draft.id)}>X</button>
-                                    }
+                                    {/* The flags are independent: `locked` is a
+                                        badge (frozen to writes), `protected` is
+                                        the absence of the delete button. A draft
+                                        can be either, both or neither. */}
+                                    <span className="flex items-center gap-2">
+                                        {draft.locked && (
+                                            <span title="Locked — picks, budget and plan are frozen">🔒 Locked</span>
+                                        )}
+                                        {!readOnly && !draft.protected && (
+                                            <button className="bg-red-400 text-white" onClick={() => deleteDraft(draft.id)}>X</button>
+                                        )}
+                                    </span>
                                 </td>
                             </tr>
                         ))}

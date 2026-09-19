@@ -332,14 +332,16 @@ class PlayerAdmin(admin.ModelAdmin):
     fields = ('name', 'position', 'team', 'year', 'notes', 'target_tier', 'years_experience', 'risk_score', 'risk_summary', 'is_projection', 'has_injury', 'defensive_impact', 'projected_price', 'adp_price', 'my_price', 'my_price_rationale', 'skepticism', 'adp_formatted', 'adp_source', 'adp_ffc', 'adp_sharks', 'adp_fpros', 'favorite', 'override_price', 'player_id', )
     
 class DraftAdmin(admin.ModelAdmin):
-    list_display = ('draft_name', 'year', 'drafter', 'projected_draft', 'available_to_spectators', 'target_allocation', 'date_created')
-    list_editable = ('available_to_spectators',)
+    list_display = ('draft_name', 'year', 'drafter', 'projected_draft', 'locked', 'protected', 'available_to_spectators', 'target_allocation', 'date_created')
+    list_editable = ('locked', 'protected', 'available_to_spectators')
     # search_fields = ('draft_name', 'drafter', )
-    list_filter = ('locked', 'available_to_spectators', 'draft_name', 'drafter',)
+    list_filter = ('locked', 'protected', 'available_to_spectators', 'draft_name', 'drafter',)
     # The allocation plan (RB/WR dollars + bodies, the QB/TE/DEF reserve, bench).
     # The allocation PAGE is where this is normally edited mid-draft; these are
     # here for a fix-up outside a live draft.
-    fields = ('draft_name', 'year', 'drafter', 'projected_draft', 'saved_slots', 'locked', 'available_to_spectators',
+    # locked = no writes reach this draft (DraftIsUnlocked); protected = it
+    # cannot be deleted (Draft.delete). Independent flags — see the model.
+    fields = ('draft_name', 'year', 'drafter', 'projected_draft', 'saved_slots', ('locked', 'protected'), 'available_to_spectators',
               ('target_rb', 'target_rb_count', 'target_wr', 'target_wr_count'),
               ('target_other', 'target_bench'), 'date_created' )
     # date_created is auto_now_add (non-editable); without this the edit form

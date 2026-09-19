@@ -286,7 +286,18 @@ class Draft(models.Model):
     drafter = models.CharField(max_length=100, null=True, blank=True)
     projected_draft = models.TextField(blank=True)
     saved_slots = models.TextField(blank=True)
+    # Two different safety flags, and the distinction matters:
+    #   protected — cannot be DELETED. What `locked` used to mean, and what the
+    #               real historical drafts carry so a stray X can't take a
+    #               season with it. Enforced in Draft.delete + delete_draft.
+    #   locked    — cannot be WRITTEN TO. Freezes every pick, budget row,
+    #               watchlist entry, favorite and the allocation plan, so a
+    #               finished draft can be read and replayed but never nudged.
+    #               Enforced in DraftWriteService (see `assert_unlocked`).
+    # They are independent: a live draft can be protected and unlocked, and a
+    # scratch mockup can be locked without being protected.
     locked = models.BooleanField(default=False)
+    protected = models.BooleanField(default=False)
     # Spectator accounts only ever see drafts flagged here (mockups stay
     # hidden); enforced in DraftReadService.get_drafts + IsSpectatorVisible.
     available_to_spectators = models.BooleanField(default=False)
@@ -322,7 +333,9 @@ class Draft(models.Model):
         super(Draft, self).save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
-        if self.locked:
+        # `protected`, not `locked` — a locked draft is merely frozen, and
+        # freezing a scratch mockup shouldn't make it undeletable.
+        if self.protected:
             return
         super(Draft, self).delete(*args, **kwargs)
 

@@ -88,6 +88,10 @@ export default function Draft({draftDetails}: DraftProps) {
     const { draftStateRef, flowContext } = useDraftState();
     const { send: draftSend } = draftStateRef;
     const data = useDraftData(draftDetails.id);
+    // A locked draft takes no writes at all — enforced on the server
+    // (DraftIsUnlocked) and again at the write queue; here it only shapes what
+    // the board offers.
+    const locked = Boolean(draftDetails.locked);
 
     // Fresh server data replaces this draft's local rows wholesale (the
     // server stays the source of truth whenever it's reachable).
@@ -245,13 +249,15 @@ export default function Draft({draftDetails}: DraftProps) {
                 WatchList ▸
             </button>
         )}
-        <button
-            className={btnClass}
-            onClick={() => navigate(`/draft/${draftDetails.id}/plan`)}
-            title="Merge a saved plan into the budget"
-        >
-            Plans
-        </button>
+        {!locked && (
+            <button
+                className={btnClass}
+                onClick={() => navigate(`/draft/${draftDetails.id}/plan`)}
+                title="Merge a saved plan into the budget"
+            >
+                Plans
+            </button>
+        )}
         {!showTiers && (
             <button
                 className={btnClass}
@@ -286,13 +292,18 @@ export default function Draft({draftDetails}: DraftProps) {
         >
             Allocation ↗
         </button>
-        <button
-            className={btnClass}
-            onClick={() => setShowRebudget(true)}
-            title="Suggest a budget from favorited players by strategy"
-        >
-            Rebudget
-        </button>
+        {/* Write-side tools are hidden on a locked draft: the server refuses
+            their writes (DraftIsUnlocked) and the write queue drops them, so
+            offering them would only produce failures. */}
+        {!locked && (
+            <button
+                className={btnClass}
+                onClick={() => setShowRebudget(true)}
+                title="Suggest a budget from favorited players by strategy"
+            >
+                Rebudget
+            </button>
+        )}
       </div>
       <div className="flex w-full lg:w-auto lg:flex-1 gap-1">
         {data.pendingWrites > 0 && (
@@ -300,7 +311,10 @@ export default function Draft({draftDetails}: DraftProps) {
                 ⏳ {data.pendingWrites} change{data.pendingWrites === 1 ? "" : "s"} waiting to sync
             </p>
         )}
-        <p className="flex-1 bg-green-200 text-center text-lg font-bold truncate">{draftDetails.draft_name}</p>
+        <p className={`flex-1 text-center text-lg font-bold truncate ${locked ? "bg-amber-200" : "bg-green-200"}`}>
+            {locked && <span title="Picks, budget and plan are frozen">🔒 LOCKED — </span>}
+            {draftDetails.draft_name}
+        </p>
       </div>
     </div>
     {showRebudget && data.hydrated && (

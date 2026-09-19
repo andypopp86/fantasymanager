@@ -178,6 +178,48 @@ redirects to `/login/?next=…` when a session expires mid-use.
 **Draft day:** the spectator laptop must log in once (any non-staff account)
 before opening the board URL; sessions last two weeks by default.
 
+## Locked vs. protected (two independent draft flags)
+
+`Draft.locked` and `Draft.protected` guard different things, and the names are
+the wrong way round from this repo's history — `locked` used to mean "can't be
+deleted", and that meaning moved to `protected` (migration `0095` copies the
+flag across; the old rows keep `locked` too, which is right for finished drafts).
+
+| flag | blocks | enforced in |
+| --- | --- | --- |
+| `protected` | DELETION | `Draft.delete` + `delete_draft` |
+| `locked` | every WRITE to the draft's own rows | `DraftIsUnlocked` (a DRF permission) |
+
+They are independent: a live draft can be protected and unlocked, a scratch
+mockup locked and disposable.
+
+**`locked` is a permission, not a pile of `if`s.**
+`draft/api/permissions.py::DraftIsUnlocked` sits beside `IsDrafter` on every
+write view that carries a `draft_id` — submit/unsubmit, budget/unbudget, both
+reslots, and the allocation POST. A new write endpoint is frozen by adding the
+class, not by remembering a guard in the service. Two deliberate holes:
+
+- **Safe methods pass**, so a locked draft stays fully readable — board,
+  summary, playback, allocation GET.
+- **Favorites and the watchlist are NOT draft state.** Both write
+  `Player.favorite` / `Player.watched`, keyed on (player, year) and shared by
+  every draft that season, so locking one draft must not freeze a flag its
+  neighbours read. Those two endpoints stay ungated.
+
+The client mirrors this at ONE seam: `lib/writeQueue.ts` refuses to send (or
+queue) any op for a locked draft, with the same `favorite`/`watch` exemption
+(`LOCK_EXEMPT_OPS`). Without it the optimistic Dexie row would diverge until the
+next hydration, since the server answers 403 and the queue's policy is to DROP
+server-rejected ops. `submitPick` surfaces the refusal as its normal error
+string. UI: the draft list shows a 🔒 Locked badge and hides the delete X for
+protected drafts (independently), and the board turns its title bar amber with a
+LOCKED prefix and drops the Rebudget and Plans buttons.
+
+**`update_position_adp` prices off `protected` drafts**, not locked ones — it
+wants the real historical drafts, which is what that flag now marks.
+
+Tests: `draft/tests.py::LockedAndProtectedTests`.
+
 ## Hosted deploy (Railway)
 
 `Dockerfile` builds the React bundle and serves via gunicorn + WhiteNoise

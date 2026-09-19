@@ -7,7 +7,7 @@ from rest_framework.pagination import PageNumberPagination
 from drf_spectacular.utils import extend_schema
 
 from core.api.serializers.base import BaseSerializer, BaseInputSerializer
-from draft.api.permissions import IsDrafter, IsSpectatorVisible, IsSuperuser
+from draft.api.permissions import DraftIsUnlocked, IsDrafter, IsSpectatorVisible, IsSuperuser
 from draft.services.draft.draft import ALLOCATION_TARGET_FIELDS, DraftReadService, DraftManagersReadService, DraftBoardReadService, DraftWriteService
 
 class LargeResultsSetPagination(PageNumberPagination):
@@ -71,6 +71,7 @@ class DraftOutputSerializer(BaseSerializer):
     projected_draft = None
     saved_slots = None
     locked = serializers.BooleanField()
+    protected = serializers.BooleanField()
     starting_budget = serializers.IntegerField()
     limit_qb = serializers.IntegerField()
     limit_rb = serializers.IntegerField()
@@ -95,6 +96,7 @@ class DraftOutputSerializer(BaseSerializer):
     projected_draft = None
     saved_slots = None
     locked = serializers.BooleanField()
+    protected = serializers.BooleanField()
     starting_budget = serializers.IntegerField()
     limit_qb = serializers.IntegerField()
     limit_rb = serializers.IntegerField()
@@ -385,7 +387,7 @@ class DraftAllocationAPI(APIView):
     POST rewrites the plan — the allocation page edits it in place, because a
     position re-prices itself the moment you buy into it.
     """
-    permission_classes = [IsDrafter]
+    permission_classes = [IsDrafter, DraftIsUnlocked]
 
     class AllocationTargetsSerializer(BaseInputSerializer):
         target_rb = serializers.IntegerField(min_value=0)
@@ -480,6 +482,7 @@ class SpectatorDraftListAPI(APIView):
         draft_name = serializers.CharField()
         drafter = serializers.CharField()
         locked = serializers.BooleanField()
+        protected = serializers.BooleanField()
         starting_budget = serializers.IntegerField()
         rounds = serializers.IntegerField()
         date_created = serializers.DateTimeField()
@@ -526,7 +529,7 @@ class SpectatorDraftedPlayersAPI(APIView):
 
 
 class DraftSubmitPickAPI(APIView):
-    permission_classes = [IsDrafter]
+    permission_classes = [IsDrafter, DraftIsUnlocked]
 
     class DraftPickCreateSerializer(BaseInputSerializer):
         price = serializers.IntegerField()
@@ -568,7 +571,7 @@ class DraftSubmitPickAPI(APIView):
         return response
 
 class DraftUnsubmitPickAPI(APIView):
-    permission_classes = [IsDrafter]
+    permission_classes = [IsDrafter, DraftIsUnlocked]
 
     def post(self, request, draft_id, manager_id, player_id):
         DraftWriteService(
@@ -581,7 +584,7 @@ class DraftUnsubmitPickAPI(APIView):
         return Response(status=status.HTTP_200_OK)
     
 class DraftBudgetPickAPI(APIView):
-    permission_classes = [IsDrafter]
+    permission_classes = [IsDrafter, DraftIsUnlocked]
 
     def post(self, request, draft_id, manager_id, player_id):
         DraftWriteService(
@@ -596,7 +599,7 @@ class DraftBudgetPickAPI(APIView):
         return Response(status=status.HTTP_200_OK)
 
 class DraftUnbudgetPickAPI(APIView):
-    permission_classes = [IsDrafter]
+    permission_classes = [IsDrafter, DraftIsUnlocked]
 
     def post(self, request, draft_id, manager_id, player_id):
         DraftWriteService(
@@ -609,7 +612,7 @@ class DraftUnbudgetPickAPI(APIView):
         return Response(status=status.HTTP_200_OK)
 
 class DraftReslotPicksAPI(APIView):
-    permission_classes = [IsDrafter]
+    permission_classes = [IsDrafter, DraftIsUnlocked]
 
     def post(self, request, draft_id, manager_id):
         DraftWriteService(
@@ -623,7 +626,7 @@ class DraftReslotPicksAPI(APIView):
 
 
 class DraftReslotBudgetAPI(APIView):
-    permission_classes = [IsDrafter]
+    permission_classes = [IsDrafter, DraftIsUnlocked]
 
     def post(self, request, draft_id, manager_id):
         DraftWriteService(
@@ -696,7 +699,7 @@ class DraftCreateAPI(APIView):
             targets={field: input_data[field] for field in ALLOCATION_TARGET_FIELDS},
         )
         response = Response(status=status.HTTP_200_OK)
-        response.data = {"id": draft.id, "year": draft.year, "draft_name": draft.draft_name, "drafter": draft.drafter, "locked": False,
+        response.data = {"id": draft.id, "year": draft.year, "draft_name": draft.draft_name, "drafter": draft.drafter, "locked": False, "protected": False,
                          "starting_budget": draft.starting_budget, "limit_qb": draft.limit_qb, "limit_rb": draft.limit_rb, "limit_wr": draft.limit_wr,
                          "limit_te": draft.limit_te, "limit_def": draft.limit_def,
                          "available_to_spectators": draft.available_to_spectators,

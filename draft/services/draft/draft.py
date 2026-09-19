@@ -145,10 +145,10 @@ class DraftWriteService(BaseService):
         draft = d.Draft.objects.filter(id=draft_id).first()
         if not draft:
             raise Http404
-        if not draft.locked:
+        if not draft.protected:
             draft.delete()
         else:
-            raise Exception("Draft is locked")
+            raise Exception("Draft is protected")
         return draft
     
     def update_plan_changes(self, draft_id, manager_id, draft_pick, budgeted_player, position_slot):

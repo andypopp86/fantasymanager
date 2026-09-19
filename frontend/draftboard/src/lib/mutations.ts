@@ -34,6 +34,9 @@ export const submitPick = async (
         price,
         slot,
     });
+    // Locked draft — the queue refused to send, so nothing local may change
+    // either. The caller alerts with this string like any other rejection.
+    if ("locked" in result) return "This draft is locked; picks can't be changed.";
     if ("response" in result) {
         const errMsg = result.response.data["error"];
         if (errMsg != null) return errMsg;
