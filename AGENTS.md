@@ -206,12 +206,20 @@ class, not by remembering a guard in the service. Two deliberate holes:
   every draft that season, so locking one draft must not freeze a flag its
   neighbours read. Those two endpoints stay ungated.
 
-The client mirrors this at ONE seam: `lib/writeQueue.ts` refuses to send (or
-queue) any op for a locked draft, with the same `favorite`/`watch` exemption
-(`LOCK_EXEMPT_OPS`). Without it the optimistic Dexie row would diverge until the
-next hydration, since the server answers 403 and the queue's policy is to DROP
-server-rejected ops. `submitPick` surfaces the refusal as its normal error
-string. UI: the draft list shows a 🔒 Locked badge and hides the delete X for
+The client refuses the same writes, and it has to do so at the MUTATION, not
+just at the send: the mutations are optimistic, so a gate that only blocked the
+request still moved the local Dexie rows — the player left the board, the budget
+row reset, and a refresh silently put it all back. So `lib/mutations.ts` exports
+its draft-state writers through **`lockGuarded`** (one wrapper, applied at the
+export, because every one of them takes `draftId` first), and the click is a
+true no-op. `draftPlayer` is the only guarded mutation whose result is read, so
+it refuses with `LOCKED_MESSAGE` and the board alerts; the rest refuse with
+`undefined`. `lib/writeQueue.ts` keeps its own check (`LOCK_EXEMPT_OPS`) as the
+last line — it also covers ops replayed off the pending queue. Left unguarded on
+purpose: `watchPick` / `unwatchPick` / `setFavorite` (player-level, as above)
+and the `*Backup*` family, a local-only shelf the server never sees.
+`isDraftLocked` in `lib/db.ts` is the single reader of the flag (off the
+hydrated `draft_meta` row). UI: the draft list shows a 🔒 Locked badge and hides the delete X for
 protected drafts (independently), and the board turns its title bar amber with a
 LOCKED prefix and drops the Rebudget and Plans buttons.
 

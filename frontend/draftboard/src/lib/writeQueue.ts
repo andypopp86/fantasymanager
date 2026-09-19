@@ -1,4 +1,4 @@
-import { db } from "./db";
+import { db, isDraftLocked } from "./db";
 import {
     draftPickSubmit,
     draftPickUnsubmit,
@@ -39,15 +39,11 @@ const OP_SENDERS: Record<string, (args: any) => Promise<any>> = {
 // favorite and watch endpoints ungated for the same reason.
 const LOCK_EXEMPT_OPS = new Set(["favorite", "watch"]);
 
-// A locked draft takes no writes. Checked HERE, at the one seam every mutation
-// passes through, so a new mutation is covered without remembering a guard —
-// the client half of DraftIsUnlocked. The server refuses these anyway (403);
-// this stops the local Dexie row from diverging until the next hydration.
-const isLocked = async (draftId: number, op: string) => {
-    if (LOCK_EXEMPT_OPS.has(op)) return false;
-    const meta = await db.draft_meta.get(draftId);
-    return Boolean(meta?.draftDetails?.locked);
-};
+// A locked draft sends nothing. This is the LAST line of the client gate —
+// mutations.ts already refuses the local write (see lockGuarded there), so an op
+// only reaches here if it slipped past that, or came off the replay queue.
+const isLocked = async (draftId: number, op: string) =>
+    !LOCK_EXEMPT_OPS.has(op) && await isDraftLocked(draftId);
 
 // Request never reached the server (offline, refused, timed out) — as opposed
 // to the server answering with an error status.

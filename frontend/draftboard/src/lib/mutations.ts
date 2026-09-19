@@ -1,4 +1,4 @@
-import { db } from "./db";
+import { db, isDraftLocked } from "./db";
 import { sendOrQueue, sendOrQueueWithResponse } from "./writeQueue";
 import type { PlayerDetail, SlotName } from "./draft.schemas";
 
@@ -14,6 +14,34 @@ import type { PlayerDetail, SlotName } from "./draft.schemas";
 //   is accepted optimistically and queued: losing picks mid-draft is worse
 //   than a rare replay rejection (hydration reconciles those).
 // - everything else is OPTIMISTIC (local rows first, API sent/queued after).
+
+// A locked draft takes no writes, and the LOCAL row must not move either — the
+// click has to be a no-op, not an optimistic change that a refresh silently
+// undoes. Every draft-state mutation below is exported through this wrapper, so
+// covering a new one is one word at its export rather than a guard inside it.
+// Mirrors the server's DraftIsUnlocked; every guarded function takes draftId
+// first, which is what makes one wrapper enough.
+//
+// NOT wrapped, deliberately: `watchPick` / `unwatchPick` / `setFavorite`, which
+// write Player rows keyed on (player, year) and shared by every draft that
+// season (same exemption the server and the write queue make), and the
+// `*Backup*` family, which is a local-only shelf the server never sees.
+// What a refused write hands back. `draftPlayer` is the one guarded mutation
+// whose result is read (DraftBoard alerts on it), so it refuses with this
+// string; the rest are fire-and-forget and refuse with undefined.
+export const LOCKED_MESSAGE = "This draft is locked; picks can't be changed.";
+
+const lockGuarded = <Args extends [number, ...any[]], R>(
+    name: string,
+    fn: (...args: Args) => Promise<R>,
+    refusal?: R,
+) => async (...args: Args): Promise<R | undefined> => {
+    if (await isDraftLocked(args[0])) {
+        console.warn(`${name} skipped — draft ${args[0]} is locked`);
+        return refusal;
+    }
+    return fn(...args);
+};
 
 // Register a pick with the server, then flip the local row to drafted (they
 // leave the available list by definition) and drop them from the watchlist.
@@ -36,7 +64,7 @@ export const submitPick = async (
     });
     // Locked draft — the queue refused to send, so nothing local may change
     // either. The caller alerts with this string like any other rejection.
-    if ("locked" in result) return "This draft is locked; picks can't be changed.";
+    if ("locked" in result) return LOCKED_MESSAGE;
     if ("response" in result) {
         const errMsg = result.response.data["error"];
         if (errMsg != null) return errMsg;
@@ -62,7 +90,7 @@ export const submitPick = async (
 // The straightforward (non-conflicting) draft flow: mirror the pick into the
 // drafter's budget first (or, when an opponent wins a budgeted target, drop
 // the target from the plan), then submit.
-export const draftPlayer = async (
+const _draftPlayer = async (
     draftId: number,
     drafterId: number,
     managerId: number,
@@ -82,7 +110,7 @@ export const draftPlayer = async (
 
 // Undraft: the row flips back to available. The budget row (if any) is kept,
 // matching pre-Dexie behavior — the plan still targets the player.
-export const unsubmitPick = async (draftId: number, managerId: number, playerId: number | string) => {
+const _unsubmitPick = async (draftId: number, managerId: number, playerId: number | string) => {
     await db.draft_picks.update([draftId, playerId], {
         drafted: false,
         manager_id: null,
@@ -96,7 +124,7 @@ export const unsubmitPick = async (draftId: number, managerId: number, playerId:
 
 // Budget a player at a slot. One budget row per player (server semantics:
 // re-budgeting MOVES the row), and the target slot is cleared first.
-export const budgetPick = async (
+const _budgetPick = async (
     draftId: number,
     drafterId: number,
     player: { player_id: number | string, name?: string, player_name?: string, position: string },
@@ -126,7 +154,7 @@ export const budgetPick = async (
     });
 };
 
-export const unbudgetPick = async (draftId: number, drafterId: number, playerId: number | string) => {
+const _unbudgetPick = async (draftId: number, drafterId: number, playerId: number | string) => {
     await db.budget_picks.delete([draftId, playerId]);
     await sendOrQueue(draftId, "unbudget_pick", { draftId, managerId: drafterId, playerId });
 };
@@ -135,7 +163,7 @@ export const unbudgetPick = async (draftId: number, drafterId: number, playerId:
 // current occupant (its server row would otherwise still claim the slot and
 // reappear on refetch) and budget the plan's player there. Sequential so the
 // unbudget lands before the replacement for the same slot.
-export const applyPlanSelections = async (
+const _applyPlanSelections = async (
     draftId: number,
     drafterId: number,
     selections: {
@@ -171,7 +199,7 @@ export type PlanShelf = {
 // Everyone currently budgeted and NOT in the plan is unbudgeted; a plan player
 // who happens to be budgeted already is left to `budgetPick` to move (see
 // applyBudgetChanges on why unbudgeting a mover corrupts the row).
-export const applyPlanToBoard = async (
+const _applyPlanToBoard = async (
     draftId: number,
     drafterId: number,
     roster: {
@@ -207,7 +235,7 @@ export const applyPlanToBoard = async (
 // displaced player is either re-placed or listed for removal, never dropped
 // silently — `budgetPick` clears the target slot only in Dexie, with no server
 // counterpart, so an orphan row would reclaim its slot on the next hydrate.
-export const applyBudgetChanges = async (
+const _applyBudgetChanges = async (
     draftId: number,
     drafterId: number,
     changes: {
@@ -413,7 +441,7 @@ export const setFavorite = async (draftId: number, playerId: number | string) =>
 };
 
 // Re-slot a manager's drafted players. assignments: { slotName: player_id }.
-export const reslotPicks = async (draftId: number, managerId: number, assignments: Record<string, number | string>) => {
+const _reslotPicks = async (draftId: number, managerId: number, assignments: Record<string, number | string>) => {
     const slotByPlayer = Object.fromEntries(
         Object.entries(assignments).map(([slot, playerId]) => [String(playerId), slot]),
     );
@@ -428,7 +456,7 @@ export const reslotPicks = async (draftId: number, managerId: number, assignment
     sendOrQueue(draftId, "reslot_picks", { draftId, managerId, assignments });
 };
 
-export const reslotBudget = async (draftId: number, drafterId: number, assignments: Record<string, number | string>) => {
+const _reslotBudget = async (draftId: number, drafterId: number, assignments: Record<string, number | string>) => {
     const slotByPlayer = Object.fromEntries(
         Object.entries(assignments).map(([slot, playerId]) => [String(playerId), slot]),
     );
@@ -442,3 +470,14 @@ export const reslotBudget = async (draftId: number, drafterId: number, assignmen
     });
     sendOrQueue(draftId, "reslot_budget", { draftId, managerId: drafterId, assignments });
 };
+
+// Draft-state writers, each refused outright on a locked draft (see lockGuarded).
+export const draftPlayer = lockGuarded("draftPlayer", _draftPlayer, LOCKED_MESSAGE);
+export const unsubmitPick = lockGuarded("unsubmitPick", _unsubmitPick);
+export const budgetPick = lockGuarded("budgetPick", _budgetPick);
+export const unbudgetPick = lockGuarded("unbudgetPick", _unbudgetPick);
+export const applyPlanSelections = lockGuarded("applyPlanSelections", _applyPlanSelections);
+export const applyPlanToBoard = lockGuarded("applyPlanToBoard", _applyPlanToBoard);
+export const applyBudgetChanges = lockGuarded("applyBudgetChanges", _applyBudgetChanges);
+export const reslotPicks = lockGuarded("reslotPicks", _reslotPicks);
+export const reslotBudget = lockGuarded("reslotBudget", _reslotBudget);
